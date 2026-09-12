@@ -107,7 +107,7 @@ function scrollToId(id: string) {
 }
 
 function enterEduSphere() {
-  window.location.href = "http://localhost:8000/auth/google";
+  window.location.href = '${import.meta.env.VITE_API_BASE_URL}/auth/google';
 }
 
 

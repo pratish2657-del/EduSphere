@@ -60,7 +60,7 @@ export default function Home() {
           className="nav-login"
           onClick={() => {
             window.location.href =
-              "http://localhost:8000/auth/google";
+              '${import.meta.env.VITE_API_BASE_URL}/auth/google';
           }}
         >
           Enter EduSphere
@@ -146,7 +146,7 @@ export default function Home() {
               className="primary-button"
               onClick={() => {
                 window.location.href =
-                  "http://localhost:8000/auth/google";
+                  '${import.meta.env.VITE_API_BASE_URL}/auth/google';
               }}
             >
               Enter EduSphere
@@ -420,7 +420,7 @@ export default function Home() {
           className="primary-button"
           onClick={() => {
             window.location.href =
-              "http://localhost:8000/auth/google";
+              '${import.meta.env.VITE_API_BASE_URL}/auth/google';
           }}
         >
           Get Started
