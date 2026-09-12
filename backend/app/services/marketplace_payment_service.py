@@ -13,19 +13,22 @@ from app.services.payment_gateway_service import (
     get_gateway_order,
 )
 
+
 # ============================================================
 # CREATE PAYMENT
 # BUYER
 #
-# Creates a PENDING payment.
+# Creates a PENDING Cashfree payment.
 # It does NOT mark the order as paid.
 # ============================================================
 
 
 def create_payment(user_id, order_id):
 
-    # Release abandoned checkout reservations before checking stock/payment state.
+    # Release abandoned checkout reservations before
+    # checking stock/payment state.
     expire_pending_orders()
+
     connection = get_connection()
 
     try:
@@ -65,19 +68,41 @@ def create_payment(user_id, order_id):
         # ----------------------------------------------------
 
         if order["status"] == "CONFIRMED":
-            raise ConflictError("Order has already been confirmed")
+            raise ConflictError(
+                "Order has already been confirmed"
+            )
 
         if order["status"] in ["CANCELLED", "REFUNDED"]:
-            raise BadRequestError("Payment cannot be created for this order")
+            raise BadRequestError(
+                "Payment cannot be created for this order"
+            )
+
+        # ----------------------------------------------------
+        # Check checkout expiry
+        # ----------------------------------------------------
 
         if order["expires_at"] is not None:
+
             cursor.execute(
-                "SELECT CURRENT_TIMESTAMP AS now, expires_at FROM marketplace_orders WHERE id=%s",
+                """
+                SELECT
+                    CURRENT_TIMESTAMP AS now,
+                    expires_at
+
+                FROM marketplace_orders
+
+                WHERE id = %s
+                """,
                 (order_id,),
             )
+
             expiry = cursor.fetchone()
+
             if expiry and expiry["expires_at"] <= expiry["now"]:
-                raise BadRequestError("This checkout session has expired. Please create a new order.")
+                raise BadRequestError(
+                    "This checkout session has expired. "
+                    "Please create a new order."
+                )
 
         # ----------------------------------------------------
         # Server-controlled amount
@@ -86,10 +111,14 @@ def create_payment(user_id, order_id):
         amount = order["total_amount"]
 
         if amount is None:
-            raise BadRequestError("Order amount is invalid")
+            raise BadRequestError(
+                "Order amount is invalid"
+            )
 
         if amount <= 0:
-            raise BadRequestError("Order amount must be greater than zero")
+            raise BadRequestError(
+                "Order amount must be greater than zero"
+            )
 
         # ----------------------------------------------------
         # Existing payment
@@ -123,14 +152,21 @@ def create_payment(user_id, order_id):
         # ----------------------------------------------------
 
         if existing_payment:
+
             if existing_payment["status"] == "PAID":
-                raise ConflictError("Order has already been paid")
+                raise ConflictError(
+                    "Order has already been paid"
+                )
 
             # ------------------------------------------------
-            # Existing Razorpay order
+            # Existing Cashfree order
             # ------------------------------------------------
 
-            if existing_payment["gateway_order_id"] and existing_payment["gateway"] == "CASHFREE":
+            if (
+                existing_payment["gateway_order_id"]
+                and existing_payment["gateway"] == "CASHFREE"
+            ):
+
                 connection.commit()
 
                 return {
@@ -138,13 +174,21 @@ def create_payment(user_id, order_id):
                     "payment_id": existing_payment["id"],
                     "order_id": order_id,
                     "gateway": existing_payment["gateway"],
-                    "gateway_order_id": existing_payment["gateway_order_id"],
+                    "gateway_order_id": (
+                        existing_payment["gateway_order_id"]
+                    ),
                     "amount": existing_payment["amount"],
                     "currency": existing_payment["currency"],
                     "status": existing_payment["status"],
-                    "platform_fee_percent": order["platform_fee_percent"],
-                    "platform_fee_amount": order["platform_fee_amount"],
-                    "seller_net_amount": order["seller_net_amount"],
+                    "platform_fee_percent": (
+                        order["platform_fee_percent"]
+                    ),
+                    "platform_fee_amount": (
+                        order["platform_fee_amount"]
+                    ),
+                    "seller_net_amount": (
+                        order["seller_net_amount"]
+                    ),
                 }
 
         # ----------------------------------------------------
@@ -152,6 +196,7 @@ def create_payment(user_id, order_id):
         # ----------------------------------------------------
 
         if not existing_payment:
+
             cursor.execute(
                 """
                 INSERT INTO marketplace_payments (
@@ -169,11 +214,15 @@ def create_payment(user_id, order_id):
                     %s,
                     'INR',
                     'UPI',
-                    'RAZORPAY',
+                    'CASHFREE',
                     'PENDING'
                 )
                 """,
-                (order_id, user_id, amount),
+                (
+                    order_id,
+                    user_id,
+                    amount,
+                ),
             )
 
             payment_id = cursor.lastrowid
@@ -188,7 +237,10 @@ def create_payment(user_id, order_id):
         gateway_order = create_gateway_order(
             amount=amount,
             receipt=f"EDU-{order_id}",
-            notify_url="https://edusphere-fovh.onrender.com/marketplace/payments/webhook",
+            notify_url=(
+                "https://edusphere-fovh.onrender.com/"
+                "marketplace/payments/webhook"
+            ),
             notes={
                 "edusphere_order_id": str(order_id),
                 "edusphere_payment_id": str(payment_id),
@@ -214,7 +266,10 @@ def create_payment(user_id, order_id):
 
             WHERE id = %s
             """,
-            (gateway_order_id, payment_id),
+            (
+                gateway_order_id,
+                payment_id,
+            ),
         )
 
         connection.commit()
@@ -229,9 +284,15 @@ def create_payment(user_id, order_id):
             "amount": amount,
             "currency": "INR",
             "status": "PENDING",
-            "platform_fee_percent": order["platform_fee_percent"],
-            "platform_fee_amount": order["platform_fee_amount"],
-            "seller_net_amount": order["seller_net_amount"],
+            "platform_fee_percent": (
+                order["platform_fee_percent"]
+            ),
+            "platform_fee_amount": (
+                order["platform_fee_amount"]
+            ),
+            "seller_net_amount": (
+                order["seller_net_amount"]
+            ),
         }
 
     except Exception:
@@ -282,13 +343,18 @@ def get_payment(payment_id, user_id):
             WHERE mp.id = %s
               AND mp.buyer_id = %s
             """,
-            (payment_id, user_id),
+            (
+                payment_id,
+                user_id,
+            ),
         )
 
         payment = cursor.fetchone()
 
         if not payment:
-            raise NotFoundError("Payment not found")
+            raise NotFoundError(
+                "Payment not found"
+            )
 
         return payment
 
@@ -336,13 +402,18 @@ def get_order_payment(order_id, user_id):
             WHERE mp.order_id = %s
               AND mp.buyer_id = %s
             """,
-            (order_id, user_id),
+            (
+                order_id,
+                user_id,
+            ),
         )
 
         payment = cursor.fetchone()
 
         if not payment:
-            raise NotFoundError("Payment not found")
+            raise NotFoundError(
+                "Payment not found"
+            )
 
         return payment
 
@@ -352,14 +423,22 @@ def get_order_payment(order_id, user_id):
 
 # ============================================================
 # VERIFY PAYMENT
+# BUYER
 #
-# Buyer must own the order.
-# Cashfree signature must be valid.
+# Cashfree is the authoritative payment source.
 #
-# Only then:
+# The browser does NOT determine payment success.
 #
-# marketplace_payments = PAID
-# marketplace_orders   = CONFIRMED
+# Verification flow:
+#
+# 1. Buyer owns the order
+# 2. Cashfree order ID matches our database
+# 3. Ask Cashfree for current order status
+# 4. Verify Cashfree amount
+# 5. Require order_status == PAID
+# 6. Mark local payment PAID
+# 7. Finalize inventory
+# 8. Confirm marketplace order
 # ============================================================
 
 
@@ -367,16 +446,24 @@ def verify_payment(
     user_id,
     order_id,
     gateway_order_id,
-    gateway_payment_id,
+    gateway_payment_id=None,
     gateway_signature=None,
 ):
     """
-    Verify a Cashfree payment.
+    Verify a Cashfree payment server-side.
 
-    The browser does NOT determine whether payment succeeded.
+    The browser cannot decide whether a payment succeeded.
 
-    EduSphere asks Cashfree for the order/payment status and only
-    marks the local payment as PAID when Cashfree confirms success.
+    EduSphere asks Cashfree for the authoritative order status
+    and only marks the local payment as PAID when Cashfree
+    confirms that the order is PAID.
+
+    gateway_payment_id is optional because Cashfree order-status
+    verification does not require the browser to provide a
+    payment ID.
+
+    gateway_signature is retained for schema compatibility but
+    is not trusted for payment confirmation.
     """
 
     connection = get_connection()
@@ -406,19 +493,25 @@ def verify_payment(
 
             FOR UPDATE
             """,
-            (order_id, user_id),
+            (
+                order_id,
+                user_id,
+            ),
         )
 
         payment = cursor.fetchone()
 
         if not payment:
-            raise NotFoundError("Payment not found")
+            raise NotFoundError(
+                "Payment not found"
+            )
 
         # ----------------------------------------------------
         # Idempotency
         # ----------------------------------------------------
 
         if payment["status"] == "PAID":
+
             connection.commit()
 
             return {
@@ -441,7 +534,11 @@ def verify_payment(
         # Verify gateway order ID against our database
         # ----------------------------------------------------
 
-        if payment["gateway_order_id"] != gateway_order_id:
+        if (
+            not gateway_order_id
+            or payment["gateway_order_id"]
+            != gateway_order_id
+        ):
             raise BadRequestError(
                 "Payment gateway order mismatch"
             )
@@ -455,16 +552,57 @@ def verify_payment(
         )
 
         gateway_status = str(
-            gateway_order.get("order_status", "")
+            gateway_order.get(
+                "order_status",
+                "",
+            )
         ).upper()
+
+        # ----------------------------------------------------
+        # Verify Cashfree amount against our database
+        # ----------------------------------------------------
+
+        gateway_amount = gateway_order.get(
+            "order_amount"
+        )
+
+        if gateway_amount is None:
+            raise BadRequestError(
+                "Cashfree order amount is missing"
+            )
+
+        try:
+            local_amount = float(
+                payment["amount"]
+            )
+
+            cashfree_amount = float(
+                gateway_amount
+            )
+
+        except (TypeError, ValueError) as error:
+            raise BadRequestError(
+                "Invalid payment amount returned by Cashfree"
+            ) from error
+
+        if cashfree_amount != local_amount:
+            raise ConflictError(
+                "Cashfree payment amount does not "
+                "match the EduSphere order amount"
+            )
 
         # ----------------------------------------------------
         # Payment is not successful yet
         # ----------------------------------------------------
 
         if gateway_status != "PAID":
+
+            connection.commit()
+
             return {
-                "message": "Cashfree payment is not completed",
+                "message": (
+                    "Cashfree payment is not completed"
+                ),
                 "payment_id": payment["id"],
                 "order_id": order_id,
                 "status": "PENDING",
@@ -473,6 +611,11 @@ def verify_payment(
 
         # ----------------------------------------------------
         # Mark payment PAID
+        #
+        # gateway_payment_id is optional.
+        #
+        # The frontend must NEVER send the Cashfree order ID
+        # as the payment ID.
         # ----------------------------------------------------
 
         cursor.execute(
@@ -524,7 +667,10 @@ def verify_payment(
               AND buyer_id = %s
               AND status = 'PENDING'
             """,
-            (order_id, user_id),
+            (
+                order_id,
+                user_id,
+            ),
         )
 
         if cursor.rowcount != 1:
@@ -535,7 +681,9 @@ def verify_payment(
         connection.commit()
 
         return {
-            "message": "Cashfree payment verified successfully",
+            "message": (
+                "Cashfree payment verified successfully"
+            ),
             "payment_id": payment["id"],
             "order_id": order_id,
             "status": "PAID",
@@ -554,13 +702,17 @@ def verify_payment(
 # MARK COD PAYMENT COLLECTED
 # ADMIN / SUPER ADMIN
 #
-# COD is not a Razorpay transaction. Staff confirm cash collection,
-# then the local payment becomes PAID and the seller payout ledger
-# becomes READY for the normal payout workflow.
+# COD is not a Cashfree transaction.
+#
+# Staff confirm cash collection, then the local payment becomes
+# PAID and the seller payout ledger becomes READY.
 # ============================================================
 
 
-def mark_cod_payment_collected(payment_id, admin_user_id):
+def mark_cod_payment_collected(
+    payment_id,
+    admin_user_id,
+):
 
     connection = get_connection()
 
@@ -579,10 +731,14 @@ def mark_cod_payment_collected(payment_id, admin_user_id):
                 mp.status AS payment_status,
                 o.status AS order_status,
                 o.institution_id
+
             FROM marketplace_payments mp
+
             INNER JOIN marketplace_orders o
                 ON o.id = mp.order_id
+
             WHERE mp.id = %s
+
             FOR UPDATE
             """,
             (payment_id,),
@@ -591,61 +747,136 @@ def mark_cod_payment_collected(payment_id, admin_user_id):
         payment = cursor.fetchone()
 
         if not payment:
-            raise NotFoundError("Payment not found")
+            raise NotFoundError(
+                "Payment not found"
+            )
 
-        # Admins can only collect COD payments for their institution;
-        # super admins are allowed platform-wide.
+        # ----------------------------------------------------
+        # Admin authorization
+        # ----------------------------------------------------
+
         cursor.execute(
-            "SELECT role FROM users WHERE id = %s LIMIT 1",
+            """
+            SELECT role
+            FROM users
+            WHERE id = %s
+            LIMIT 1
+            """,
             (admin_user_id,),
         )
-        admin = cursor.fetchone()
-        role = str((admin or {}).get("role") or "").upper()
 
-        if role not in {"ADMIN", "SUPER_ADMIN"}:
-            # require_admin normally blocks this path, but keep the service
-            # defensive if it is called directly.
-            raise BadRequestError("Administrator access is required")
+        admin = cursor.fetchone()
+
+        role = str(
+            (admin or {}).get("role") or ""
+        ).upper()
+
+        if role not in {
+            "ADMIN",
+            "SUPER_ADMIN",
+        }:
+            raise BadRequestError(
+                "Administrator access is required"
+            )
+
+        # ----------------------------------------------------
+        # Institution restriction for ADMIN
+        # ----------------------------------------------------
 
         if role == "ADMIN":
+
             cursor.execute(
                 """
                 SELECT 1
+
                 FROM admin_profiles
+
                 WHERE user_id = %s
                   AND institution_id = %s
+
                 LIMIT 1
                 """,
-                (admin_user_id, payment["institution_id"]),
+                (
+                    admin_user_id,
+                    payment["institution_id"],
+                ),
             )
+
             if not cursor.fetchone():
-                raise BadRequestError("You cannot collect a COD payment outside your institution")
+                raise BadRequestError(
+                    "You cannot collect a COD payment "
+                    "outside your institution"
+                )
 
-        if str(payment["payment_method"] or "").upper() != "COD":
-            raise BadRequestError("This payment is not a Cash on Delivery payment")
+        # ----------------------------------------------------
+        # Verify COD payment
+        # ----------------------------------------------------
 
-        if str(payment["payment_status"] or "").upper() == "PAID":
+        if (
+            str(
+                payment["payment_method"] or ""
+            ).upper()
+            != "COD"
+        ):
+            raise BadRequestError(
+                "This payment is not a Cash on Delivery payment"
+            )
+
+        if (
+            str(
+                payment["payment_status"] or ""
+            ).upper()
+            == "PAID"
+        ):
             return {
-                "message": "COD payment was already marked as collected",
+                "message": (
+                    "COD payment was already "
+                    "marked as collected"
+                ),
                 "payment_id": payment_id,
                 "order_id": payment["order_id"],
                 "status": "PAID",
             }
 
-        if str(payment["payment_status"] or "").upper() != "PENDING":
-            raise ConflictError("Only a pending COD payment can be marked as collected")
+        if (
+            str(
+                payment["payment_status"] or ""
+            ).upper()
+            != "PENDING"
+        ):
+            raise ConflictError(
+                "Only a pending COD payment can "
+                "be marked as collected"
+            )
 
-        if str(payment["order_status"] or "").upper() in {"CANCELLED", "REFUNDED"}:
-            raise BadRequestError("A cancelled or refunded order cannot be collected")
+        if (
+            str(
+                payment["order_status"] or ""
+            ).upper()
+            in {
+                "CANCELLED",
+                "REFUNDED",
+            }
+        ):
+            raise BadRequestError(
+                "A cancelled or refunded order "
+                "cannot be collected"
+            )
+
+        # ----------------------------------------------------
+        # Mark COD payment PAID
+        # ----------------------------------------------------
 
         cursor.execute(
             """
             UPDATE marketplace_payments
+
             SET
                 status = 'PAID',
                 paid_at = CURRENT_TIMESTAMP,
                 gateway = 'COD',
                 payment_method = 'COD'
+
             WHERE id = %s
               AND status = 'PENDING'
               AND payment_method = 'COD'
@@ -654,13 +885,25 @@ def mark_cod_payment_collected(payment_id, admin_user_id):
         )
 
         if cursor.rowcount != 1:
-            raise ConflictError("COD payment could not be marked as collected")
+            raise ConflictError(
+                "COD payment could not be marked as collected"
+            )
+
+        # ----------------------------------------------------
+        # Prepare seller payout ledger
+        # ----------------------------------------------------
 
         cursor.execute(
             """
             UPDATE marketplace_seller_payout_transactions
+
             SET
-                status = CASE WHEN status = 'PENDING' THEN 'READY' ELSE status END
+                status = CASE
+                    WHEN status = 'PENDING'
+                    THEN 'READY'
+                    ELSE status
+                END
+
             WHERE order_id = %s
               AND status = 'PENDING'
             """,
@@ -670,7 +913,9 @@ def mark_cod_payment_collected(payment_id, admin_user_id):
         connection.commit()
 
         return {
-            "message": "COD payment collected successfully",
+            "message": (
+                "COD payment collected successfully"
+            ),
             "payment_id": payment_id,
             "order_id": payment["order_id"],
             "amount": payment["amount"],
