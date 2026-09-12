@@ -22,6 +22,7 @@ pydantic_core==2.46.4
 PyMySQL==1.2.0
 python-dotenv==1.2.3
 python-multipart==0.0.32
+email-validator==2.3.0
 razorpay==2.0.1
 requests==2.34.2
 starlette==1.6.0
