@@ -1,0 +1,26 @@
+/* Super Admin Institution Management */
+.sai-page{min-height:100vh;background:radial-gradient(circle at 80% 0%,rgba(79,70,229,.14),transparent 34%),#060918;color:#eef2ff;padding:28px}
+.sai-shell{max-width:1450px;margin:auto}
+.sai-header{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:24px}
+.sai-title-wrap,.sai-header-actions{display:flex;align-items:center;gap:14px}
+.sai-title-wrap>div:last-child span,.sai-modal-head span{font-size:10px;letter-spacing:.16em;color:#818cf8;font-weight:800}
+.sai-title-wrap h1{margin:4px 0 0;font-size:28px}
+.sai-icon-btn,.sai-secondary,.sai-primary,.sai-edit{border:1px solid rgba(148,163,184,.16);border-radius:10px;background:rgba(15,23,42,.8);color:#dbe4ff;display:inline-flex;align-items:center;gap:8px;padding:10px 13px;cursor:pointer}
+.sai-icon-btn{width:40px;height:40px;justify-content:center;padding:0}
+.sai-primary{background:linear-gradient(135deg,#4f46e5,#7c3aed);border:0;color:#fff;font-weight:800}
+.sai-secondary:hover,.sai-edit:hover,.sai-icon-btn:hover{background:rgba(30,41,59,.95)}
+.sai-overview{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.sai-stat{border:1px solid rgba(129,140,248,.15);background:linear-gradient(145deg,rgba(15,23,42,.92),rgba(12,17,35,.86));border-radius:16px;padding:18px;display:flex;gap:13px;align-items:center;box-shadow:0 15px 45px rgba(0,0,0,.2)}
+.sai-stat>svg{color:#818cf8}.sai-stat span{display:block;color:#94a3b8;font-size:12px}.sai-stat strong{display:block;margin-top:4px;font-size:22px}
+.sai-panel{border:1px solid rgba(129,140,248,.14);background:rgba(10,15,30,.88);border-radius:18px;overflow:hidden}
+.sai-toolbar{padding:16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(148,163,184,.1)}
+.sai-search{width:min(480px,100%);display:flex;align-items:center;gap:9px;padding:11px 13px;border:1px solid rgba(148,163,184,.16);background:#080d1d;border-radius:11px;color:#64748b}
+.sai-search input{width:100%;background:none;border:0;outline:0;color:#e2e8f0;font-size:14px}.sai-search input::placeholder{color:#64748b}
+.sai-count{font-size:12px;color:#64748b}.sai-error{margin:14px;padding:12px 14px;border-radius:10px;background:rgba(127,29,29,.2);border:1px solid rgba(248,113,113,.2);color:#fca5a5;display:flex;gap:8px;align-items:center}
+.sai-table-wrap{overflow:auto}.sai-table{width:100%;border-collapse:collapse;min-width:900px}.sai-table th{padding:13px 18px;text-align:left;font-size:10px;letter-spacing:.12em;color:#64748b;background:#080d1b}.sai-table td{padding:16px 18px;border-top:1px solid rgba(148,163,184,.08);font-size:13px;color:#b8c2d6}.sai-table tr:hover td{background:rgba(30,41,59,.24)}
+.sai-institution{display:flex;align-items:center;gap:11px}.sai-building{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:rgba(99,102,241,.12);color:#a5b4fc}.sai-institution strong{display:block;color:#f1f5f9}.sai-institution span{display:block;color:#64748b;font-size:11px;margin-top:3px}.sai-table code{color:#a5b4fc;background:rgba(99,102,241,.1);padding:5px 8px;border-radius:6px}
+.sai-status{border:0;background:none;cursor:pointer;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:7px}.sai-status span{width:7px;height:7px;border-radius:50%;background:#22c55e}.sai-status.active{color:#86efac}.sai-status.inactive{color:#fca5a5}.sai-status.inactive span{background:#ef4444}
+.sai-edit{padding:7px 10px;font-size:12px}.sai-empty{min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#64748b}.sai-empty strong{color:#cbd5e1}.sai-spin{animation:saiSpin 1s linear infinite}@keyframes saiSpin{to{transform:rotate(360deg)}}
+.sai-modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,.78);backdrop-filter:blur(8px);display:grid;place-items:center;padding:20px;z-index:1000}.sai-modal{width:min(720px,100%);max-height:90vh;overflow:auto;background:#0b1122;border:1px solid rgba(129,140,248,.22);border-radius:18px;box-shadow:0 30px 100px rgba(0,0,0,.55)}.sai-modal-head{padding:20px;display:flex;justify-content:space-between;border-bottom:1px solid rgba(148,163,184,.1)}.sai-modal-head h2{margin:5px 0 0}.sai-form{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:15px}.sai-form label.full{grid-column:1/-1}.sai-form label span{display:block;color:#94a3b8;font-size:12px;margin-bottom:7px}.sai-form input{width:100%;box-sizing:border-box;padding:11px 12px;border-radius:9px;border:1px solid rgba(148,163,184,.15);outline:0;background:#070c19;color:#e2e8f0}.sai-form input:focus{border-color:#6366f1}.sai-modal-actions{display:flex;justify-content:flex-end;gap:10px;padding:16px 20px;border-top:1px solid rgba(148,163,184,.1)}
+@media(max-width:900px){.sai-overview{grid-template-columns:1fr 1fr}.sai-header{align-items:flex-start;flex-direction:column}.sai-header-actions{width:100%}.sai-header-actions button{flex:1;justify-content:center}}
+@media(max-width:560px){.sai-page{padding:16px}.sai-overview{grid-template-columns:1fr}.sai-toolbar{align-items:stretch;flex-direction:column;gap:10px}.sai-search{width:auto}.sai-form{grid-template-columns:1fr}.sai-form label.full{grid-column:auto}}

@@ -1,0 +1,43 @@
+services:
+  edusphere-developer-ide:
+    image: codercom/code-server:4.106.3
+    container_name: edusphere-developer-ide
+    restart: unless-stopped
+
+    # Local Docker Desktop fix:
+    # code-server must be able to create its config/data directories.
+    # The named volumes below are intentionally Docker-managed.
+    user: "0:0"
+
+    command: >-
+      code-server
+      --bind-addr 0.0.0.0:8080
+      --auth none
+      --disable-telemetry
+      /home/coder/workspace
+
+    volumes:
+      # Developer files remain on the EduSphere host workspace.
+      - ./developer-workspaces:/home/coder/workspace
+
+      # code-server internal state/extensions.
+      - edusphere_developer_ide_data:/home/coder/.local/share/code-server
+      - edusphere_developer_ide_config:/home/coder/.config
+
+    expose:
+      - "8080"
+
+  edusphere-developer-ide-proxy:
+    image: nginx:1.29-alpine
+    container_name: edusphere-developer-ide-proxy
+    restart: unless-stopped
+    depends_on:
+      - edusphere-developer-ide
+    ports:
+      - "8443:80"
+    volumes:
+      - ./developer-workspace/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  edusphere_developer_ide_data:
+  edusphere_developer_ide_config:

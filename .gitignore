@@ -1,0 +1,18 @@
+.pnpm-store/
+node_modules/
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Private uploads
+backend/private_uploads/
+
+# Build output
+dist/
+build/
