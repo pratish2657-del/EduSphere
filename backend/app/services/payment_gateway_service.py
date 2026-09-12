@@ -233,3 +233,36 @@ def get_gateway_order(order_id):
         )
 
     return response.json()
+
+def get_gateway_payments(order_id):
+    """
+    Fetch all Cashfree payment attempts for an order.
+
+    This is intentionally server-side so Cashfree credentials
+    never reach the browser.
+    """
+
+    config = get_cashfree_config()
+
+    try:
+        response = httpx.get(
+            f"{config['base_url']}/orders/{order_id}/payments",
+            headers=get_cashfree_headers(),
+            timeout=30.0,
+        )
+    except httpx.RequestError as exc:
+        raise ServiceUnavailableError(
+            f"Cashfree payment lookup failed: {exc}"
+        )
+
+    if response.status_code != 200:
+        try:
+            error_data = response.json()
+        except Exception:
+            error_data = response.text
+
+        raise ServiceUnavailableError(
+            f"Cashfree payment lookup failed: {error_data}"
+        )
+
+    return response.json()
