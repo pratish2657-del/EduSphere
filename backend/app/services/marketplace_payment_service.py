@@ -8,11 +8,11 @@ from app.services.marketplace_inventory_service import (
     expire_pending_orders,
     finalize_order_inventory,
 )
+from app.services.marketplace_payout_service import attempt_cashfree_split
 from app.services.payment_gateway_service import (
     create_gateway_order,
     get_gateway_order,
 )
-
 
 # ============================================================
 # CREATE PAYMENT
@@ -548,7 +548,7 @@ def verify_payment(
         # ----------------------------------------------------
 
         gateway_order = get_gateway_order(
-            payment["gateway_order_id"]
+            order_id
         )
 
         gateway_status = str(
@@ -679,6 +679,11 @@ def verify_payment(
             )
 
         connection.commit()
+
+        # Easy Split is downstream of a successful customer payment.
+        # A missing/unverified seller must not roll back the paid order; the
+        # payout UI can retry the split after seller onboarding is complete.
+        attempt_cashfree_split(order_id)
 
         return {
             "message": (

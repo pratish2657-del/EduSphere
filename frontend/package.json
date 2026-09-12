@@ -10,11 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@cashfreepayments/cashfree-js": "^1.0.7",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
     "framer-motion": "^13.2.0",
     "lucide-react": "^1.40.0",
-    "monaco-editor": "^0.55.1",
+    "monaco-editor": "^0.53.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3",

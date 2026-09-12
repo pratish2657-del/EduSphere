@@ -9,7 +9,9 @@ def get_seller_payout(user_id):
         cursor.execute("""
             SELECT user_id, enabled, preferred_upi_app, upi_id,
                    account_holder_name, payout_status,
-                   razorpay_linked_account_id, created_at, updated_at
+                   cashfree_vendor_id, cashfree_vendor_status,
+                   cashfree_schedule_option, bank_account_last4, bank_ifsc,
+                   created_at, updated_at
             FROM marketplace_seller_payouts
             WHERE user_id = %s
         """, (user_id,))
@@ -22,7 +24,9 @@ def get_seller_payout(user_id):
                 "upi_id": None,
                 "account_holder_name": None,
                 "payout_status": "NOT_CONFIGURED",
-                "razorpay_linked_account_id": None,
+                "cashfree_vendor_id": None,
+                "cashfree_vendor_status": None,
+                "cashfree_schedule_option": None,
             }
         return row
     finally:

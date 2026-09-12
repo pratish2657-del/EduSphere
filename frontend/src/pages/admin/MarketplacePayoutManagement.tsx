@@ -14,13 +14,13 @@ type Payout = {
   platform_fee_amount: number;
   seller_amount: number;
   status: string;
-  razorpay_linked_account_id?: string | null;
-  razorpay_transfer_id?: string | null;
+  cashfree_vendor_id?: string | null;
+  cashfree_transfer_id?: string | null;
   transfer_status?: string | null;
   settlement_status?: string | null;
   failure_reason?: string | null;
   payout_status?: string | null;
-  route_activation_status?: string | null;
+  cashfree_vendor_status?: string | null;
   action?: string;
 };
 
@@ -48,8 +48,8 @@ export default function MarketplacePayoutManagement() {
     setMsg("");
     try {
       const [payoutResponse, financeResponse] = await Promise.all([
-        fetch(`${API}/marketplace/route/payouts`, { credentials: "include" }),
-        fetch(`${API}/marketplace/route/finance-summary`, { credentials: "include" }),
+        fetch(`${API}/marketplace/easy-split/payouts`, { credentials: "include" }),
+        fetch(`${API}/marketplace/easy-split/finance-summary`, { credentials: "include" }),
       ]);
       const payouts = await payoutResponse.json().catch(() => ({}));
       const summary = await financeResponse.json().catch(() => ({}));
@@ -68,7 +68,7 @@ export default function MarketplacePayoutManagement() {
   const retry = async (id: number) => {
     setBusy(id);
     try {
-      const response = await fetch(`${API}/marketplace/route/payouts/${id}/retry`, {
+      const response = await fetch(`${API}/marketplace/easy-split/payouts/${id}/retry`, {
         method: "POST",
         credentials: "include",
       });
@@ -93,7 +93,7 @@ export default function MarketplacePayoutManagement() {
 
     setBusy(item.id);
     try {
-      const response = await fetch(`${API}/marketplace/route/payouts/${item.id}/reverse`, {
+      const response = await fetch(`${API}/marketplace/easy-split/payouts/${item.id}/reverse`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -138,7 +138,7 @@ export default function MarketplacePayoutManagement() {
       <div className="payout-head">
         <div>
           <h1><WalletCards size={23} /> Admin Marketplace Payouts</h1>
-          <p>Shared EduSphere Route settlements across Student, Professor and Admin sellers.</p>
+          <p>Shared EduSphere Cashfree Easy Split settlements across Student, Professor and Admin sellers.</p>
         </div>
         <button onClick={load} disabled={loading}><RefreshCw size={16} /> Refresh</button>
       </div>
@@ -161,7 +161,7 @@ export default function MarketplacePayoutManagement() {
           <thead>
             <tr>
               <th>Seller</th><th>Order</th><th>Gross</th><th>5% Fee</th>
-              <th>Seller Net</th><th>Status</th><th>Route</th><th>Action</th>
+              <th>Seller Net</th><th>Status</th><th>Cashfree Vendor</th><th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -183,8 +183,8 @@ export default function MarketplacePayoutManagement() {
                   {item.failure_reason && <small className="failure">{item.failure_reason}</small>}
                 </td>
                 <td>
-                  <small>{item.razorpay_linked_account_id || "Not connected"}</small>
-                  {item.razorpay_transfer_id && <small className="transfer">{item.razorpay_transfer_id}</small>}
+                  <small>{item.cashfree_vendor_id || "Not connected"}</small>
+                  {item.cashfree_transfer_id && <small className="transfer">{item.cashfree_transfer_id}</small>}
                 </td>
                 <td>{action(item)}</td>
               </tr>

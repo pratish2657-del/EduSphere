@@ -1232,7 +1232,7 @@ def test_webhook_missing_signature():
     assert response.status_code == 400
 
     assert response.json()["detail"] == (
-        "Razorpay webhook signature is missing"
+        "Missing Cashfree webhook signature"
     )
 
 
@@ -1246,12 +1246,12 @@ def test_webhook_missing_event_id(monkeypatch):
         "/marketplace/payments/webhook",
         content=b"{}",
         headers={
-            "x-razorpay-signature": "invalid",
+            "x-webhook-signature": "invalid",
         },
     )
 
     assert response.status_code == 400
 
     assert response.json()["detail"] == (
-        "Razorpay webhook event ID is missing"
+        "Missing Cashfree webhook timestamp"
     )

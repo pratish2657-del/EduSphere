@@ -19,7 +19,7 @@ from app.services.marketplace_route_service import (
     submit_route_onboarding,
 )
 
-router = APIRouter(prefix="/marketplace/route", tags=["Marketplace Route"])
+router = APIRouter(prefix="/marketplace/easy-split", tags=["Marketplace Easy Split"])
 
 
 def _error(error):

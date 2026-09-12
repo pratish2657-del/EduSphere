@@ -7,11 +7,11 @@ from typing import Any
 
 from app.core.exceptions import (
     BadRequestError,
-    ConflictError,
     NotFoundError,
 )
 from app.database import get_connection
-
+from app.services.marketplace_inventory_service import finalize_order_inventory
+from app.services.marketplace_payout_service import attempt_cashfree_split
 
 # ============================================================
 # CASHFREE WEBHOOK CONFIGURATION
@@ -320,6 +320,8 @@ def _handle_payment_success(
         # Confirm marketplace order
         # ----------------------------------------------------
 
+        finalize_order_inventory(payment["order_id"], cursor)
+
         cursor.execute(
             """
             UPDATE marketplace_orders
@@ -336,6 +338,8 @@ def _handle_payment_success(
         )
 
         connection.commit()
+
+        attempt_cashfree_split(payment["order_id"])
 
         return {
             "message": "Cashfree payment processed successfully",

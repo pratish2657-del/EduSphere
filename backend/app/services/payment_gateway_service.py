@@ -7,7 +7,6 @@ from app.core.exceptions import (
     ServiceUnavailableError,
 )
 
-
 # ============================================================
 # CASHFREE CONFIGURATION
 # ============================================================
@@ -184,7 +183,7 @@ def create_gateway_order(
     if response.status_code not in (200, 201):
         try:
             error_data = response.json()
-        except Exception:
+        except ValueError:
             error_data = response.text
 
         raise ServiceUnavailableError(
@@ -225,7 +224,7 @@ def get_gateway_order(order_id):
     if response.status_code != 200:
         try:
             error_data = response.json()
-        except Exception:
+        except ValueError:
             error_data = response.text
 
         raise ServiceUnavailableError(
@@ -258,7 +257,7 @@ def get_gateway_payments(order_id):
     if response.status_code != 200:
         try:
             error_data = response.json()
-        except Exception:
+        except ValueError:
             error_data = response.text
 
         raise ServiceUnavailableError(

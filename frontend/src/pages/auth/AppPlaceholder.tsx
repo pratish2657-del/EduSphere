@@ -30,6 +30,7 @@ import { useAuth } from "../../context/AuthContext";
 import StudentCube3D from "../../components/three/StudentCube3D";
 import AIChatbot from "../../components/ai/AIChatbot";
 import AttendanceView from "../../components/attendance/AttendanceView";
+import { load } from "@cashfreepayments/cashfree-js";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -313,48 +314,16 @@ type MarketplacePaymentCreateResponse = {
   order_id: number;
   gateway: string;
   gateway_order_id: string;
+  payment_session_id: string;
   amount: number | string;
   currency: string;
   status: string;
   platform_fee_percent?: number | string;
   platform_fee_amount?: number | string;
   seller_net_amount?: number | string;
-  razorpay_key_id: string | null;
 };
 
-type RazorpaySuccessResponse = {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
-};
 
-type RazorpayOptions = {
-  key: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  order_id: string;
-  handler: (response: RazorpaySuccessResponse) => void;
-  modal?: {
-    ondismiss?: () => void;
-  };
-  theme?: {
-    color?: string;
-  };
-};
-
-type RazorpayInstance = {
-  open: () => void;
-};
-
-type RazorpayConstructor = new (options: RazorpayOptions) => RazorpayInstance;
-
-declare global {
-  interface Window {
-    Razorpay?: RazorpayConstructor;
-  }
-}
 
 export default function AppPlaceholder() {
   const navigate = useNavigate();
@@ -789,220 +758,278 @@ export default function AppPlaceholder() {
     [loadMarketplaceCart]
   );
 
-  const checkoutMarketplace = useCallback(async (paymentMethod: "ONLINE" | "COD", deliveryAddress: string) => {
-    const institutionId =
-      dashboard?.student.institution_id ??
-      timetable?.student.institution_id;
+  const checkoutMarketplace = useCallback(
+    async (
+      paymentMethod: "ONLINE" | "COD",
+      deliveryAddress: string
+    ) => {
+      const institutionId =
+        dashboard?.student.institution_id ??
+        timetable?.student.institution_id;
 
-    if (!institutionId) {
-      setMarketplaceNotice(
-        "Your institution information is not available yet."
-      );
-      return;
-    }
-
-    if (!marketplaceCart?.items.length) {
-      setMarketplaceNotice("Your cart is empty.");
-      return;
-    }
-
-    const hasDigital = marketplaceCart.items.some(
-      (item) => String(item.product_type).toUpperCase() === "DIGITAL"
-    );
-    if (paymentMethod === "COD" && hasDigital) {
-      setMarketplaceNotice(
-        "Cash on Delivery is available only when every cart item is physical."
-      );
-      return;
-    }
-    const hasPhysical = marketplaceCart.items.some(
-      (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-    );
-    if (hasPhysical && deliveryAddress.trim().length < 10) {
-      setMarketplaceNotice("Enter a valid delivery address for physical products.");
-      return;
-    }
-
-    setMarketplaceBusy(true);
-    setMarketplaceNotice("");
-
-    try {
-      const checkoutResponse = await fetch(
-        `${API_BASE_URL}/marketplace/checkout?institution_id=${encodeURIComponent(
-          institutionId
-        )}&payment_method=${encodeURIComponent(paymentMethod)}${marketplaceCart.items.some((item) => String(item.product_type).toUpperCase() === "PHYSICAL") ? `&shipping_address=${encodeURIComponent(deliveryAddress.trim())}` : ""}`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { Accept: "application/json" },
-        }
-      );
-
-      const checkoutData = await checkoutResponse.json().catch(() => null);
-
-      if (!checkoutResponse.ok) {
-        throw new Error(
-          String(
-            checkoutData?.detail ||
-              checkoutData?.message ||
-              "Unable to create marketplace order."
-          )
-        );
-      }
-
-      const orderId = Number(checkoutData?.order_id);
-      if (!Number.isFinite(orderId)) {
-        throw new Error("Marketplace order ID was not returned.");
-      }
-
-      if (paymentMethod === "COD") {
+      if (!institutionId) {
         setMarketplaceNotice(
-          `Cash on Delivery order #${orderId} placed successfully. Payment will remain pending until cash is collected.`
+          "Your institution information is not available yet."
         );
-        setMarketplacePanel("orders");
-        setCheckoutPaymentMethod("ONLINE");
-        setShippingAddress("");
-        await loadMarketplaceCart();
-        await loadMarketplaceOrders();
-        setMarketplaceBusy(false);
         return;
       }
 
-      const paymentResponse = await fetch(
-        `${API_BASE_URL}/marketplace/payments/`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ order_id: orderId }),
-        }
+      if (!marketplaceCart?.items.length) {
+        setMarketplaceNotice("Your cart is empty.");
+        return;
+      }
+
+      const hasDigital = marketplaceCart.items.some(
+        (item) =>
+          String(item.product_type).toUpperCase() === "DIGITAL"
       );
 
-      const paymentData = (await paymentResponse.json().catch(() => null)) as
-        | MarketplacePaymentCreateResponse
-        | { detail?: string; message?: string }
-        | null;
-
-      if (!paymentResponse.ok) {
-        throw new Error(
-          String(
-            (paymentData as { detail?: string; message?: string } | null)
-              ?.detail ||
-              (paymentData as { detail?: string; message?: string } | null)
-                ?.message ||
-              "Unable to create Razorpay payment."
-          )
+      if (paymentMethod === "COD" && hasDigital) {
+        setMarketplaceNotice(
+          "Cash on Delivery is available only when every cart item is physical."
         );
+        return;
       }
 
-      const payment = paymentData as MarketplacePaymentCreateResponse;
+      const hasPhysical = marketplaceCart.items.some(
+        (item) =>
+          String(item.product_type).toUpperCase() === "PHYSICAL"
+      );
 
-      if (!payment.razorpay_key_id) {
-        throw new Error(
-          "Razorpay key is not configured on the server."
+      if (hasPhysical && deliveryAddress.trim().length < 10) {
+        setMarketplaceNotice(
+          "Enter a valid delivery address for physical products."
         );
+        return;
       }
 
-      await ensureRazorpayScript();
+      setMarketplaceBusy(true);
+      setMarketplaceNotice("");
 
-      if (!window.Razorpay) {
-        throw new Error("Razorpay checkout could not be loaded.");
-      }
-
-      const amountInPaise = Math.round(Number(payment.amount) * 100);
-
-      if (!Number.isFinite(amountInPaise) || amountInPaise <= 0) {
-        throw new Error("Invalid payment amount returned by the server.");
-      }
-
-      const razorpay = new window.Razorpay({
-        key: payment.razorpay_key_id,
-        amount: amountInPaise,
-        currency: payment.currency || "INR",
-        name: "EduSphere Marketplace",
-        description: `Marketplace order #${orderId}`,
-        order_id: payment.gateway_order_id,
-        handler: async (razorpayResponse) => {
-          setMarketplaceBusy(true);
-
-          try {
-            const verifyResponse = await fetch(
-              `${API_BASE_URL}/marketplace/payments/verify`,
-              {
-                method: "POST",
-                credentials: "include",
-                headers: {
-                  Accept: "application/json",
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  order_id: orderId,
-                  gateway_order_id: razorpayResponse.razorpay_order_id,
-                  gateway_payment_id: razorpayResponse.razorpay_payment_id,
-                  gateway_signature: razorpayResponse.razorpay_signature,
-                }),
-              }
-            );
-
-            const verifyData = await verifyResponse.json().catch(() => null);
-
-            if (!verifyResponse.ok) {
-              throw new Error(
-                String(
-                  verifyData?.detail ||
-                    verifyData?.message ||
-                    "Payment verification failed."
-                )
-              );
-            }
-
-            setMarketplaceNotice(
-              `Payment successful. Order #${orderId} is confirmed.`
-            );
-            await loadMarketplaceCart();
-            await loadMarketplaceOrders();
-          } catch (err) {
-            setMarketplaceNotice(
-              err instanceof Error
-                ? err.message
-                : "Payment verification failed."
-            );
-          } finally {
-            setMarketplaceBusy(false);
+      try {
+        // ------------------------------------------------------------
+        // STEP 1: Create EduSphere marketplace order
+        // ------------------------------------------------------------
+        const checkoutResponse = await fetch(
+          `${API_BASE_URL}/marketplace/checkout?institution_id=${encodeURIComponent(
+            institutionId
+          )}&payment_method=${encodeURIComponent(paymentMethod)}${
+            hasPhysical
+              ? `&shipping_address=${encodeURIComponent(
+                  deliveryAddress.trim()
+                )}`
+              : ""
+          }`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              Accept: "application/json",
+            },
           }
-        },
-        modal: {
-          ondismiss: () => {
-            setMarketplaceBusy(false);
-            setMarketplaceNotice(
-              "Payment window closed. Your order remains pending."
-            );
-          },
-        },
-        theme: {
-          color: "#6366f1",
-        },
-      });
+        );
 
-      razorpay.open();
-    } catch (err) {
-      setMarketplaceNotice(
-        err instanceof Error
-          ? err.message
-          : "Unable to start marketplace payment."
-      );
-      setMarketplaceBusy(false);
-    }
-  }, [
-    dashboard,
-    loadMarketplaceCart,
-    loadMarketplaceOrders,
-    marketplaceCart,
-    timetable,
-  ]);
+        const checkoutData = await checkoutResponse
+          .json()
+          .catch(() => null);
+
+        if (!checkoutResponse.ok) {
+          throw new Error(
+            String(
+              checkoutData?.detail ||
+                checkoutData?.message ||
+                "Unable to create marketplace order."
+            )
+          );
+        }
+
+        const orderId = Number(checkoutData?.order_id);
+
+        if (!Number.isFinite(orderId)) {
+          throw new Error(
+            "Marketplace order ID was not returned."
+          );
+        }
+
+        // ------------------------------------------------------------
+        // COD
+        // ------------------------------------------------------------
+        if (paymentMethod === "COD") {
+          setMarketplaceNotice(
+            `Cash on Delivery order #${orderId} placed successfully. Payment will remain pending until cash is collected.`
+          );
+
+          setMarketplacePanel("orders");
+          setCheckoutPaymentMethod("ONLINE");
+          setShippingAddress("");
+
+          await loadMarketplaceCart();
+          await loadMarketplaceOrders();
+
+          setMarketplaceBusy(false);
+          return;
+        }
+
+        // ------------------------------------------------------------
+        // STEP 2: Create Cashfree payment session
+        // ------------------------------------------------------------
+        const paymentResponse = await fetch(
+          `${API_BASE_URL}/marketplace/payments/`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              order_id: orderId,
+            }),
+          }
+        );
+
+        const paymentData =
+          (await paymentResponse.json().catch(() => null)) as
+            | MarketplacePaymentCreateResponse
+            | { detail?: string; message?: string }
+            | null;
+
+        if (!paymentResponse.ok) {
+          throw new Error(
+            String(
+              (paymentData as {
+                detail?: string;
+                message?: string;
+              } | null)?.detail ||
+                (paymentData as {
+                  detail?: string;
+                  message?: string;
+                } | null)?.message ||
+                "Unable to create Cashfree payment."
+            )
+          );
+        }
+
+        const payment =
+          paymentData as MarketplacePaymentCreateResponse;
+
+        if (!payment.payment_session_id) {
+          throw new Error(
+            "Cashfree payment session was not returned by the server."
+          );
+        }
+
+        // ------------------------------------------------------------
+        // STEP 3: Load Cashfree Sandbox SDK
+        // ------------------------------------------------------------
+        const cashfree = await load({
+          mode: "sandbox",
+        });
+
+        if (!cashfree) {
+          throw new Error(
+            "Cashfree checkout could not be loaded."
+          );
+        }
+
+        // ------------------------------------------------------------
+        // STEP 4: Open Cashfree Sandbox Checkout
+        // ------------------------------------------------------------
+        const checkoutResult = (await cashfree.checkout({
+          paymentSessionId: payment.payment_session_id,
+          redirectTarget: "_modal",
+        })) as {
+          error?: {
+            message?: string;
+          };
+        };
+
+        if (checkoutResult?.error) {
+          throw new Error(
+            checkoutResult.error.message ||
+              "Cashfree checkout could not be started."
+          );
+        }
+
+        // ------------------------------------------------------------
+        // STEP 5: Verify payment on EduSphere backend
+        //
+        // Do NOT use gateway_order_id as gateway_payment_id.
+        // The backend verifies the Cashfree order status server-side.
+        // ------------------------------------------------------------
+        const verifyResponse = await fetch(
+          `${API_BASE_URL}/marketplace/payments/verify`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              order_id: orderId,
+              gateway_order_id: payment.gateway_order_id,
+            }),
+          }
+        );
+
+        const verifyData = await verifyResponse
+          .json()
+          .catch(() => null);
+
+        if (!verifyResponse.ok) {
+          throw new Error(
+            String(
+              verifyData?.detail ||
+                verifyData?.message ||
+                "Cashfree payment verification failed."
+            )
+          );
+        }
+
+        const verificationStatus = String(
+          verifyData?.status || ""
+        ).toUpperCase();
+
+        if (
+          verificationStatus === "PAID" ||
+          verificationStatus === "SUCCESS"
+        ) {
+          setMarketplaceNotice(
+            `Payment successful. Order #${orderId} is confirmed.`
+          );
+
+          setMarketplacePanel("orders");
+          setCheckoutPaymentMethod("ONLINE");
+          setShippingAddress("");
+
+          await loadMarketplaceCart();
+          await loadMarketplaceOrders();
+        } else {
+          setMarketplaceNotice(
+            `Payment is currently ${
+              verificationStatus || "pending"
+            }. Please check your orders shortly.`
+          );
+        }
+      } catch (err) {
+        setMarketplaceNotice(
+          err instanceof Error
+            ? err.message
+            : "Unable to start marketplace payment."
+        );
+      } finally {
+        setMarketplaceBusy(false);
+      }
+    },
+    [
+      dashboard,
+      loadMarketplaceCart,
+      loadMarketplaceOrders,
+      marketplaceCart,
+      timetable,
+    ]
+  );
 
   const loadTimetable = useCallback(async (day?: string) => {
     setTimetableLoading(true);
@@ -2845,7 +2872,7 @@ function MarketplaceCartModal({
                     fontWeight: 800,
                   }}
                 >
-                  Online · Razorpay
+                  Online · Cashfree
                 </button>
                 <button
                   type="button"
@@ -2936,7 +2963,7 @@ function MarketplaceCartModal({
               ? "Processing..."
               : paymentMethod === "COD"
                 ? "Place COD Order"
-                : "Pay Online with Razorpay"}
+                : "Pay Online with Cashfree"}
           </button>
         </div>
       </div>
@@ -3450,47 +3477,6 @@ function getMarketplaceStatusStyle(status: string) {
     color: "#fcd34d",
     background: "rgba(245,158,11,0.08)",
   };
-}
-
-async function ensureRazorpayScript() {
-  if (window.Razorpay) return;
-
-  const existing = document.querySelector(
-    'script[data-edusphere-razorpay="true"]'
-  );
-
-  if (existing) {
-    await new Promise<void>((resolve, reject) => {
-      const timeout = window.setTimeout(
-        () => reject(new Error("Razorpay script load timed out.")),
-        10000
-      );
-
-      existing.addEventListener("load", () => {
-        window.clearTimeout(timeout);
-        resolve();
-      });
-      existing.addEventListener("error", () => {
-        window.clearTimeout(timeout);
-        reject(new Error("Unable to load Razorpay checkout."));
-      });
-    });
-
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.dataset.edusphereRazorpay = "true";
-
-    script.onload = () => resolve();
-    script.onerror = () =>
-      reject(new Error("Unable to load Razorpay checkout."));
-
-    document.body.appendChild(script);
-  });
 }
 
 /* =============================================================

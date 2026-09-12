@@ -1,3 +1,4 @@
+import { load as loadCashfree } from "@cashfreepayments/cashfree-js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
@@ -118,37 +119,9 @@ type PaymentResponse = {
   platform_fee_percent?: number | string;
   platform_fee_amount?: number | string;
   seller_net_amount?: number | string;
-  razorpay_key_id: string | null;
+  payment_session_id: string;
 };
 
-type RazorpaySuccessResponse = {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
-};
-
-type RazorpayOptions = {
-  key: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  order_id: string;
-  handler: (response: RazorpaySuccessResponse) => void;
-  modal?: { ondismiss?: () => void };
-  theme?: { color?: string };
-};
-
-type RazorpayInstance = { open: () => void };
-type RazorpayConstructor = new (
-  options: RazorpayOptions
-) => RazorpayInstance;
-
-declare global {
-  interface Window {
-    Razorpay?: RazorpayConstructor;
-  }
-}
 
 async function api<T>(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -185,39 +158,6 @@ function dateTime(value: string) {
   return date.toLocaleString(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
-  });
-}
-
-async function ensureRazorpayScript() {
-  if (window.Razorpay) return;
-
-  const existing = document.querySelector(
-    'script[data-edusphere-razorpay="true"]'
-  ) as HTMLScriptElement | null;
-
-  if (existing) {
-    await new Promise<void>((resolve, reject) => {
-      if (window.Razorpay) {
-        resolve();
-        return;
-      }
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () =>
-        reject(new Error("Razorpay checkout could not be loaded."))
-      );
-    });
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.dataset.edusphereRazorpay = "true";
-    script.onload = () => resolve();
-    script.onerror = () =>
-      reject(new Error("Unable to load Razorpay checkout."));
-    document.body.appendChild(script);
   });
 }
 
@@ -393,62 +333,41 @@ export default function AdminMarketplace() {
         body: JSON.stringify({ order_id: orderId }),
       });
 
-      if (!payment.razorpay_key_id) {
-        throw new Error("Razorpay key is not configured on the server.");
+      if (!payment.payment_session_id) {
+        throw new Error("Cashfree payment session was not returned by the server.");
       }
 
-      await ensureRazorpayScript();
-
-      if (!window.Razorpay) {
-        throw new Error("Razorpay checkout could not be loaded.");
+      const cashfree = await loadCashfree({ mode: "sandbox" });
+      if (!cashfree) {
+        throw new Error("Cashfree checkout could not be loaded.");
       }
 
-      const amountInPaise = Math.round(Number(payment.amount) * 100);
-      if (!Number.isFinite(amountInPaise) || amountInPaise <= 0) {
-        throw new Error("Invalid payment amount returned by the server.");
-      }
-
-      const razorpay = new window.Razorpay({
-        key: payment.razorpay_key_id,
-        amount: amountInPaise,
-        currency: payment.currency || "INR",
-        name: "EduSphere Marketplace",
-        description: `Marketplace order #${orderId}`,
-        order_id: payment.gateway_order_id,
-        handler: async (response) => {
-          try {
-            await api("/marketplace/payments/verify", {
-              method: "POST",
-              body: JSON.stringify({
-                order_id: orderId,
-                gateway_order_id: response.razorpay_order_id,
-                gateway_payment_id: response.razorpay_payment_id,
-                gateway_signature: response.razorpay_signature,
-              }),
-            });
-
-            setNotice(`Payment successful. Order #${orderId} is confirmed.`);
-            await Promise.all([loadCart(), loadOrders()]);
-          } catch (err) {
-            setNotice(
-              err instanceof Error
-                ? err.message
-                : "Payment verification failed."
-            );
-          } finally {
-            setBusy(false);
-          }
-        },
-        modal: {
-          ondismiss: () => {
-            setBusy(false);
-            setNotice("Payment window closed. Your order remains pending.");
-          },
-        },
-        theme: { color: "#6366f1" },
+      await cashfree.checkout({
+        paymentSessionId: payment.payment_session_id,
+        redirectTarget: "_modal",
       });
 
-      razorpay.open();
+      // Cashfree checkout can close before the server has finalized the order.
+      // The backend remains authoritative; the buyer can refresh orders if needed.
+      try {
+        await api("/marketplace/payments/verify", {
+          method: "POST",
+          body: JSON.stringify({
+            order_id: orderId,
+            gateway_order_id: payment.gateway_order_id,
+          }),
+        });
+        setNotice(`Payment verification completed. Order #${orderId} is confirmed.`);
+        await Promise.all([loadCart(), loadOrders()]);
+      } catch (err) {
+        setNotice(
+          err instanceof Error
+            ? err.message
+            : "Payment verification is still pending. Please refresh your orders."
+        );
+      } finally {
+        setBusy(false);
+      }
     } catch (err) {
       setNotice(
         err instanceof Error ? err.message : "Unable to start marketplace payment."

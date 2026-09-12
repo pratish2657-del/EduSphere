@@ -318,7 +318,7 @@ async def marketplace_order_status(
         raise HTTPException(
             status_code=400,
             detail="Use the marketplace refund workflow to refund a paid order. "
-                   "This prevents COD refunds from being sent to Razorpay.",
+                   "This prevents COD refunds from being sent through a payment gateway.",
         )
 
     connection = get_connection()

@@ -18,7 +18,7 @@ type Refund = {
   buyer_email: string;
   amount: number;
   reverse_transfers: boolean;
-  razorpay_refund_id?: string | null;
+  cashfree_refund_id?: string | null;
   status: string;
   failure_reason?: string | null;
   created_at: string;
@@ -44,7 +44,7 @@ export default function MarketplaceRefundManagement() {
     setMessage("");
 
     try {
-      const r = await fetch(`${API}/marketplace/route/refunds`, {
+      const r = await fetch(`${API}/marketplace/easy-split/refunds`, {
         credentials: "include",
       });
 
@@ -113,7 +113,7 @@ export default function MarketplaceRefundManagement() {
 
     try {
       const r = await fetch(
-        `${API}/marketplace/route/payments/${parsedPaymentId}/refund`,
+        `${API}/marketplace/easy-split/payments/${parsedPaymentId}/refund`,
         {
           method: "POST",
           credentials: "include",
@@ -162,7 +162,7 @@ export default function MarketplaceRefundManagement() {
 
           <p>
             Admin and Super Admin refund controls with optional
-            Route transfer reversal.
+            Cashfree Easy Split transfer reversal.
           </p>
         </div>
 
@@ -189,7 +189,7 @@ export default function MarketplaceRefundManagement() {
 
         <span>
           Refunding a captured marketplace payment can also
-          reverse Route transfers. Use the reversal option when
+          reverse Cashfree Easy Split vendor transfers. Use the reversal option when
           seller funds have already been transferred.
         </span>
       </div>
@@ -212,7 +212,7 @@ export default function MarketplaceRefundManagement() {
               <th>Amount</th>
               <th>Route Reversal</th>
               <th>Status</th>
-              <th>Razorpay</th>
+              <th>Cashfree</th>
               <th>Created</th>
             </tr>
           </thead>
@@ -265,7 +265,7 @@ export default function MarketplaceRefundManagement() {
 
                   <td>
                     <small>
-                      {x.razorpay_refund_id || "—"}
+                      {x.cashfree_refund_id || "—"}
                     </small>
                   </td>
 
@@ -309,7 +309,7 @@ export default function MarketplaceRefundManagement() {
 
                 <p>
                   Refund a captured marketplace payment through
-                  Razorpay.
+                  Cashfree.
                 </p>
               </div>
 
@@ -346,7 +346,7 @@ export default function MarketplaceRefundManagement() {
 
                 <small>
                   Enter the EduSphere payment database ID, not
-                  the Razorpay payment ID.
+                  the Cashfree payment ID.
                 </small>
               </div>
 
@@ -386,7 +386,7 @@ export default function MarketplaceRefundManagement() {
 
                 <span>
                   <strong>
-                    Reverse Route seller transfers
+                    Reverse Cashfree Easy Split seller transfers
                   </strong>
 
                   <small>

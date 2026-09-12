@@ -1,3 +1,4 @@
+import { load as loadCashfree } from "@cashfreepayments/cashfree-js";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   BookOpen,
@@ -126,42 +127,9 @@ type MarketplacePaymentCreateResponse = {
   platform_fee_percent?: number | string;
   platform_fee_amount?: number | string;
   seller_net_amount?: number | string;
-  razorpay_key_id: string | null;
+  payment_session_id: string;
 };
 
-type RazorpaySuccessResponse = {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
-};
-
-type RazorpayOptions = {
-  key: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  order_id: string;
-  handler: (response: RazorpaySuccessResponse) => void;
-  modal?: {
-    ondismiss?: () => void;
-  };
-  theme?: {
-    color?: string;
-  };
-};
-
-type RazorpayInstance = {
-  open: () => void;
-};
-
-type RazorpayConstructor = new (options: RazorpayOptions) => RazorpayInstance;
-
-declare global {
-  interface Window {
-    Razorpay?: RazorpayConstructor;
-  }
-}
 type ProfessorDashboardResponse = {
   professor?: {
     professor_id?: number;
@@ -201,10 +169,11 @@ export default function ProfessorMarketplace() {
   const [marketplaceBusy, setMarketplaceBusy] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<MarketplaceProduct | null>(null);
 
-  const apiGet = useCallback(async <T,>(endpoint: string): Promise<T> => {
+  const apiGet = useCallback(async <T,>(endpoint: string, options: RequestInit = {}): Promise<T> => {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       credentials: "include",
-      headers: { Accept: "application/json" },
+      ...options,
+      headers: { Accept: "application/json", ...(options.headers || {}) },
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) {
@@ -412,62 +381,45 @@ export default function ProfessorMarketplace() {
       });
       const paymentData = await paymentResponse.json().catch(() => null);
       if (!paymentResponse.ok) {
-        throw new Error(String(paymentData?.detail || paymentData?.message || "Unable to create Razorpay payment."));
+        throw new Error(String(paymentData?.detail || paymentData?.message || "Unable to create Cashfree payment."));
       }
 
       const payment = paymentData as MarketplacePaymentCreateResponse;
-      if (!payment.razorpay_key_id) throw new Error("Razorpay key is not configured on the server.");
+      if (!payment.payment_session_id) {
+        throw new Error("Cashfree payment session was not returned by the server.");
+      }
 
-      await ensureRazorpayScript();
-      if (!window.Razorpay) throw new Error("Razorpay checkout could not be loaded.");
+      const cashfree = await loadCashfree({ mode: "sandbox" });
+      if (!cashfree) {
+        throw new Error("Cashfree checkout could not be loaded.");
+      }
 
-      const amountInPaise = Math.round(Number(payment.amount) * 100);
-      if (!Number.isFinite(amountInPaise) || amountInPaise <= 0) throw new Error("Invalid payment amount returned by the server.");
-
-      const razorpay = new window.Razorpay({
-        key: payment.razorpay_key_id,
-        amount: amountInPaise,
-        currency: payment.currency || "INR",
-        name: "EduSphere Marketplace",
-        description: `Professor marketplace order #${orderId}`,
-        order_id: payment.gateway_order_id,
-        handler: async (razorpayResponse) => {
-          try {
-            const verifyResponse = await fetch(`${API_BASE_URL}/marketplace/payments/verify`, {
-              method: "POST",
-              credentials: "include",
-              headers: { Accept: "application/json", "Content-Type": "application/json" },
-              body: JSON.stringify({
-                order_id: orderId,
-                gateway_order_id: razorpayResponse.razorpay_order_id,
-                gateway_payment_id: razorpayResponse.razorpay_payment_id,
-                gateway_signature: razorpayResponse.razorpay_signature,
-              }),
-            });
-            const verifyData = await verifyResponse.json().catch(() => null);
-            if (!verifyResponse.ok) throw new Error(String(verifyData?.detail || verifyData?.message || "Payment verification failed."));
-            setMarketplaceNotice(`Payment successful. Order #${orderId} is confirmed.`);
-            setMarketplacePanel("orders");
-            setCheckoutPaymentMethod("ONLINE");
-            setShippingAddress("");
-            await loadMarketplaceCart();
-            await loadMarketplaceOrders();
-          } catch (err) {
-            setMarketplaceNotice(err instanceof Error ? err.message : "Payment verification failed.");
-          } finally {
-            setMarketplaceBusy(false);
-          }
-        },
-        modal: {
-          ondismiss: () => {
-            setMarketplaceBusy(false);
-            setMarketplaceNotice("Payment window closed. Your order remains pending.");
-          },
-        },
-        theme: { color: "#6366f1" },
+      await cashfree.checkout({
+        paymentSessionId: payment.payment_session_id,
+        redirectTarget: "_modal",
       });
 
-      razorpay.open();
+      // Cashfree checkout can close before the server has finalized the order.
+      // The backend remains authoritative; the buyer can refresh orders if needed.
+      try {
+        await apiGet("/marketplace/payments/verify", {
+          method: "POST",
+          body: JSON.stringify({
+            order_id: orderId,
+            gateway_order_id: payment.gateway_order_id,
+          }),
+        });
+        setMarketplaceNotice(`Payment verification completed. Order #${orderId} is confirmed.`);
+        await Promise.all([loadMarketplaceCart(), loadMarketplaceOrders()]);
+      } catch (err) {
+        setMarketplaceNotice(
+          err instanceof Error
+            ? err.message
+            : "Payment verification is still pending. Please refresh your orders."
+        );
+      } finally {
+        setMarketplaceBusy(false);
+      }
     } catch (err) {
       setMarketplaceNotice(err instanceof Error ? err.message : "Unable to start marketplace payment.");
       setMarketplaceBusy(false);
@@ -1260,7 +1212,7 @@ function MarketplaceCartModal({
                     fontWeight: 800,
                   }}
                 >
-                  Online · Razorpay
+                  Online · Cashfree
                 </button>
                 <button
                   type="button"
@@ -1339,7 +1291,7 @@ function MarketplaceCartModal({
               ? "Processing..."
               : paymentMethod === "COD"
                 ? "Place COD Order"
-                : "Pay Online with Razorpay"}
+                : "Pay Online with Cashfree"}
           </button>
         </div>
       </div>
@@ -1853,47 +1805,6 @@ function getMarketplaceStatusStyle(status: string) {
     color: "#fcd34d",
     background: "rgba(245,158,11,0.08)",
   };
-}
-
-async function ensureRazorpayScript() {
-  if (window.Razorpay) return;
-
-  const existing = document.querySelector(
-    'script[data-edusphere-razorpay="true"]'
-  );
-
-  if (existing) {
-    await new Promise<void>((resolve, reject) => {
-      const timeout = window.setTimeout(
-        () => reject(new Error("Razorpay script load timed out.")),
-        10000
-      );
-
-      existing.addEventListener("load", () => {
-        window.clearTimeout(timeout);
-        resolve();
-      });
-      existing.addEventListener("error", () => {
-        window.clearTimeout(timeout);
-        reject(new Error("Unable to load Razorpay checkout."));
-      });
-    });
-
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.dataset.edusphereRazorpay = "true";
-
-    script.onload = () => resolve();
-    script.onerror = () =>
-      reject(new Error("Unable to load Razorpay checkout."));
-
-    document.body.appendChild(script);
-  });
 }
 
 /* =============================================================
