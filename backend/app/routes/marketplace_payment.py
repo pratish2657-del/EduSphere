@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.core.exceptions import (
     BadRequestError,
@@ -18,6 +18,10 @@ from app.services.marketplace_payment_service import (
     get_payment,
     mark_cod_payment_collected,
     verify_payment,
+)
+from app.services.payment_gateway_service import (
+    get_gateway_order,
+    get_gateway_payments,
 )
 from app.services.payment_webhook_service import process_payment_webhook
 
@@ -293,3 +297,16 @@ async def get_payment_route(
             status_code=400,
             detail=str(error),
         ) from error
+        
+@router.get("/cashfree/{gateway_order_id}/debug")
+async def debug_cashfree_order(
+    gateway_order_id: str,
+    user=Depends(require_admin),
+):
+    try:
+        return get_gateway_order(gateway_order_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        )
