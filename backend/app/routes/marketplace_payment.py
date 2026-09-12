@@ -309,3 +309,19 @@ async def debug_cashfree_order(
             status_code=502,
             detail=str(exc),
         )
+        
+@router.get("/cashfree/{gateway_order_id}/payments")
+async def get_cashfree_payment_attempts(
+    gateway_order_id: str,
+):
+    """
+    Temporary endpoint for inspecting Cashfree payment attempts.
+    """
+
+    try:
+        return get_gateway_payments(gateway_order_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        )
