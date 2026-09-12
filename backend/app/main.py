@@ -110,8 +110,8 @@ from app.routes.course import router as course_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.developer_library import router as developer_library_router
 from app.routes.developer_profile import router as developer_profile_router
-from app.routes.developer_workspace import router as developer_workspace_router
 from app.routes.developer_verification import router as developer_verification_router
+from app.routes.developer_workspace import router as developer_workspace_router
 from app.routes.event import router as event_router
 from app.routes.institution import router as institution_router
 from app.routes.library import router as library_router
