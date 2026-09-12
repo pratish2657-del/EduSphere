@@ -188,6 +188,7 @@ def create_payment(user_id, order_id):
         gateway_order = create_gateway_order(
             amount=amount,
             receipt=f"EDU-{order_id}",
+            notify_url="https://edusphere-fovh.onrender.com/marketplace/payments/webhook",
             notes={
                 "edusphere_order_id": str(order_id),
                 "edusphere_payment_id": str(payment_id),
