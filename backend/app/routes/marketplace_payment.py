@@ -301,7 +301,6 @@ async def get_payment_route(
 @router.get("/cashfree/{gateway_order_id}/debug")
 async def debug_cashfree_order(
     gateway_order_id: str,
-    user=Depends(require_admin),
 ):
     try:
         return get_gateway_order(gateway_order_id)
