@@ -26,7 +26,7 @@ type Submission = {
   reviewed_at?: string | null;
 };
 
-const IDE_URL = (import.meta.env.VITE_DEVELOPER_IDE_URL || "http://127.0.0.1:8443").replace(/\/$/, "");
+const IDE_URL = (import.meta.env.VITE_DEVELOPER_IDE_URL || "").replace(/\/$/, "");
 
 export default function DevelopmentWorkspace() {
   const navigate = useNavigate();
@@ -94,8 +94,20 @@ export default function DevelopmentWorkspace() {
 
   const checkIde = useCallback(async () => {
     setIdeOnline(null);
+
+    if (!IDE_URL) {
+      setIdeOnline(false);
+      setError(
+        "Developer IDE is not configured for this deployment. Set VITE_DEVELOPER_IDE_URL in Vercel to the public HTTPS URL of the browser IDE service."
+      );
+      return;
+    }
+
     try {
-      await fetch(`${IDE_URL}/healthz`, { mode: "no-cors", cache: "no-store" });
+      await fetch(`${IDE_URL}/healthz`, {
+        mode: "no-cors",
+        cache: "no-store",
+      });
       setIdeOnline(true);
     } catch {
       setIdeOnline(false);
@@ -140,7 +152,19 @@ export default function DevelopmentWorkspace() {
           <div className={`dw-ide-status ${ideOnline === true ? "online" : ideOnline === false ? "offline" : "checking"}`}>
             <span /> {ideOnline === true ? "IDE Online" : ideOnline === false ? "IDE Offline" : "Checking IDE"}
           </div>
-          <button onClick={() => developerId ? window.open(`${IDE_URL}/?folder=${encodeURIComponent(`/home/coder/workspace/${developerId}`)}`, "_blank", "noopener,noreferrer") : undefined}><ExternalLink size={15} /> Open IDE</button>
+          <button
+            onClick={() => {
+              if (!IDE_URL || !developerId) return;
+              window.open(
+                `${IDE_URL}/?folder=${encodeURIComponent(`/home/coder/workspace/${developerId}`)}`,
+                "_blank",
+                "noopener,noreferrer",
+              );
+            }}
+            disabled={!IDE_URL || !developerId || ideOnline !== true}
+          >
+            <ExternalLink size={15} /> Open IDE
+          </button>
           <button className="dw-ai" onClick={() => window.dispatchEvent(new Event("edusphere-open-ai"))}><Bot size={15} /> AI</button>
         </div>
       </header>
@@ -196,8 +220,14 @@ export default function DevelopmentWorkspace() {
             <div className="dw-ide-offline">
               <Server size={34} />
               <h2>Developer IDE is not running</h2>
-              <p>Start the EduSphere browser IDE service, then reload this page.</p>
-              <code>docker compose -f docker-compose.developer-workspace.yml up -d</code>
+              <p>
+                {IDE_URL
+                  ? "The configured browser IDE service is unreachable. Start the IDE service and reload this page."
+                  : "This production deployment has no browser IDE URL configured."}
+              </p>
+              {!IDE_URL && (
+                <code>VITE_DEVELOPER_IDE_URL=https://your-public-ide.example.com</code>
+              )}
               <button onClick={() => void checkIde()}><RefreshCw size={14} /> Check again</button>
             </div>
           ) : (
