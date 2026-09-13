@@ -50,20 +50,40 @@ def _get_user(cursor, user_id):
 
 
 def _check_professor_course_access(cursor, professor_id, course_id):
+    """
+    Verify that the logged-in professor is assigned to the course.
+
+    EduSphere currently supports both assignment relationships:
+      1. course_teachers.professor_id -> users.id
+      2. timetables.professor_id -> professor_profiles.id
+
+    Attendance must recognize either relationship.
+    """
 
     cursor.execute(
         """
-        SELECT
-            id
-
+        SELECT 1
         FROM course_teachers
-
         WHERE professor_id = %s
           AND course_id = %s
 
+        UNION ALL
+
+        SELECT 1
+        FROM timetables t
+        INNER JOIN professor_profiles pp
+            ON pp.id = t.professor_id
+        WHERE pp.user_id = %s
+          AND t.course_id = %s
+
         LIMIT 1
         """,
-        (professor_id, course_id),
+        (
+            professor_id,
+            course_id,
+            professor_id,
+            course_id,
+        ),
     )
 
     teaching = cursor.fetchone()
