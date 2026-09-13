@@ -21,6 +21,11 @@ import EduSphere3D from "../components/three/EduSphere3D";
 
 import FloatingTab from "../components/ui/FloatingTab";
 import AIChatbot from "../components/ai/AIChatbot";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV
+    ? "http://localhost:8000"
+    : "https://edusphere-fovh.onrender.com");
 
 export default function Home() {
   return (
@@ -60,7 +65,7 @@ export default function Home() {
           className="nav-login"
           onClick={() => {
             window.location.href =
-              '${import.meta.env.VITE_API_BASE_URL}/auth/google';
+              '${API_BASE_URL}/auth/google';
           }}
         >
           Enter EduSphere
@@ -146,7 +151,7 @@ export default function Home() {
               className="primary-button"
               onClick={() => {
                 window.location.href =
-                  '${import.meta.env.VITE_API_BASE_URL}/auth/google';
+                  '${API_BASE_URL}/auth/google';
               }}
             >
               Enter EduSphere
