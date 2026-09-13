@@ -108,10 +108,25 @@ export default function DevelopmentWorkspace() {
         method: "GET",
         cache: "no-store",
         mode: "cors",
+        headers: {
+          Accept: "application/json",
+        },
       });
+
       if (!response.ok) {
         throw new Error(`IDE health check returned HTTP ${response.status}.`);
       }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.toLowerCase().includes("application/json")) {
+        throw new Error("IDE health check returned an unexpected response.");
+      }
+
+      const health = (await response.json()) as { status?: string };
+      if (health.status !== "ok") {
+        throw new Error("IDE health check did not report OK.");
+      }
+
       setIdeOnline(true);
     } catch {
       setIdeOnline(false);
