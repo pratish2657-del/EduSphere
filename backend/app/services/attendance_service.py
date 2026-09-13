@@ -102,15 +102,25 @@ def _check_student_course_enrollment(
     course_id,
 ):
     """
-    Check enrollment using the canonical users.id and also tolerate
-    legacy rows where course_enrollments.student_id contains the
-    student_profiles.id.
+    Check that the student belongs to the course.
+
+    Primary path:
+      course_enrollments.student_id -> users.id
+
+    Compatibility paths:
+      - course_enrollments.student_id -> student_profiles.id
+      - student_profiles.section_id matches a timetable section for
+        this course
+
+    The section fallback is important because the Professor Attendance
+    roster is built from the student's registered section. It prevents
+    a valid section student from being rejected merely because an
+    enrollment row uses the profile ID or is missing.
     """
 
     cursor.execute(
         """
-        SELECT
-            ce.id
+        SELECT 1
         FROM course_enrollments ce
         LEFT JOIN student_profiles sp
             ON sp.id = ce.student_id
@@ -119,11 +129,23 @@ def _check_student_course_enrollment(
               ce.student_id = %s
               OR sp.user_id = %s
           )
+
+        UNION ALL
+
+        SELECT 1
+        FROM student_profiles sp
+        INNER JOIN timetables t
+            ON t.section_id = sp.section_id
+           AND t.course_id = %s
+        WHERE sp.user_id = %s
+
         LIMIT 1
         """,
         (
             course_id,
             student_id,
+            student_id,
+            course_id,
             student_id,
         ),
     )
