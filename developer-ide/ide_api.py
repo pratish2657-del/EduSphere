@@ -122,4 +122,4 @@ def remove_file(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8081")))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("IDE_BRIDGE_PORT", "8081")))
