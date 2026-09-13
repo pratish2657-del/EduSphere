@@ -56,10 +56,10 @@ interface Course {
 
 interface TimetableItem {
   timetable_id?: number;
-  day?: string;
-  start_time?: string;
-  end_time?: string;
-  room?: string;
+  day?: string | number | null;
+  start_time?: string | number | null;
+  end_time?: string | number | null;
+  room?: string | number | null;
   program_id?: number;
   program_name?: string;
   program_code?: string;
@@ -137,18 +137,15 @@ async function apiRequest<T>(
   return data as T;
 }
 
-function getInitials(name?: unknown): string {
-  if (name === null || name === undefined) {
+function getInitials(
+  name?: string,
+): string {
+  if (!name) {
     return "P";
   }
 
-  const text = String(name).trim();
-
-  if (!text) {
-    return "P";
-  }
-
-  return text
+  return name
+    .trim()
     .split(/\s+/)
     .map((part) => part.charAt(0))
     .join("")
@@ -156,31 +153,41 @@ function getInitials(name?: unknown): string {
     .toUpperCase();
 }
 
-function formatTime(
-  value?: string,
-): string {
-  if (!value) {
+function formatTime(value?: unknown): string {
+  if (value === null || value === undefined || value === "") {
     return "—";
   }
 
-  const parts = value.split(":");
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const totalSeconds = Math.max(0, Math.floor(value));
+    const hour = Math.floor(totalSeconds / 3600) % 24;
+    const minute = Math.floor((totalSeconds % 3600) / 60);
+    const suffix = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 || 12;
 
-  if (parts.length < 2) {
-    return value;
+    return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
   }
 
-  const hour = Number(parts[0]);
-  const minute = parts[1];
+  const text = String(value).trim();
+  if (!text) {
+    return "—";
+  }
 
-  if (
-    Number.isNaN(hour)
-  ) {
-    return value;
+  const match = text.match(/^(\d{1,2}):([0-5]\d)/);
+
+  if (!match) {
+    return text;
+  }
+
+  const hour = Number(match[1]);
+  const minute = match[2];
+
+  if (!Number.isFinite(hour)) {
+    return text;
   }
 
   const suffix = hour >= 12 ? "PM" : "AM";
-  const displayHour =
-    hour % 12 || 12;
+  const displayHour = hour % 12 || 12;
 
   return `${displayHour}:${minute} ${suffix}`;
 }
@@ -1261,7 +1268,9 @@ export default function ProfessorDashboard() {
                         >
                           <span>
                             {normalizeDay(
-                              item.day,
+                              item.day == null
+                                ? undefined
+                                : String(item.day),
                             )}
                           </span>
 
