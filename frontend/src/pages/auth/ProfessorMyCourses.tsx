@@ -45,8 +45,8 @@ interface Course {
 interface TimetableItem {
   timetable_id?: number;
   day?: string;
-  start_time?: string;
-  end_time?: string;
+  start_time?: string | number | null;
+  end_time?: string | number | null;
   room?: string;
   program_name?: string;
   program_code?: string;
@@ -122,16 +122,14 @@ function formatTime(value?: unknown) {
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return "—";
 
-    // Treat numeric values as minutes from midnight when they fit that range.
-    if (value >= 0 && value < 24 * 60) {
-      const hour = Math.floor(value / 60);
-      const minute = Math.floor(value % 60);
-      const suffix = hour >= 12 ? "PM" : "AM";
-      const displayHour = hour % 12 || 12;
-      return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
-    }
-
-    return String(value);
+    // MySQL TIME values can be serialized by the API as seconds from midnight.
+    // Example: 34200 = 09:30, 36900 = 10:15.
+    const totalSeconds = Math.max(0, Math.floor(value));
+    const hour = Math.floor(totalSeconds / 3600) % 24;
+    const minute = Math.floor((totalSeconds % 3600) / 60);
+    const suffix = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
   }
 
   if (typeof value === "object") {
