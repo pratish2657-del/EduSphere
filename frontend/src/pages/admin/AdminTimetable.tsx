@@ -43,9 +43,8 @@ type Course = {
 };
 
 type Professor = {
-  id?: number;
-  user_id?: number;
-  professor_id?: number;
+  professor_id: number;
+  user_id: number;
   full_name?: string;
   email?: string;
   department?: string;
@@ -110,7 +109,9 @@ async function apiRequest<T>(
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        ...(options?.body ? { "Content-Type": "application/json" } : {}),
+        ...(options?.body
+          ? { "Content-Type": "application/json" }
+          : {}),
         ...(options?.headers || {}),
       },
       ...options,
@@ -120,7 +121,9 @@ async function apiRequest<T>(
 
     if (!response.ok) {
       const detail =
-        data && typeof data === "object" && "detail" in data
+        data &&
+        typeof data === "object" &&
+        "detail" in data
           ? (data as { detail?: unknown }).detail
           : undefined;
 
@@ -133,11 +136,15 @@ async function apiRequest<T>(
 
     return data as T;
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
+    if (
+      error instanceof DOMException &&
+      error.name === "AbortError"
+    ) {
       throw new Error(
         `Request timed out. Check that the backend is running at ${API_BASE_URL}.`,
       );
     }
+
     throw error;
   } finally {
     window.clearTimeout(timeout);
@@ -159,11 +166,16 @@ function formatTimeForInput(value?: unknown) {
     const totalSeconds = Math.max(0, Math.floor(value));
     const hour = Math.floor(totalSeconds / 3600) % 24;
     const minute = Math.floor((totalSeconds % 3600) / 60);
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(
+      2,
+      "0",
+    )}`;
   }
 
   if (typeof value === "string") {
-    const match = value.trim().match(/^(\\d{1,2}):([0-5]\\d)/);
+    const match = value.trim().match(/^(\d{1,2}):([0-5]\d)/);
+
     if (match) {
       return `${String(Number(match[1])).padStart(2, "0")}:${match[2]}`;
     }
@@ -173,21 +185,20 @@ function formatTimeForInput(value?: unknown) {
 }
 
 function formatTime(value?: unknown) {
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
 
-  // MySQL/Python time values can arrive through the API as a normal
-  // "HH:MM:SS" string, a number of seconds, or another serialized value.
-  // Normalize all common forms before formatting so one unexpected type
-  // cannot crash the whole Admin Timetable page.
   let hour = 0;
   let minute = 0;
 
   if (typeof value === "number") {
     const totalSeconds = Math.max(0, Math.floor(value));
+
     hour = Math.floor(totalSeconds / 3600) % 24;
     minute = Math.floor((totalSeconds % 3600) / 60);
   } else if (typeof value === "string") {
-    const match = value.trim().match(/^(\\d{1,2}):([0-5]\\d)/);
+    const match = value.trim().match(/^(\d{1,2}):([0-5]\d)/);
 
     if (!match) {
       return value;
@@ -197,7 +208,7 @@ function formatTime(value?: unknown) {
     minute = Number(match[2]);
   } else {
     const serialized = String(value);
-    const match = serialized.match(/^(\\d{1,2}):([0-5]\\d)/);
+    const match = serialized.match(/^(\d{1,2}):([0-5]\d)/);
 
     if (!match) {
       return "—";
@@ -213,15 +224,24 @@ function formatTime(value?: unknown) {
 
   const suffix = hour >= 12 ? "PM" : "AM";
   const displayHour = hour % 12 || 12;
-  return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
+
+  return `${displayHour}:${String(minute).padStart(
+    2,
+    "0",
+  )} ${suffix}`;
 }
 
 function displayName(professor: Professor) {
-  return professor.full_name || professor.email || `Professor #${professor.id}`;
+  return (
+    professor.full_name ||
+    professor.email ||
+    `Professor #${professor.professor_id}`
+  );
 }
 
 export default function AdminTimetable() {
   const [profile, setProfile] = useState<AdminProfile | null>(null);
+
   const [programs, setPrograms] = useState<Program[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -249,15 +269,23 @@ export default function AdminTimetable() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [assigningId, setAssigningId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(
+    null,
+  );
+  const [assigningId, setAssigningId] = useState<number | null>(
+    null,
+  );
+
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   const filteredSections = useMemo(() => {
     if (programId) {
-      return sections.filter((item) => item.program_id === Number(programId));
+      return sections.filter(
+        (item) => item.program_id === Number(programId),
+      );
     }
+
     return sections;
   }, [sections, programId]);
 
@@ -270,82 +298,109 @@ export default function AdminTimetable() {
       adminProfileResponse &&
       typeof adminProfileResponse === "object" &&
       "profile" in adminProfileResponse
-        ? (adminProfileResponse as { profile?: AdminProfile | null }).profile ??
-          null
+        ? (
+            adminProfileResponse as {
+              profile?: AdminProfile | null;
+            }
+          ).profile ?? null
         : (adminProfileResponse as AdminProfile | null);
 
     if (!adminProfile) {
-      throw new Error("Admin Profile not found. Complete your Admin Profile first.");
+      throw new Error(
+        "Admin Profile not found. Complete your Admin Profile first.",
+      );
     }
 
     setProfile(adminProfile);
 
     const institutionId = adminProfile.institution_id;
+
     if (!institutionId) {
-      throw new Error("Your Admin Profile does not have an institution assigned.");
+      throw new Error(
+        "Your Admin Profile does not have an institution assigned.",
+      );
     }
 
-    const [programResponse, courseResponse, professorResponse] =
-      await Promise.all([
-        apiRequest<ListResponse<Program>>(
-          `/programs/?institution_id=${institutionId}`,
-        ),
-        apiRequest<ListResponse<Course>>(
-          `/courses/?institution_id=${institutionId}`,
-        ),
-        apiRequest<ListResponse<Professor>>(
-          `/admin/users?role=PROFESSOR&status=ACTIVE&limit=100`,
-        ),
-      ]);
+    const [
+      programResponse,
+      courseResponse,
+      professorResponse,
+    ] = await Promise.all([
+      apiRequest<ListResponse<Program>>(
+        `/programs/?institution_id=${institutionId}`,
+      ),
+
+      apiRequest<ListResponse<Course>>(
+        `/courses/?institution_id=${institutionId}`,
+      ),
+
+      apiRequest<{ professors?: Professor[] }>(
+        "/timetable/admin/professors",
+      ),
+    ]);
 
     setPrograms(programResponse.programs ?? []);
     setCourses(courseResponse.courses ?? []);
-    setProfessors(professorResponse.users ?? []);
+    setProfessors(professorResponse.professors ?? []);
 
-    // Sections are loaded for all programs so filters can be changed without
-    // another request. If your backend only supports program_id, the fallback
-    // below loads them per selected program in loadSectionsForProgram().
     try {
-      const sectionResponse = await apiRequest<ListResponse<Section>>(
-        `/sections/?institution_id=${institutionId}`,
-      );
+      const sectionResponse = await apiRequest<
+        ListResponse<Section>
+      >(`/sections/?institution_id=${institutionId}`);
+
       setSections(sectionResponse.sections ?? []);
     } catch {
       setSections([]);
     }
   }, []);
 
-  const loadSectionsForProgram = useCallback(async (selectedProgramId: string) => {
-    if (!selectedProgramId) {
-      setSections([]);
-      return;
-    }
+  const loadSectionsForProgram = useCallback(
+    async (selectedProgramId: string) => {
+      if (!selectedProgramId) {
+        setSections([]);
+        return;
+      }
 
-    try {
-      const response = await apiRequest<ListResponse<Section>>(
-        `/sections/?program_id=${selectedProgramId}`,
-      );
-      setSections(response.sections ?? []);
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to load sections.",
-      );
-    }
-  }, []);
+      try {
+        const response = await apiRequest<ListResponse<Section>>(
+          `/sections/?program_id=${selectedProgramId}`,
+        );
+
+        setSections(response.sections ?? []);
+      } catch (requestError) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load sections.",
+        );
+      }
+    },
+    [],
+  );
 
   const loadTimetable = useCallback(async () => {
     const params = new URLSearchParams();
 
-    if (programFilter !== "ALL") params.set("program_id", programFilter);
-    if (sectionFilter !== "ALL") params.set("section_id", sectionFilter);
-    if (dayFilter !== "ALL") params.set("day", dayFilter);
+    if (programFilter !== "ALL") {
+      params.set("program_id", programFilter);
+    }
 
-    const suffix = params.toString() ? `?${params.toString()}` : "";
+    if (sectionFilter !== "ALL") {
+      params.set("section_id", sectionFilter);
+    }
+
+    if (dayFilter !== "ALL") {
+      params.set("day", dayFilter);
+    }
+
+    const suffix = params.toString()
+      ? `?${params.toString()}`
+      : "";
+
     const response = await apiRequest<TimetableResponse>(
       `/timetable/admin${suffix}`,
     );
+
     setTimetable(response.timetable ?? []);
   }, [programFilter, sectionFilter, dayFilter]);
 
@@ -382,7 +437,9 @@ export default function AdminTimetable() {
     const q = search.trim().toLowerCase();
 
     return timetable.filter((item) => {
-      if (!q) return true;
+      if (!q) {
+        return true;
+      }
 
       return [
         item.course_name,
@@ -395,13 +452,19 @@ export default function AdminTimetable() {
         item.section_code,
       ]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q));
+        .some((value) =>
+          String(value).toLowerCase().includes(q),
+        );
     });
   }, [timetable, search]);
 
   const resetForm = () => {
     setEditing(null);
-    setProgramId(programs[0]?.id ? String(programs[0].id) : "");
+
+    setProgramId(
+      programs[0]?.id ? String(programs[0].id) : "",
+    );
+
     setSectionId("");
     setCourseId("");
     setAcademicYear("");
@@ -416,32 +479,45 @@ export default function AdminTimetable() {
   const openCreate = () => {
     setError("");
     setNotice("");
+
     resetForm();
+
     setModalOpen(true);
   };
 
   const openEdit = (item: TimetableItem) => {
     setError("");
     setNotice("");
+
     setEditing(item);
+
     setProgramId(String(item.program_id));
     setSectionId(String(item.section_id));
     setCourseId(String(item.course_id));
     setAcademicYear(item.academic_year);
     setCurrentYear(String(item.current_year));
     setDay(item.day.toUpperCase());
+
     setStartTime(
       typeof item.start_time === "string"
         ? item.start_time.slice(0, 5)
         : formatTimeForInput(item.start_time),
     );
+
     setEndTime(
       typeof item.end_time === "string"
         ? item.end_time.slice(0, 5)
         : formatTimeForInput(item.end_time),
     );
+
     setRoom(item.room);
-    setProfessorId(item.professor_id ? String(item.professor_id) : "");
+
+    setProfessorId(
+      item.professor_id
+        ? String(item.professor_id)
+        : "",
+    );
+
     setModalOpen(true);
   };
 
@@ -454,17 +530,27 @@ export default function AdminTimetable() {
     }
 
     if (!programId || !sectionId || !courseId) {
-      setError("Program, section and course are required.");
+      setError(
+        "Program, section and course are required.",
+      );
       return;
     }
 
     if (!academicYear.trim() || !room.trim()) {
-      setError("Academic year and room are required.");
+      setError(
+        "Academic year and room are required.",
+      );
       return;
     }
 
-    if (!startTime || !endTime || startTime >= endTime) {
-      setError("Start time must be before end time.");
+    if (
+      !startTime ||
+      !endTime ||
+      startTime >= endTime
+    ) {
+      setError(
+        "Start time must be before end time.",
+      );
       return;
     }
 
@@ -474,7 +560,10 @@ export default function AdminTimetable() {
 
     try {
       const payload = {
-        ...(editing ? {} : { institution_id: institutionId }),
+        ...(editing
+          ? {}
+          : { institution_id: institutionId }),
+
         program_id: Number(programId),
         section_id: Number(sectionId),
         course_id: Number(courseId),
@@ -494,24 +583,40 @@ export default function AdminTimetable() {
               body: JSON.stringify(payload),
             },
           )
-        : await apiRequest<{ timetable_id?: number }>("/timetable/", {
-            method: "POST",
-            body: JSON.stringify(payload),
-          });
+        : await apiRequest<{ timetable_id?: number }>(
+            "/timetable/",
+            {
+              method: "POST",
+              body: JSON.stringify(payload),
+            },
+          );
 
-      const timetableId = response.timetable_id ?? editing?.timetable_id;
+      const timetableId =
+        response.timetable_id ??
+        editing?.timetable_id;
 
       if (timetableId) {
-        await apiRequest(`/timetable/${timetableId}/assign-professor`, {
-          method: "PUT",
-          body: JSON.stringify({
-            professor_id: professorId ? Number(professorId) : null,
-          }),
-        });
+        await apiRequest(
+          `/timetable/${timetableId}/assign-professor`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              professor_id: professorId
+                ? Number(professorId)
+                : null,
+            }),
+          },
+        );
       }
 
-      setNotice(editing ? "Timetable updated successfully." : "Timetable created successfully.");
+      setNotice(
+        editing
+          ? "Timetable updated successfully."
+          : "Timetable created successfully.",
+      );
+
       setModalOpen(false);
+
       await loadTimetable();
     } catch (requestError) {
       setError(
@@ -525,7 +630,14 @@ export default function AdminTimetable() {
   };
 
   const deleteEntry = async (item: TimetableItem) => {
-    if (!window.confirm(`Delete ${item.course_name || "this timetable entry"}?`)) {
+    if (
+      !window.confirm(
+        `Delete ${
+          item.course_name ||
+          "this timetable entry"
+        }?`,
+      )
+    ) {
       return;
     }
 
@@ -534,10 +646,17 @@ export default function AdminTimetable() {
     setNotice("");
 
     try {
-      await apiRequest(`/timetable/${item.timetable_id}`, {
-        method: "DELETE",
-      });
-      setNotice("Timetable entry deleted successfully.");
+      await apiRequest(
+        `/timetable/${item.timetable_id}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      setNotice(
+        "Timetable entry deleted successfully.",
+      );
+
       await loadTimetable();
     } catch (requestError) {
       setError(
@@ -550,20 +669,31 @@ export default function AdminTimetable() {
     }
   };
 
-  const assignProfessor = async (item: TimetableItem, nextProfessorId: string) => {
+  const assignProfessor = async (
+    item: TimetableItem,
+    nextProfessorId: string,
+  ) => {
     setAssigningId(item.timetable_id);
     setError("");
     setNotice("");
 
     try {
-      await apiRequest(`/timetable/${item.timetable_id}/assign-professor`, {
-        method: "PUT",
-        body: JSON.stringify({
-          professor_id: nextProfessorId ? Number(nextProfessorId) : null,
-        }),
-      });
+      await apiRequest(
+        `/timetable/${item.timetable_id}/assign-professor`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            professor_id: nextProfessorId
+              ? Number(nextProfessorId)
+              : null,
+          }),
+        },
+      );
 
-      setNotice("Professor assignment updated.");
+      setNotice(
+        "Professor assignment updated.",
+      );
+
       await loadTimetable();
     } catch (requestError) {
       setError(
@@ -577,7 +707,9 @@ export default function AdminTimetable() {
   };
 
   const institutionLabel =
-    profile?.institution_name || profile?.institution_code || "Institution";
+    profile?.institution_name ||
+    profile?.institution_code ||
+    "Institution";
 
   return (
     <div className="admin-timetable-page">
@@ -587,10 +719,13 @@ export default function AdminTimetable() {
             <CalendarDays size={16} />
             ACADEMIC MANAGEMENT
           </div>
+
           <h1>Timetable Management</h1>
+
           <p>
-            Create, update, assign professors and manage the complete timetable
-            for {institutionLabel}.
+            Create, update, assign professors and
+            manage the complete timetable for{" "}
+            {institutionLabel}.
           </p>
         </div>
 
@@ -600,7 +735,14 @@ export default function AdminTimetable() {
             onClick={() => void loadAll()}
             disabled={loading}
           >
-            <RefreshCw size={17} className={loading ? "admin-timetable-spin" : ""} />
+            <RefreshCw
+              size={17}
+              className={
+                loading
+                  ? "admin-timetable-spin"
+                  : ""
+              }
+            />
             Refresh
           </button>
 
@@ -619,14 +761,17 @@ export default function AdminTimetable() {
           <span>Total Entries</span>
           <strong>{timetable.length}</strong>
         </div>
+
         <div>
           <span>Programs</span>
           <strong>{programs.length}</strong>
         </div>
+
         <div>
           <span>Professors</span>
           <strong>{professors.length}</strong>
         </div>
+
         <div>
           <span>Filtered Results</span>
           <strong>{visibleRows.length}</strong>
@@ -634,9 +779,20 @@ export default function AdminTimetable() {
       </div>
 
       {(error || notice) && (
-        <div className={`admin-timetable-alert ${error ? "is-error" : "is-success"}`}>
+        <div
+          className={`admin-timetable-alert ${
+            error ? "is-error" : "is-success"
+          }`}
+        >
           <span>{error || notice}</span>
-          <button onClick={() => { setError(""); setNotice(""); }} aria-label="Dismiss">
+
+          <button
+            onClick={() => {
+              setError("");
+              setNotice("");
+            }}
+            aria-label="Dismiss"
+          >
             <X size={16} />
           </button>
         </div>
@@ -646,29 +802,41 @@ export default function AdminTimetable() {
         <div className="admin-timetable-toolbar">
           <div className="admin-timetable-search">
             <Search size={17} />
+
             <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
               placeholder="Search course, professor, room..."
             />
           </div>
 
           <label>
             <span>Program</span>
+
             <select
               value={programFilter}
               onChange={(event) => {
                 const value = event.target.value;
+
                 setProgramFilter(value);
                 setSectionFilter("ALL");
+
                 if (value !== "ALL") {
                   void loadSectionsForProgram(value);
                 }
               }}
             >
-              <option value="ALL">All Programs</option>
+              <option value="ALL">
+                All Programs
+              </option>
+
               {programs.map((program) => (
-                <option key={program.id} value={program.id}>
+                <option
+                  key={program.id}
+                  value={program.id}
+                >
                   {program.code} — {program.name}
                 </option>
               ))}
@@ -677,13 +845,24 @@ export default function AdminTimetable() {
 
           <label>
             <span>Section</span>
+
             <select
               value={sectionFilter}
-              onChange={(event) => setSectionFilter(event.target.value)}
+              onChange={(event) =>
+                setSectionFilter(
+                  event.target.value,
+                )
+              }
             >
-              <option value="ALL">All Sections</option>
+              <option value="ALL">
+                All Sections
+              </option>
+
               {sections.map((section) => (
-                <option key={section.id} value={section.id}>
+                <option
+                  key={section.id}
+                  value={section.id}
+                >
                   {section.code} — {section.name}
                 </option>
               ))}
@@ -692,14 +871,21 @@ export default function AdminTimetable() {
 
           <label>
             <span>Day</span>
+
             <select
               value={dayFilter}
-              onChange={(event) => setDayFilter(event.target.value)}
+              onChange={(event) =>
+                setDayFilter(event.target.value)
+              }
             >
-              <option value="ALL">All Days</option>
+              <option value="ALL">
+                All Days
+              </option>
+
               {DAYS.map((item) => (
                 <option key={item} value={item}>
-                  {item.charAt(0) + item.slice(1).toLowerCase()}
+                  {item.charAt(0) +
+                    item.slice(1).toLowerCase()}
                 </option>
               ))}
             </select>
@@ -723,16 +909,29 @@ export default function AdminTimetable() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="admin-timetable-empty">
+                  <td
+                    colSpan={7}
+                    className="admin-timetable-empty"
+                  >
                     Loading timetable...
                   </td>
                 </tr>
               ) : visibleRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="admin-timetable-empty">
+                  <td
+                    colSpan={7}
+                    className="admin-timetable-empty"
+                  >
                     <CalendarDays size={30} />
-                    <strong>No timetable entries found</strong>
-                    <span>Create a timetable entry or change the filters.</span>
+
+                    <strong>
+                      No timetable entries found
+                    </strong>
+
+                    <span>
+                      Create a timetable entry or
+                      change the filters.
+                    </span>
                   </td>
                 </tr>
               ) : (
@@ -741,25 +940,47 @@ export default function AdminTimetable() {
                     <td>
                       <div className="admin-timetable-time">
                         <Clock3 size={15} />
-                        <strong>{formatTime(item.start_time)}</strong>
-                        <span>{formatTime(item.end_time)}</span>
-                      </div>
-                    </td>
 
-                    <td>
-                      <div className="admin-timetable-course">
-                        <strong>{item.course_name || "Unnamed Course"}</strong>
-                        <span>{item.course_code || "—"}</span>
+                        <strong>
+                          {formatTime(
+                            item.start_time,
+                          )}
+                        </strong>
+
+                        <span>
+                          {formatTime(
+                            item.end_time,
+                          )}
+                        </span>
                       </div>
                     </td>
 
                     <td>
                       <div className="admin-timetable-course">
                         <strong>
-                          {item.program_code || item.program_name || "—"}
+                          {item.course_name ||
+                            "Unnamed Course"}
                         </strong>
+
                         <span>
-                          {item.section_code || item.section_name || "—"} · Year{" "}
+                          {item.course_code || "—"}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td>
+                      <div className="admin-timetable-course">
+                        <strong>
+                          {item.program_code ||
+                            item.program_name ||
+                            "—"}
+                        </strong>
+
+                        <span>
+                          {item.section_code ||
+                            item.section_name ||
+                            "—"}{" "}
+                          · Year{" "}
                           {item.current_year}
                         </span>
                       </div>
@@ -769,41 +990,70 @@ export default function AdminTimetable() {
                       <div className="admin-timetable-professor-cell">
                         <div className="admin-timetable-professor-name">
                           <UserRound size={15} />
-                          <span>{item.professor_name || "Not assigned"}</span>
+
+                          <span>
+                            {item.professor_name ||
+                              "Not assigned"}
+                          </span>
                         </div>
 
                         <div className="admin-timetable-assignment">
                           <select
-                            value={item.professor_id ? String(item.professor_id) : ""}
-                            disabled={assigningId === item.timetable_id}
+                            value={
+                              item.professor_id
+                                ? String(
+                                    item.professor_id,
+                                  )
+                                : ""
+                            }
+                            disabled={
+                              assigningId ===
+                              item.timetable_id
+                            }
                             onChange={(event) =>
-                              void assignProfessor(item, event.target.value)
+                              void assignProfessor(
+                                item,
+                                event.target.value,
+                              )
                             }
                           >
-                            <option value="">Unassigned</option>
-                            {professors.map((professor) => {
-                              const id =
-                                professor.id ??
-                                professor.professor_id ??
-                                professor.user_id;
-                              return id ? (
-                                <option key={id} value={id}>
-                                  {displayName(professor)}
+                            <option value="">
+                              Unassigned
+                            </option>
+
+                            {professors.map(
+                              (professor) => (
+                                <option
+                                  key={
+                                    professor.professor_id
+                                  }
+                                  value={
+                                    professor.professor_id
+                                  }
+                                >
+                                  {displayName(
+                                    professor,
+                                  )}
                                 </option>
-                              ) : null;
-                            })}
+                              ),
+                            )}
                           </select>
                         </div>
                       </div>
                     </td>
 
                     <td>
-                      <span className="admin-timetable-room">{item.room}</span>
+                      <span className="admin-timetable-room">
+                        {item.room}
+                      </span>
                     </td>
 
                     <td>
                       <span className="admin-timetable-day">
-                        {item.day.charAt(0) + item.day.slice(1).toLowerCase()}
+                        {item.day.charAt(0) +
+                          item.day
+                            .slice(1)
+                            .toLowerCase()}
                       </span>
                     </td>
 
@@ -811,15 +1061,23 @@ export default function AdminTimetable() {
                       <div className="admin-timetable-row-actions">
                         <button
                           title="Edit"
-                          onClick={() => openEdit(item)}
+                          onClick={() =>
+                            openEdit(item)
+                          }
                         >
                           <Edit3 size={16} />
                         </button>
+
                         <button
                           title="Delete"
                           className="danger"
-                          disabled={deletingId === item.timetable_id}
-                          onClick={() => void deleteEntry(item)}
+                          disabled={
+                            deletingId ===
+                            item.timetable_id
+                          }
+                          onClick={() =>
+                            void deleteEntry(item)
+                          }
                         >
                           <Trash2 size={16} />
                         </button>
@@ -837,7 +1095,10 @@ export default function AdminTimetable() {
         <div
           className="admin-timetable-modal-backdrop"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !saving) {
+            if (
+              event.target === event.currentTarget &&
+              !saving
+            ) {
               setModalOpen(false);
             }
           }}
@@ -845,11 +1106,23 @@ export default function AdminTimetable() {
           <div className="admin-timetable-modal">
             <div className="admin-timetable-modal-header">
               <div>
-                <span>{editing ? "UPDATE ENTRY" : "NEW ENTRY"}</span>
-                <h2>{editing ? "Edit Timetable" : "Add Timetable"}</h2>
+                <span>
+                  {editing
+                    ? "UPDATE ENTRY"
+                    : "NEW ENTRY"}
+                </span>
+
+                <h2>
+                  {editing
+                    ? "Edit Timetable"
+                    : "Add Timetable"}
+                </h2>
               </div>
+
               <button
-                onClick={() => setModalOpen(false)}
+                onClick={() =>
+                  setModalOpen(false)
+                }
                 disabled={saving}
                 aria-label="Close"
               >
@@ -860,11 +1133,26 @@ export default function AdminTimetable() {
             <div className="admin-timetable-form-grid">
               <label>
                 <span>Program *</span>
-                <select value={programId} onChange={(event) => setProgramId(event.target.value)}>
-                  <option value="">Select program</option>
+
+                <select
+                  value={programId}
+                  onChange={(event) =>
+                    setProgramId(
+                      event.target.value,
+                    )
+                  }
+                >
+                  <option value="">
+                    Select program
+                  </option>
+
                   {programs.map((program) => (
-                    <option key={program.id} value={program.id}>
-                      {program.code} — {program.name}
+                    <option
+                      key={program.id}
+                      value={program.id}
+                    >
+                      {program.code} —{" "}
+                      {program.name}
                     </option>
                   ))}
                 </select>
@@ -872,33 +1160,68 @@ export default function AdminTimetable() {
 
               <label>
                 <span>Section *</span>
+
                 <select
                   value={sectionId}
-                  onChange={(event) => setSectionId(event.target.value)}
+                  onChange={(event) =>
+                    setSectionId(
+                      event.target.value,
+                    )
+                  }
                   disabled={!programId}
                 >
-                  <option value="">Select section</option>
-                  {filteredSections.map((section) => (
-                    <option key={section.id} value={section.id}>
-                      {section.code} — {section.name}
-                    </option>
-                  ))}
+                  <option value="">
+                    Select section
+                  </option>
+
+                  {filteredSections.map(
+                    (section) => (
+                      <option
+                        key={section.id}
+                        value={section.id}
+                      >
+                        {section.code} —{" "}
+                        {section.name}
+                      </option>
+                    ),
+                  )}
                 </select>
               </label>
 
               <label className="wide">
                 <span>Course *</span>
-                <select value={courseId} onChange={(event) => setCourseId(event.target.value)}>
-                  <option value="">Select course</option>
+
+                <select
+                  value={courseId}
+                  onChange={(event) =>
+                    setCourseId(
+                      event.target.value,
+                    )
+                  }
+                >
+                  <option value="">
+                    Select course
+                  </option>
+
                   {courses
                     .filter(
                       (course) =>
-                        !programId || Number(course.program_id) === Number(programId),
+                        !programId ||
+                        Number(
+                          course.program_id,
+                        ) ===
+                          Number(programId),
                     )
                     .map((course) => (
-                      <option key={course.id} value={course.id}>
-                        {course.code} — {course.name}
-                        {course.semester ? ` · Sem ${course.semester}` : ""}
+                      <option
+                        key={course.id}
+                        value={course.id}
+                      >
+                        {course.code} —{" "}
+                        {course.name}
+                        {course.semester
+                          ? ` · Sem ${course.semester}`
+                          : ""}
                       </option>
                     ))}
                 </select>
@@ -906,21 +1229,37 @@ export default function AdminTimetable() {
 
               <label>
                 <span>Academic Year *</span>
+
                 <input
                   value={academicYear}
-                  onChange={(event) => setAcademicYear(event.target.value)}
+                  onChange={(event) =>
+                    setAcademicYear(
+                      event.target.value,
+                    )
+                  }
                   placeholder="2026-27"
                 />
               </label>
 
               <label>
                 <span>Current Year *</span>
+
                 <select
                   value={currentYear}
-                  onChange={(event) => setCurrentYear(event.target.value)}
+                  onChange={(event) =>
+                    setCurrentYear(
+                      event.target.value,
+                    )
+                  }
                 >
-                  {Array.from({ length: 10 }, (_, index) => index + 1).map((year) => (
-                    <option key={year} value={year}>
+                  {Array.from(
+                    { length: 10 },
+                    (_, index) => index + 1,
+                  ).map((year) => (
+                    <option
+                      key={year}
+                      value={year}
+                    >
                       Year {year}
                     </option>
                   ))}
@@ -929,10 +1268,22 @@ export default function AdminTimetable() {
 
               <label>
                 <span>Day *</span>
-                <select value={day} onChange={(event) => setDay(event.target.value)}>
+
+                <select
+                  value={day}
+                  onChange={(event) =>
+                    setDay(event.target.value)
+                  }
+                >
                   {DAYS.map((item) => (
-                    <option key={item} value={item}>
-                      {item.charAt(0) + item.slice(1).toLowerCase()}
+                    <option
+                      key={item}
+                      value={item}
+                    >
+                      {item.charAt(0) +
+                        item
+                          .slice(1)
+                          .toLowerCase()}
                     </option>
                   ))}
                 </select>
@@ -940,48 +1291,74 @@ export default function AdminTimetable() {
 
               <label>
                 <span>Professor</span>
+
                 <select
                   value={professorId}
-                  onChange={(event) => setProfessorId(event.target.value)}
+                  onChange={(event) =>
+                    setProfessorId(
+                      event.target.value,
+                    )
+                  }
                 >
-                  <option value="">Unassigned</option>
-                  {professors.map((professor) => {
-                    const id =
-                      professor.id ??
-                      professor.professor_id ??
-                      professor.user_id;
-                    return id ? (
-                      <option key={id} value={id}>
-                        {displayName(professor)}
+                  <option value="">
+                    Unassigned
+                  </option>
+
+                  {professors.map(
+                    (professor) => (
+                      <option
+                        key={
+                          professor.professor_id
+                        }
+                        value={
+                          professor.professor_id
+                        }
+                      >
+                        {displayName(
+                          professor,
+                        )}
                       </option>
-                    ) : null;
-                  })}
+                    ),
+                  )}
                 </select>
               </label>
 
               <label>
                 <span>Start Time *</span>
+
                 <input
                   type="time"
                   value={startTime}
-                  onChange={(event) => setStartTime(event.target.value)}
+                  onChange={(event) =>
+                    setStartTime(
+                      event.target.value,
+                    )
+                  }
                 />
               </label>
 
               <label>
                 <span>End Time *</span>
+
                 <input
                   type="time"
                   value={endTime}
-                  onChange={(event) => setEndTime(event.target.value)}
+                  onChange={(event) =>
+                    setEndTime(
+                      event.target.value,
+                    )
+                  }
                 />
               </label>
 
               <label className="wide">
                 <span>Room *</span>
+
                 <input
                   value={room}
-                  onChange={(event) => setRoom(event.target.value)}
+                  onChange={(event) =>
+                    setRoom(event.target.value)
+                  }
                   placeholder="Room 301 / Lab 2"
                 />
               </label>
@@ -990,22 +1367,32 @@ export default function AdminTimetable() {
             <div className="admin-timetable-modal-footer">
               <button
                 className="admin-timetable-secondary-button"
-                onClick={() => setModalOpen(false)}
+                onClick={() =>
+                  setModalOpen(false)
+                }
                 disabled={saving}
               >
                 Cancel
               </button>
+
               <button
                 className="admin-timetable-primary-button"
-                onClick={() => void saveEntry()}
+                onClick={() =>
+                  void saveEntry()
+                }
                 disabled={saving}
               >
-                {saving ? "Saving..." : editing ? "Update Timetable" : "Create Timetable"}
+                {saving
+                  ? "Saving..."
+                  : editing
+                    ? "Update Timetable"
+                    : "Create Timetable"}
               </button>
             </div>
           </div>
         </div>
       )}
+
       <AI />
     </div>
   );

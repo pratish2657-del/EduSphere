@@ -21,6 +21,7 @@ from app.services.timetable_service import (
     assign_professor,
     create_timetable,
     delete_timetable,
+    get_admin_professors,
     get_admin_timetable,
     get_professor_timetable,
     get_student_timetable,
@@ -153,6 +154,40 @@ async def professor_timetable(
         raise HTTPException(
             status_code=500,
             detail="Unable to retrieve professor timetable",
+        ) from error
+
+
+# ============================================================
+# ADMIN — PROFESSOR LIST
+# ============================================================
+
+
+@router.get("/admin/professors")
+async def admin_professors(request: Request):
+    admin = require_admin(request)
+
+    try:
+        return get_admin_professors(user_id=admin["id"])
+
+    except UnauthorizedError as error:
+        raise HTTPException(status_code=401, detail=str(error)) from error
+
+    except ForbiddenError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
+
+    except NotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+    except BadRequestError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    except ConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve verified professors",
         ) from error
 
 

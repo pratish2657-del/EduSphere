@@ -969,6 +969,82 @@ def get_professor_timetable(
 
 
 # ============================================================
+# ADMIN — LIST VERIFIED PROFESSORS
+# ============================================================
+
+
+def get_admin_professors(user_id):
+    """Return active, verified professors belonging to the admin's institution."""
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT institution_id
+            FROM admin_profiles
+            WHERE user_id = %s
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+
+        admin = cursor.fetchone()
+
+        if not admin:
+            raise NotFoundError("Admin profile not found")
+
+        institution_id = admin["institution_id"]
+
+        cursor.execute(
+            """
+            SELECT
+                pp.id AS professor_id,
+                pp.user_id,
+                u.full_name,
+                u.email,
+                pp.department,
+                pp.designation,
+                (
+                    SELECT pv.status
+                    FROM professor_verifications pv
+                    WHERE pv.professor_id = pp.id
+                    ORDER BY pv.id DESC
+                    LIMIT 1
+                ) AS verification_status
+            FROM professor_profiles pp
+            INNER JOIN users u
+                ON pp.user_id = u.id
+            INNER JOIN roles r
+                ON u.role_id = r.id
+            WHERE pp.institution_id = %s
+              AND u.is_active = TRUE
+              AND r.name = 'PROFESSOR'
+              AND EXISTS (
+                    SELECT 1
+                    FROM professor_verifications pv
+                    WHERE pv.professor_id = pp.id
+                      AND pv.status = 'VERIFIED'
+              )
+            ORDER BY u.full_name ASC, u.email ASC
+            """,
+            (institution_id,),
+        )
+
+        professors = cursor.fetchall()
+
+        return {
+            "institution_id": institution_id,
+            "count": len(professors),
+            "professors": professors,
+        }
+
+    finally:
+        connection.close()
+
+
+# ============================================================
 # ADMIN — ASSIGN PROFESSOR
 # ============================================================
 
@@ -1039,7 +1115,14 @@ def assign_professor(
                 pp.id,
                 pp.institution_id,
                 u.is_active,
-                r.name AS role
+                r.name AS role,
+                (
+                    SELECT pv.status
+                    FROM professor_verifications pv
+                    WHERE pv.professor_id = pp.id
+                    ORDER BY pv.id DESC
+                    LIMIT 1
+                ) AS verification_status
 
             FROM professor_profiles pp
 
@@ -1070,6 +1153,11 @@ def assign_professor(
         if professor["role"] != "PROFESSOR":
             raise ForbiddenError(
                 "Selected user is not a PROFESSOR"
+            )
+
+        if professor["verification_status"] != "VERIFIED":
+            raise ForbiddenError(
+                "Professor is not verified"
             )
 
         if (
