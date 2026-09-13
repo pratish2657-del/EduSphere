@@ -3,12 +3,16 @@ FROM codercom/code-server:latest
 USER root
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-pip nginx gettext-base supervisor \
+    && apt-get install -y --no-install-recommends python3 python3-venv nginx gettext-base supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/ide
+
 COPY requirements.txt /opt/ide/requirements.txt
-RUN pip3 install --no-cache-dir --break-system-packages -r /opt/ide/requirements.txt
+
+RUN python3 -m venv /opt/ide/venv \
+    && /opt/ide/venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/ide/venv/bin/pip install --no-cache-dir -r /opt/ide/requirements.txt
 
 COPY ide_api.py /opt/ide/ide_api.py
 COPY nginx.conf /opt/ide/nginx.conf
