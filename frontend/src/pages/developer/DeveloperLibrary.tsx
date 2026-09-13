@@ -236,7 +236,7 @@ export default function DeveloperLibrary() {
                   <td><span className="developer-library-badge">{resource.resource_type}</span></td>
                   <td><span className={`developer-library-status status-${resource.status.toLowerCase()}`}>{resource.status}</span></td>
                   <td>{fileSize(resource.file_size)}</td>
-                  <td><div className="developer-library-actions"><button title="Download" onClick={() => window.open(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/developer/library/${resource.id}/download`, "_blank")}><Download size={15} /></button><button title="Edit" onClick={() => openEdit(resource)}><Edit3 size={15} /></button><button title="Delete" className="danger" onClick={() => void removeResource(resource)}><Trash2 size={15} /></button></div></td>
+                  <td><div className="developer-library-actions"><button title="Download" onClick={() => window.open(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/developer/library/${resource.id}/download`, "_blank")}><Download size={15} /></button><button title="Edit" onClick={() => openEdit(resource)}><Edit3 size={15} /></button><button title="Delete" className="danger" onClick={() => void removeResource(resource)}><Trash2 size={15} /></button></div></td>
                 </tr>
               ))}</tbody>
             </table>
