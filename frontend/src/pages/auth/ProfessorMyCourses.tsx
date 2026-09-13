@@ -111,17 +111,61 @@ async function apiRequest<T>(endpoint: string): Promise<T> {
   return data as T;
 }
 
-function formatTime(value?: string) {
-  if (!value) return "—";
+function formatTime(value?: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return "—";
+  }
 
-  const parts = value.split(":");
+  // FastAPI/MySQL TIME values are normally returned as strings, but
+  // production data can sometimes arrive as a number or structured value.
+  // Normalize those shapes before calling string methods.
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "—";
 
-  if (parts.length < 2) return value;
+    // Treat numeric values as minutes from midnight when they fit that range.
+    if (value >= 0 && value < 24 * 60) {
+      const hour = Math.floor(value / 60);
+      const minute = Math.floor(value % 60);
+      const suffix = hour >= 12 ? "PM" : "AM";
+      const displayHour = hour % 12 || 12;
+      return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
+    }
+
+    return String(value);
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const hourValue = record.hour ?? record.hours;
+    const minuteValue = record.minute ?? record.minutes;
+
+    if (
+      typeof hourValue === "number" &&
+      typeof minuteValue === "number" &&
+      Number.isFinite(hourValue) &&
+      Number.isFinite(minuteValue)
+    ) {
+      const hour = hourValue;
+      const minute = minuteValue;
+      const suffix = hour >= 12 ? "PM" : "AM";
+      const displayHour = hour % 12 || 12;
+      return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
+    }
+
+    return "—";
+  }
+
+  const stringValue = String(value).trim();
+  if (!stringValue) return "—";
+
+  const parts = stringValue.split(":");
+
+  if (parts.length < 2) return stringValue;
 
   const hour = Number(parts[0]);
   const minute = parts[1];
 
-  if (Number.isNaN(hour)) return value;
+  if (Number.isNaN(hour)) return stringValue;
 
   const suffix = hour >= 12 ? "PM" : "AM";
   const displayHour = hour % 12 || 12;
@@ -129,10 +173,15 @@ function formatTime(value?: string) {
   return `${displayHour}:${minute} ${suffix}`;
 }
 
-function normalizeDay(day?: string) {
-  if (!day) return "Unknown";
+function normalizeDay(day?: unknown) {
+  if (day === undefined || day === null || day === "") {
+    return "Unknown";
+  }
 
-  return day.charAt(0).toUpperCase() + day.slice(1).toLowerCase();
+  const value = String(day).trim();
+  if (!value) return "Unknown";
+
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
 
 function getCourseName(course: Course) {
@@ -369,10 +418,10 @@ export default function MyCourses() {
 
           <div style={styles.professorChip}>
             <div style={styles.avatar}>
-              {(professor?.full_name || user?.full_name || "P")
+              {String(professor?.full_name || user?.full_name || "P")
                 .trim()
                 .split(/\s+/)
-                .map((part) => part[0])
+                .map((part) => part[0] || "")
                 .join("")
                 .slice(0, 2)
                 .toUpperCase()}
