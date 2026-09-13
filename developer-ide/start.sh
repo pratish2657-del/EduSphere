@@ -1,13 +1,9 @@
 #!/bin/bash
-
 set -e
 
-PORT="${PORT:-8080}"
+export PORT="${PORT:-10000}"
+export IDE_BRIDGE_PORT="${IDE_BRIDGE_PORT:-8081}"
 
 mkdir -p /home/coder/workspace
-
-exec code-server \
-  --bind-addr "0.0.0.0:${PORT}" \
-  --auth none \
-  --disable-telemetry \
-  /home/coder/workspace
+envsubst '${PORT}' < /opt/ide/nginx.conf > /tmp/nginx.conf
+exec /usr/bin/supervisord -c /opt/ide/supervisord.conf

@@ -104,10 +104,14 @@ export default function DevelopmentWorkspace() {
     }
 
     try {
-      await fetch(`${IDE_URL}/healthz`, {
-        mode: "no-cors",
+      const response = await fetch(`${IDE_URL}/healthz`, {
+        method: "GET",
         cache: "no-store",
+        mode: "cors",
       });
+      if (!response.ok) {
+        throw new Error(`IDE health check returned HTTP ${response.status}.`);
+      }
       setIdeOnline(true);
     } catch {
       setIdeOnline(false);
