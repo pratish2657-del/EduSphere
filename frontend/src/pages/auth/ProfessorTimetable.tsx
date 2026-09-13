@@ -20,10 +20,10 @@ const API_BASE_URL =
 
 type TimetableItem = {
   timetable_id?: number;
-  day?: string;
-  start_time?: string;
-  end_time?: string;
-  room?: string;
+  day?: string | number | null;
+  start_time?: string | number | null;
+  end_time?: string | number | null;
+  room?: string | number | null;
   academic_year?: string;
   current_year?: number;
   program_name?: string;
@@ -58,17 +58,60 @@ const COURSE_ACCENTS = [
   { bg: "#EFF6FF", icon: "#2563EB", line: "#3B82F6" },
 ];
 
-function formatTime(value?: string) {
-  if (!value) return "—";
-  const [hourText, minute = "00"] = value.split(":");
-  const hour = Number(hourText);
-  if (Number.isNaN(hour)) return value;
-  return `${hour % 12 || 12}:${minute} ${hour >= 12 ? "PM" : "AM"}`;
+function formatTime(value?: unknown): string {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  // API/database time values may arrive as:
+  // - "09:30"
+  // - "09:30:00"
+  // - number of seconds
+  // - another serializable value
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const totalSeconds = Math.max(0, Math.floor(value));
+    const hour = Math.floor(totalSeconds / 3600) % 24;
+    const minute = Math.floor((totalSeconds % 3600) / 60);
+    const suffix = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 || 12;
+
+    return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
+  }
+
+  const text = String(value).trim();
+  if (!text) return "—";
+
+  const match = text.match(/^(\d{1,2}):([0-5]\d)/);
+
+  if (!match) {
+    return text;
+  }
+
+  const hour = Number(match[1]);
+  const minute = match[2];
+
+  if (!Number.isFinite(hour)) {
+    return text;
+  }
+
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+
+  return `${displayHour}:${minute} ${suffix}`;
 }
 
-function formatDay(value?: string) {
-  if (!value) return "Unknown";
-  return value.charAt(0) + value.slice(1).toLowerCase();
+function formatDay(value?: unknown): string {
+  if (value === null || value === undefined || value === "") {
+    return "Unknown";
+  }
+
+  const text = String(value).trim();
+
+  if (!text) {
+    return "Unknown";
+  }
+
+  return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
 }
 
 async function apiRequest<T>(endpoint: string): Promise<T> {
@@ -135,7 +178,7 @@ export default function ProfessorTimetable() {
     return items.filter((item) => {
       if (
         selectedDay !== "ALL" &&
-        String(item.day || "").toUpperCase() !== selectedDay
+        String(item.day ?? "").trim().toUpperCase() !== selectedDay
       )
         return false;
 
@@ -161,7 +204,7 @@ export default function ProfessorTimetable() {
     DAYS.forEach((day) => (result[day] = []));
 
     filteredItems.forEach((item) => {
-      const day = String(item.day || "").toUpperCase();
+      const day = String(item.day ?? "").trim().toUpperCase();
       if (!result[day]) result[day] = [];
       result[day].push(item);
     });
@@ -186,7 +229,7 @@ export default function ProfessorTimetable() {
   ).size;
 
   const todayCount = items.filter(
-    (x) => String(x.day || "").toUpperCase() === today,
+    (x) => String(x.day ?? "").trim().toUpperCase() === today,
   ).length;
 
   return (
@@ -529,7 +572,7 @@ export default function ProfessorTimetable() {
                 <Detail label="Day & Time" value={`${formatDay(selectedItem.day)} · ${formatTime(selectedItem.start_time)} – ${formatTime(selectedItem.end_time)}`} />
                 <Detail label="Program" value={selectedItem.program_name || selectedItem.program_code || "—"} />
                 <Detail label="Section" value={selectedItem.section_name || selectedItem.section_code || "—"} />
-                <Detail label="Room" value={selectedItem.room || "—"} />
+                <Detail label="Room" value={String(selectedItem.room || "—")} />
                 <Detail label="Academic Year" value={selectedItem.academic_year || "—"} />
               </div>
 

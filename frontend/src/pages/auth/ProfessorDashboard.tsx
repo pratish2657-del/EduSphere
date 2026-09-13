@@ -137,15 +137,18 @@ async function apiRequest<T>(
   return data as T;
 }
 
-function getInitials(
-  name?: string,
-): string {
-  if (!name) {
+function getInitials(name?: unknown): string {
+  if (name === null || name === undefined) {
     return "P";
   }
 
-  return name
-    .trim()
+  const text = String(name).trim();
+
+  if (!text) {
+    return "P";
+  }
+
+  return text
     .split(/\s+/)
     .map((part) => part.charAt(0))
     .join("")
