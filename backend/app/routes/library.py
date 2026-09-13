@@ -1,7 +1,5 @@
-import os
-
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse
 
 from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.middleware.auth_guard import get_current_user
@@ -57,10 +55,9 @@ async def library_resource(resource_id: int, request: Request):
 async def library_download(resource_id: int, request: Request):
     try:
         resource = get_library_download(get_current_user(request), resource_id)
-        return FileResponse(
-            resource["resource_file_path"],
-            filename=resource.get("original_file_name") or os.path.basename(resource["resource_file_path"]),
-            media_type=resource.get("mime_type") or "application/octet-stream",
+        return RedirectResponse(
+            url=resource["signed_url"],
+            status_code=307,
         )
     except (BadRequestError, ForbiddenError, NotFoundError) as error:
         _handle(error)

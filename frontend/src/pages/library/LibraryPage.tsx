@@ -97,24 +97,12 @@ export default function LibraryPage() {
     ["PDFs", summary.pdfs ?? 0],
   ], [summary]);
 
-  async function download(resource: Resource) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/library/${resource.id}/download`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Download is unavailable");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = resource.original_file_name || resource.title;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to download the resource.");
+  function download(resource: Resource) {
+    if (!resource.original_file_name) {
+      setError("This resource does not have a downloadable file.");
+      return;
     }
+    window.open(`${API_BASE_URL}/library/${resource.id}/download`, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -186,7 +174,7 @@ export default function LibraryPage() {
                 </div>
                 <div className="library-card-footer">
                   <span>{formatSize(resource.file_size)}</span>
-                  <button onClick={() => void download(resource)} disabled={!resource.original_file_name}>
+                  <button onClick={() => download(resource)} disabled={!resource.original_file_name}>
                     <Download size={15} /> {resource.original_file_name ? "Download" : "No file"}
                   </button>
                 </div>
