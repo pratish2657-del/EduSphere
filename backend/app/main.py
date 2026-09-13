@@ -57,14 +57,26 @@ app.add_middleware(
 # CORS
 # ============================================================
 
+# ============================================================
+# CORS
+# ============================================================
+
 CORS_ORIGINS = [
-    origin.strip()
+    origin.strip().rstrip("/")
     for origin in os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173","https://edusphere-rho-sable.vercel.app"
+        "http://localhost:5173,http://127.0.0.1:5173,https://edusphere-rho-sable.vercel.app",
     ).split(",")
     if origin.strip()
 ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.add_middleware(
     CORSMiddleware,
