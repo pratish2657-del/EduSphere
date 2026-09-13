@@ -107,7 +107,8 @@ function scrollToId(id: string) {
 }
 
 function enterEduSphere() {
-  window.location.href = '${import.meta.env.VITE_API_BASE_URL}/auth/google';
+  window.location.href =
+    `${import.meta.env.DEV ? "http://localhost:8000" : "https://edusphere-fovh.onrender.com"}/auth/google`;
 }
 
 

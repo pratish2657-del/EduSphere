@@ -420,7 +420,7 @@ export default function Home() {
           className="primary-button"
           onClick={() => {
             window.location.href =
-              '${import.meta.env.VITE_API_BASE_URL}/auth/google';
+              '${import.meta.env.VITE_API_BASE_URL || "https://edusphere-fovh.onrender.com"}/auth/google';
           }}
         >
           Get Started
