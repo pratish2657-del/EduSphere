@@ -48,8 +48,8 @@ app = FastAPI(
 app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET,
-    same_site="lax",
-    https_only=False,
+    same_site="none",
+    https_only=True,
     session_cookie="edusphere_session",
 )
 
@@ -61,18 +61,14 @@ CORS_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
+        "http://localhost:5173,http://127.0.0.1:5173","https://edusphere-rho-sable.vercel.app"
     ).split(",")
     if origin.strip()
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://edusphere-rho-sable.vercel.app"
-    ],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
