@@ -1,4 +1,5 @@
 EduSphere
+
 EduSphere x StudyFlow --- a student-focused academic ecosystem and
 marketplace with role-based campus management, learning resources,
 developer tooling, and an AI-powered study assistant.
