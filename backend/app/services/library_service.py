@@ -154,8 +154,14 @@ def _signed_storage_url(path, expires_in=300, download_name=None):
         raise NotFoundError("Library file is not available in persistent storage")
     if signed_path.startswith("http://") or signed_path.startswith("https://"):
         url = signed_path
-    else:
+    elif signed_path.startswith("/storage/v1/"):
         url = f"{SUPABASE_URL}{signed_path}"
+    elif signed_path.startswith("/object/"):
+        # Supabase REST returns signedURL as a relative /object/... path.
+        # The public endpoint is rooted under /storage/v1.
+        url = f"{SUPABASE_URL}/storage/v1{signed_path}"
+    else:
+        url = f"{SUPABASE_URL}/storage/v1/{signed_path.lstrip('/')}"
     if download_name:
         separator = "&" if "?" in url else "?"
         url = f"{url}{separator}download={quote(download_name)}"
