@@ -108,7 +108,8 @@ type TimetableEntry = {
   section_id: number;
   academic_year: string;
   current_year: number;
-  day: string;
+  day?: string | null;
+  day_of_week?: string | null;
   start_time: string | number | null;
   end_time: string | number | null;
   room: string | null;
@@ -3880,7 +3881,7 @@ function CoursesView({
         professor_names: entry.professor_name
           ? [entry.professor_name]
           : [],
-        days: [normalizeDay(entry.day)],
+        days: [normalizeDay(entry.day ?? entry.day_of_week)],
         class_count: 1,
         rooms: entry.room ? [entry.room] : [],
       });
@@ -3889,7 +3890,7 @@ function CoursesView({
 
     existing.class_count += 1;
 
-    const day = normalizeDay(entry.day);
+    const day = normalizeDay(entry.day ?? entry.day_of_week);
     if (day && !existing.days.includes(day)) {
       existing.days.push(day);
     }
@@ -4144,14 +4145,14 @@ function TimetableView({
   const entries = timetable?.timetable ?? [];
   const visibleEntries = selectedDay
     ? entries.filter(
-        (entry) => normalizeDay(entry.day) === normalizeDay(selectedDay)
+        (entry) => normalizeDay(entry.day ?? entry.day_of_week) === normalizeDay(selectedDay)
       )
     : entries;
 
   const dayEntries = days.map((day) => ({
     day,
     entries: entries
-      .filter((entry) => normalizeDay(entry.day) === normalizeDay(day))
+      .filter((entry) => normalizeDay(entry.day ?? entry.day_of_week) === normalizeDay(day))
       .sort(
         (a, b) =>
           timeToMinutes(a.start_time) - timeToMinutes(b.start_time)
@@ -4259,7 +4260,7 @@ function TimetableView({
 
         {days.map((day) => {
           const count = entries.filter(
-            (entry) => normalizeDay(entry.day) === normalizeDay(day)
+            (entry) => normalizeDay(entry.day ?? entry.day_of_week) === normalizeDay(day)
           ).length;
           return (
             <button
@@ -4319,7 +4320,7 @@ function TimetableView({
                 <span style={styles.nextClassEyebrow}>NEXT CLASS</span>
                 <strong>{nextClass.course_name}</strong>
                 <span>
-                  {nextClass.day} · {formatTime(nextClass.start_time)}–
+                  {getEntryDay(nextClass)} · {formatTime(nextClass.start_time)}–
                   {formatTime(nextClass.end_time)}
                   {nextClass.room ? ` · ${nextClass.room}` : ""}
                 </span>
@@ -4428,6 +4429,10 @@ function TimetableView({
     </section>
   );
 }
+function getEntryDay(entry: TimetableEntry): string {
+  return entry.day?.trim() || entry.day_of_week?.trim() || "";
+}
+
 function normalizeDay(value: string | null | undefined) {
   if (!value) return "";
   const normalized = value.trim().toUpperCase();
@@ -4531,7 +4536,7 @@ function getNextClass(entries: TimetableEntry[]) {
 
   const upcoming = [...entries]
     .map((entry) => {
-      const entryDay = dayOrder[normalizeDay(entry.day)] ?? 8;
+      const entryDay = dayOrder[normalizeDay(getEntryDay(entry)).toLowerCase()] ?? 8;
       let distance = entryDay - currentDay;
 
       if (
