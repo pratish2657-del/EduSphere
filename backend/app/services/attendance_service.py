@@ -51,13 +51,10 @@ def _get_user(cursor, user_id):
 
 def _check_professor_course_access(cursor, professor_id, course_id):
     """
-    Verify that the logged-in professor is assigned to the course.
-
-    EduSphere currently supports both assignment relationships:
-      1. course_teachers.professor_id -> users.id
-      2. timetables.professor_id -> professor_profiles.id
-
-    Attendance must recognize either relationship.
+    Verify professor access through either supported assignment path:
+      - course_teachers.professor_id -> users.id
+      - timetables.professor_id -> professor_profiles.id
+        -> professor_profiles.user_id
     """
 
     cursor.execute(
@@ -104,20 +101,31 @@ def _check_student_course_enrollment(
     student_id,
     course_id,
 ):
+    """
+    Check enrollment using the canonical users.id and also tolerate
+    legacy rows where course_enrollments.student_id contains the
+    student_profiles.id.
+    """
 
     cursor.execute(
         """
         SELECT
-            id
-
-        FROM course_enrollments
-
-        WHERE student_id = %s
-          AND course_id = %s
-
+            ce.id
+        FROM course_enrollments ce
+        LEFT JOIN student_profiles sp
+            ON sp.id = ce.student_id
+        WHERE ce.course_id = %s
+          AND (
+              ce.student_id = %s
+              OR sp.user_id = %s
+          )
         LIMIT 1
         """,
-        (student_id, course_id),
+        (
+            course_id,
+            student_id,
+            student_id,
+        ),
     )
 
     enrollment = cursor.fetchone()
@@ -141,17 +149,19 @@ def _check_student(cursor, student_id):
             u.id,
             r.name AS role,
             u.is_active
-
         FROM users u
-
         LEFT JOIN roles r
             ON u.role_id = r.id
-
+        LEFT JOIN student_profiles sp
+            ON sp.user_id = u.id
         WHERE u.id = %s
-
+           OR sp.id = %s
         LIMIT 1
         """,
-        (student_id,),
+        (
+            student_id,
+            student_id,
+        ),
     )
 
     student = cursor.fetchone()
@@ -229,7 +239,8 @@ def create_attendance(user_id, data):
         # Check student
         # ----------------------------------------------------
 
-        _check_student(cursor, data.student_id)
+        student = _check_student(cursor, data.student_id)
+        canonical_student_id = student["id"]
 
         # ----------------------------------------------------
         # Check professor course access
@@ -248,7 +259,7 @@ def create_attendance(user_id, data):
 
         _check_student_course_enrollment(
             cursor,
-            data.student_id,
+            canonical_student_id,
             data.course_id,
         )
 
@@ -270,7 +281,7 @@ def create_attendance(user_id, data):
             LIMIT 1
             """,
             (
-                data.student_id,
+                canonical_student_id,
                 data.course_id,
                 data.attendance_date,
             ),
@@ -319,7 +330,7 @@ def create_attendance(user_id, data):
         return {
             "message": "Attendance marked successfully",
             "attendance_id": attendance_id,
-            "student_id": data.student_id,
+            "student_id": canonical_student_id,
             "course_id": data.course_id,
             "attendance_date": data.attendance_date,
             "status": status,
@@ -688,10 +699,11 @@ def get_student_attendance(
 
         user = _get_user(cursor, user_id)
 
-        _check_student(
+        student = _check_student(
             cursor,
             student_id,
         )
+        canonical_student_id = student["id"]
 
         # ----------------------------------------------------
         # Student can only see own attendance
@@ -699,7 +711,7 @@ def get_student_attendance(
 
         if user["role"] == "STUDENT":
 
-            if user_id != student_id:
+            if user_id != canonical_student_id:
                 raise ForbiddenError(
                     "You can only view your own attendance"
                 )
@@ -723,7 +735,7 @@ def get_student_attendance(
 
             _check_student_course_enrollment(
                 cursor,
-                student_id,
+                canonical_student_id,
                 course_id,
             )
 
@@ -748,7 +760,7 @@ def get_student_attendance(
 
             _check_student_course_enrollment(
                 cursor,
-                student_id,
+                canonical_student_id,
                 course_id,
             )
 
@@ -781,7 +793,7 @@ def get_student_attendance(
                     a.id DESC
                 """,
                 (
-                    student_id,
+                    canonical_student_id,
                     course_id,
                 ),
             )
@@ -815,7 +827,7 @@ def get_student_attendance(
                     a.attendance_date DESC,
                     a.id DESC
                 """,
-                (student_id,),
+                (canonical_student_id,),
             )
 
         attendance = cursor.fetchall()
@@ -989,10 +1001,11 @@ def get_attendance_summary(
             user_id,
         )
 
-        _check_student(
+        student = _check_student(
             cursor,
             student_id,
         )
+        canonical_student_id = student["id"]
 
         # ----------------------------------------------------
         # Student can only see own summary
@@ -1000,7 +1013,7 @@ def get_attendance_summary(
 
         if user["role"] == "STUDENT":
 
-            if user_id != student_id:
+            if user_id != canonical_student_id:
                 raise ForbiddenError(
                     "You can only view your own attendance summary"
                 )
@@ -1034,7 +1047,7 @@ def get_attendance_summary(
 
         _check_student_course_enrollment(
             cursor,
-            student_id,
+            canonical_student_id,
             course_id,
         )
 
@@ -1100,7 +1113,7 @@ def get_attendance_summary(
                 c.code
             """,
             (
-                student_id,
+                canonical_student_id,
                 course_id,
             ),
         )
