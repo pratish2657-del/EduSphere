@@ -148,6 +148,13 @@ export default function SuperAdminLibrary() {
     event.preventDefault();
     setSaving(true);
     setError("");
+
+    if (!editing && !resourceFile) {
+      setError("Please select a resource file before creating the library resource.");
+      setSaving(false);
+      return;
+    }
+
     const body = new FormData();
     Object.entries(form).forEach(([key, value]) => body.append(key, String(value)));
     if (resourceFile) body.append("resource_file", resourceFile);

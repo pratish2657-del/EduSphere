@@ -387,7 +387,7 @@ def create_super_admin_resource(super_admin, data, resource_file=None, cover_fil
             (institution_id,title,resource_type,author,isbn,category,subject,description,language,
              publication_year,tags,resource_file_path,cover_file_path,original_file_name,mime_type,
              file_size,status,featured,created_by,updated_by)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             data.institution_id, data.title.strip(), typ, data.author, data.isbn, data.category,
             data.subject, data.description, data.language, data.publication_year, data.tags,
