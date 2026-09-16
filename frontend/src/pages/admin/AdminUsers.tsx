@@ -208,9 +208,26 @@ export default function AdminUsers() {
   };
 
   return (
-    <div className="admin-users-page">
-      <div className="admin-users-shell">
-
+    <div
+      className="admin-users-page"
+      style={{
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+        overflowX: "hidden",
+      }}
+    >
+      <div
+        className="admin-users-shell"
+        style={{
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
+          boxSizing: "border-box",
+          overflowX: "hidden",
+        }}
+      >
         <header className="admin-users-header">
           <div>
             <div className="admin-users-eyebrow">
@@ -240,53 +257,148 @@ export default function AdminUsers() {
           </button>
         </header>
 
-        <section className="admin-users-stats">
-          <div className="admin-users-stat">
+        {/* =====================================================
+            STATS
+            ===================================================== */}
+        <section
+          className="admin-users-stats"
+          style={{
+            width: "100%",
+            maxWidth: "100%",
+            minWidth: 0,
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(4, minmax(0, 1fr))",
+            gap: "18px",
+            boxSizing: "border-box",
+            overflow: "hidden",
+          }}
+        >
+          {/* Total Users */}
+          <div
+            className="admin-users-stat"
+            style={{
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
+              overflow: "hidden",
+            }}
+          >
             <span className="admin-users-stat-icon">
               <Users size={19} />
             </span>
-            <div>
+
+            <div
+              style={{
+                minWidth: 0,
+                maxWidth: "100%",
+                overflow: "hidden",
+              }}
+            >
               <strong>{total}</strong>
               <span>Total users</span>
             </div>
           </div>
 
-          <div className="admin-users-stat">
+          {/* Students */}
+          <div
+            className="admin-users-stat"
+            style={{
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
+              overflow: "hidden",
+            }}
+          >
             <span className="admin-users-stat-icon">
               <UserRound size={19} />
             </span>
-            <div>
+
+            <div
+              style={{
+                minWidth: 0,
+                maxWidth: "100%",
+                overflow: "hidden",
+              }}
+            >
               <strong>{summary.students}</strong>
               <span>Students on page</span>
             </div>
           </div>
 
-          <div className="admin-users-stat">
+          {/* Professors */}
+          <div
+            className="admin-users-stat"
+            style={{
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
+              overflow: "hidden",
+            }}
+          >
             <span className="admin-users-stat-icon">
               <ShieldCheck size={19} />
             </span>
-            <div>
+
+            <div
+              style={{
+                minWidth: 0,
+                maxWidth: "100%",
+                overflow: "hidden",
+              }}
+            >
               <strong>{summary.professors}</strong>
               <span>Professors on page</span>
             </div>
           </div>
 
-          <div className="admin-users-stat">
+          {/* Admins */}
+          <div
+            className="admin-users-stat"
+            style={{
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
+              overflow: "hidden",
+            }}
+          >
             <span className="admin-users-stat-icon">
               <ShieldCheck size={19} />
             </span>
-            <div>
+
+            <div
+              style={{
+                minWidth: 0,
+                maxWidth: "100%",
+                overflow: "hidden",
+              }}
+            >
               <strong>{summary.admins}</strong>
               <span>Admins on page</span>
             </div>
           </div>
         </section>
 
-        <section className="admin-users-panel">
-
+        {/* =====================================================
+            USERS PANEL
+            ===================================================== */}
+        <section
+          className="admin-users-panel"
+          style={{
+            width: "100%",
+            maxWidth: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
+          }}
+        >
           <div className="admin-users-toolbar">
             <div className="admin-users-search">
               <Search size={18} />
+
               <input
                 value={search}
                 onChange={(event) => {
@@ -361,13 +473,19 @@ export default function AdminUsers() {
                   size={25}
                   className="admin-users-spin"
                 />
+
                 <strong>Loading users...</strong>
-                <span>Fetching institution users securely.</span>
+
+                <span>
+                  Fetching institution users securely.
+                </span>
               </div>
             ) : users.length === 0 ? (
               <div className="admin-users-empty">
                 <Users size={32} />
+
                 <strong>No users found</strong>
+
                 <span>
                   Try changing the search or filters.
                 </span>
@@ -421,7 +539,8 @@ export default function AdminUsers() {
 
                             <div>
                               <strong>
-                                {item.full_name || "Unnamed user"}
+                                {item.full_name ||
+                                  "Unnamed user"}
                               </strong>
 
                               <span>
@@ -462,6 +581,7 @@ export default function AdminUsers() {
                             }
                           >
                             <i />
+
                             {item.is_active
                               ? "Active"
                               : "Inactive"}
@@ -495,7 +615,9 @@ export default function AdminUsers() {
                   type="button"
                   disabled={page <= 1}
                   onClick={() =>
-                    setPage((current) => Math.max(1, current - 1))
+                    setPage((current) =>
+                      Math.max(1, current - 1),
+                    )
                   }
                 >
                   <ChevronLeft size={17} />
@@ -517,7 +639,6 @@ export default function AdminUsers() {
               </div>
             </div>
           )}
-
         </section>
       </div>
     </div>
