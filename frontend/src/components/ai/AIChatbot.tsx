@@ -20,6 +20,7 @@ type AIResponse = {
   course_id: number | null;
   context_used: boolean;
   ai_available: boolean;
+  conversation_id?: number | null;
 };
 
 type ChatMessage = {
@@ -27,6 +28,17 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   contextUsed?: boolean;
+  createdAt?: string;
+};
+
+type ConversationResponse = {
+  conversation_id?: number | null;
+  messages?: Array<{
+    id: number;
+    role: "user" | "assistant";
+    content: string;
+    created_at?: string | null;
+  }>;
 };
 
 /* =========================================================
@@ -215,6 +227,10 @@ export default function AIChatbot() {
   const [messages, setMessages] = useState<ChatMessage[]>(
     []
   );
+  const [conversationId, setConversationId] = useState<number | null>(
+    null
+  );
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [minimized, setMinimized] = useState(false);
 
   const [starterPrompts, setStarterPrompts] = useState<
@@ -225,6 +241,85 @@ export default function AIChatbot() {
 
   const messagesEndRef =
     useRef<HTMLDivElement | null>(null);
+
+  /* =======================================================
+     LOAD PERSISTENT CONVERSATION
+  ======================================================= */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadConversation = async () => {
+      if (!user?.user_id) {
+        setMessages([]);
+        setConversationId(null);
+        return;
+      }
+
+      setLoadingHistory(true);
+      setError("");
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/ai/conversation`,
+          {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              Accept: "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Unable to load AI conversation.");
+        }
+
+        const data =
+          (await response.json()) as ConversationResponse;
+
+        if (cancelled) return;
+
+        setConversationId(
+          data.conversation_id ?? null
+        );
+
+        const restoredMessages = (data.messages || []).map(
+          (item) => ({
+            id: item.id,
+            role: item.role,
+            content: item.content,
+          })
+        );
+
+        setMessages(restoredMessages);
+
+        if (restoredMessages.length === 0) {
+          setStarterPrompts(
+            getRandomPrompts(userRole)
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unable to load previous AI conversation."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingHistory(false);
+        }
+      }
+    };
+
+    void loadConversation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.user_id, userRole]);
 
   useEffect(() => {
     const openAssistant = () => {
@@ -241,24 +336,36 @@ export default function AIChatbot() {
   ======================================================= */
 
   useEffect(() => {
-    if (messages.length === 0) {
+    if (
+      messages.length === 0 &&
+      !loadingHistory
+    ) {
       setStarterPrompts(
         getRandomPrompts(userRole)
       );
     }
-  }, [userRole, messages.length]);
+  }, [userRole, messages.length, loadingHistory]);
 
   /* =======================================================
      GENERATE RANDOM PROMPTS WHEN CHAT OPENS
   ======================================================= */
 
   useEffect(() => {
-    if (open && messages.length === 0) {
+    if (
+      open &&
+      messages.length === 0 &&
+      !loadingHistory
+    ) {
       setStarterPrompts(
         getRandomPrompts(userRole)
       );
     }
-  }, [open, userRole, messages.length]);
+  }, [
+    open,
+    userRole,
+    messages.length,
+    loadingHistory,
+  ]);
 
   /* =======================================================
      AUTO SCROLL
@@ -307,6 +414,7 @@ export default function AIChatbot() {
           },
           body: JSON.stringify({
             message: trimmed,
+            conversation_id: conversationId,
           }),
         }
       );
@@ -344,6 +452,10 @@ export default function AIChatbot() {
       }
 
       const result = data as AIResponse;
+
+      if (result.conversation_id) {
+        setConversationId(result.conversation_id);
+      }
 
       setMessages((current) => [
         ...current,
@@ -383,14 +495,41 @@ export default function AIChatbot() {
      CLEAR CONVERSATION
   ======================================================= */
 
-  const clearConversation = () => {
-    setMessages([]);
-    setError("");
-    setMessage("");
+  const clearConversation = async () => {
+    if (sending) return;
 
-    setStarterPrompts(
-      getRandomPrompts(userRole)
-    );
+    setError("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/ai/conversation`,
+        {
+          method: "DELETE",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Unable to clear AI conversation.");
+      }
+
+      setMessages([]);
+      setConversationId(null);
+      setMessage("");
+
+      setStarterPrompts(
+        getRandomPrompts(userRole)
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to clear AI conversation."
+      );
+    }
   };
 
   /* =======================================================
@@ -527,7 +666,24 @@ export default function AIChatbot() {
           {!minimized && (
             <>
               <div style={styles.body}>
-                {messages.length === 0 ? (
+                {loadingHistory ? (
+                  <div style={styles.emptyState}>
+                    <div style={styles.emptyOrb}>
+                      <Loader2
+                        size={23}
+                        style={styles.spin}
+                      />
+                    </div>
+
+                    <h3 style={styles.emptyTitle}>
+                      Restoring your conversation...
+                    </h3>
+
+                    <p style={styles.emptyText}>
+                      Loading your saved EduSphere AI history.
+                    </p>
+                  </div>
+                ) : messages.length === 0 ? (
                   <div style={styles.emptyState}>
                     <div style={styles.emptyOrb}>
                       <MessageCircle size={23} />
@@ -715,7 +871,9 @@ export default function AIChatbot() {
                       style={
                         styles.clearButton
                       }
-                      disabled={sending}
+                      disabled={
+                        sending || loadingHistory
+                      }
                     >
                       Clear
                     </button>
@@ -948,6 +1106,7 @@ const styles: Record<
     flex: 1,
     minHeight: 0,
     overflowY: "auto",
+    overflowX: "hidden",
     padding: 15,
   },
 
