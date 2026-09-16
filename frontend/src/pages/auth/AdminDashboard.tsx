@@ -381,17 +381,41 @@ export default function AdminDashboard() {
         .admin-nav:hover { background: rgba(255,255,255,.055) !important; }
         .admin-quick:hover { transform: translateY(-2px); border-color: rgba(96,165,250,.35) !important; }
         .admin-mobile-nav { display: none; }
+
+        .admin-main-content,
+        .admin-main-content > section {
+          min-width: 0;
+          max-width: 100%;
+          box-sizing: border-box;
+        }
+
+        .admin-grid-2 {
+          min-width: 0;
+          max-width: 100%;
+        }
+
+        .admin-grid-2 > * {
+          min-width: 0;
+          max-width: 100%;
+        }
         @media (max-width: 980px) {
           .admin-sidebar { transform: translateX(-105%); transition: transform .25s ease; }
           .admin-sidebar.open { transform: translateX(0); }
           .admin-mobile-nav { display: flex; }
           .admin-main { margin-left: 0 !important; }
           .admin-grid-4 { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
-          .admin-grid-2 { grid-template-columns: 1fr !important; }
+          .admin-grid-2 {
+            grid-template-columns: minmax(0, 1fr) !important;
+            width: 100% !important;
+          }
         }
         @media (max-width: 600px) {
           .admin-grid-4 { grid-template-columns: 1fr !important; }
-          .admin-main-content { padding: 20px !important; }
+          .admin-main-content {
+            padding: 20px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+          }
           .admin-hero { padding: 22px !important; }
         }
       `}</style>
@@ -719,7 +743,7 @@ export default function AdminDashboard() {
                 <div style={styles.eventList}>
                   {upcomingEvents.map((event) => (
                     <button
-                      key={getEventId(event) ??  event.title}
+                      key={getEventId(event) ?? event.title}
                       type="button"
                       style={styles.eventItem}
                       onClick={() => navigate("/app/admin/events")}
@@ -1065,7 +1089,12 @@ const styles: Record<string, React.CSSProperties> = {
   content: {
     height: "calc(100vh - 78px)",
     overflowY: "auto",
+    overflowX: "hidden",
+    minWidth: 0,
+    width: "100%",
+    maxWidth: "100%",
     padding: "28px 32px 35px",
+    boxSizing: "border-box",
   },
   errorBanner: {
     display: "flex",
@@ -1227,15 +1256,24 @@ const styles: Record<string, React.CSSProperties> = {
   },
   twoColumn: {
     display: "grid",
-    gridTemplateColumns: "1.12fr .88fr",
+    gridTemplateColumns: "minmax(0, 1.12fr) minmax(0, .88fr)",
     gap: 15,
     marginTop: 15,
+    minWidth: 0,
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
   },
   panel: {
     borderRadius: 17,
     border: "1px solid rgba(148,163,184,.11)",
     background: "rgba(10,18,32,.73)",
     padding: 20,
+    minWidth: 0,
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
+    overflow: "hidden",
   },
   panelHeader: {
     display: "flex",
@@ -1360,9 +1398,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 8,
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
   },
   eventItem: {
     width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
     display: "flex",
     alignItems: "center",
     gap: 11,
@@ -1372,6 +1416,8 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#f8fafc",
     borderRadius: 11,
     padding: 10,
+    boxSizing: "border-box",
+    overflow: "hidden",
   },
   eventDate: {
     width: 42,
@@ -1426,10 +1472,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   eventInfo: {
     minWidth: 0,
+    maxWidth: "100%",
+    flex: 1,
     display: "flex",
     alignItems: "baseline",
     gap: 6,
     flexWrap: "wrap",
+    overflow: "hidden",
   },
 
   eventTitle: {
@@ -1437,12 +1486,19 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 700,
     lineHeight: 1.4,
+    minWidth: 0,
+    maxWidth: "100%",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
 
   eventMeta: {
     color: "#cbd5e1",
     fontSize: 13,
     lineHeight: 1.4,
+    maxWidth: "100%",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
 };
