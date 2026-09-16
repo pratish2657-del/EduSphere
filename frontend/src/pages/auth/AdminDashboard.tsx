@@ -382,31 +382,56 @@ export default function AdminDashboard() {
         .admin-quick:hover { transform: translateY(-2px); border-color: rgba(96,165,250,.35) !important; }
         .admin-mobile-nav { display: none; }
 
+        .admin-main,
         .admin-main-content,
         .admin-main-content > section {
+          width: 100%;
+          max-width: 100%;
           min-width: 0;
+          box-sizing: border-box;
+        }
+
+        .admin-main-content {
+          overflow-x: hidden !important;
+        }
+
+        .admin-grid-4,
+        .admin-grid-2 {
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+        .admin-grid-4 > *,
+        .admin-grid-2 > * {
+          min-width: 0 !important;
           max-width: 100%;
           box-sizing: border-box;
         }
 
-        .admin-grid-2 {
-          min-width: 0;
-          max-width: 100%;
+        @media (max-width: 1200px) {
+          .admin-grid-2 {
+            grid-template-columns: minmax(0, 1fr) !important;
+          }
         }
 
-        .admin-grid-2 > * {
-          min-width: 0;
-          max-width: 100%;
-        }
         @media (max-width: 980px) {
           .admin-sidebar { transform: translateX(-105%); transition: transform .25s ease; }
           .admin-sidebar.open { transform: translateX(0); }
           .admin-mobile-nav { display: flex; }
-          .admin-main { margin-left: 0 !important; }
+          .admin-main {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+          }
           .admin-grid-4 { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
           .admin-grid-2 {
             grid-template-columns: minmax(0, 1fr) !important;
             width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
           }
         }
         @media (max-width: 600px) {
@@ -415,6 +440,8 @@ export default function AdminDashboard() {
             padding: 20px !important;
             width: 100% !important;
             max-width: 100% !important;
+            min-width: 0 !important;
+            overflow-x: hidden !important;
           }
           .admin-hero { padding: 22px !important; }
         }
@@ -743,7 +770,7 @@ export default function AdminDashboard() {
                 <div style={styles.eventList}>
                   {upcomingEvents.map((event) => (
                     <button
-                      key={getEventId(event) ?? event.title}
+                      key={getEventId(event) ??  event.title}
                       type="button"
                       style={styles.eventItem}
                       onClick={() => navigate("/app/admin/events")}
@@ -1028,6 +1055,11 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: "100vh",
     position: "relative",
     zIndex: 1,
+    width: "calc(100% - 270px)",
+    maxWidth: "calc(100% - 270px)",
+    minWidth: 0,
+    boxSizing: "border-box",
+    overflow: "hidden",
   },
   topbar: {
     minHeight: 78,
@@ -1090,10 +1122,10 @@ const styles: Record<string, React.CSSProperties> = {
     height: "calc(100vh - 78px)",
     overflowY: "auto",
     overflowX: "hidden",
-    minWidth: 0,
+    padding: "28px 32px 35px",
     width: "100%",
     maxWidth: "100%",
-    padding: "28px 32px 35px",
+    minWidth: 0,
     boxSizing: "border-box",
   },
   errorBanner: {
@@ -1202,6 +1234,11 @@ const styles: Record<string, React.CSSProperties> = {
     gridTemplateColumns: "repeat(4, minmax(0,1fr))",
     gap: 13,
     marginTop: 15,
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+    overflow: "hidden",
   },
   statCard: {
     position: "relative",
@@ -1209,6 +1246,11 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     gap: 12,
     minHeight: 122,
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+    overflow: "hidden",
     padding: "17px 15px",
     borderRadius: 16,
     border: "1px solid rgba(148,163,184,.11)",
@@ -1259,19 +1301,20 @@ const styles: Record<string, React.CSSProperties> = {
     gridTemplateColumns: "minmax(0, 1.12fr) minmax(0, .88fr)",
     gap: 15,
     marginTop: 15,
-    minWidth: 0,
     width: "100%",
     maxWidth: "100%",
+    minWidth: 0,
     boxSizing: "border-box",
+    overflow: "hidden",
   },
   panel: {
     borderRadius: 17,
     border: "1px solid rgba(148,163,184,.11)",
     background: "rgba(10,18,32,.73)",
     padding: 20,
-    minWidth: 0,
     width: "100%",
     maxWidth: "100%",
+    minWidth: 0,
     boxSizing: "border-box",
     overflow: "hidden",
   },
@@ -1319,6 +1362,10 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 10,
     padding: "10px 0",
+    minWidth: 0,
+    maxWidth: "100%",
+    boxSizing: "border-box",
+    overflow: "hidden",
     borderTop: "1px solid rgba(148,163,184,.07)",
   },
   queueAvatar: {
@@ -1360,6 +1407,8 @@ const styles: Record<string, React.CSSProperties> = {
   queueActions: {
     display: "flex",
     gap: 5,
+    flexShrink: 0,
+    minWidth: 0,
   },
   approveButton: {
     border: "1px solid rgba(34,197,94,.18)",
