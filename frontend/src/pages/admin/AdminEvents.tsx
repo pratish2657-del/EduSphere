@@ -4,6 +4,10 @@ import "./admin-events.css";
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
+/* ============================================================
+   TYPES
+============================================================ */
+
 type EventItem = {
   id: number;
   title: string;
@@ -50,6 +54,10 @@ type FormState = {
   target_year: string;
 };
 
+/* ============================================================
+   EMPTY FORM
+============================================================ */
+
 const emptyForm: FormState = {
   title: "",
   description: "",
@@ -89,7 +97,7 @@ async function api<T>(
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
-    // Response was not JSON.
+    // Response wasn't JSON.
   }
 
   if (!response.ok) {
@@ -140,41 +148,110 @@ async function api<T>(
 }
 
 /* ============================================================
-   DATE HELPERS
+   DATE / TIME HELPERS
+
+   IMPORTANT:
+   DO NOT use new Date(value).toISOString() here.
+
+   datetime-local gives:
+       2026-09-17T12:00
+
+   We want to send exactly:
+       2026-09-17T12:00
+
+   instead of converting it to UTC.
 ============================================================ */
 
 function toApiDateTime(value: string) {
-  if (!value) return value;
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toISOString();
+  return value || null;
 }
 
 function toInputDateTime(value?: string | null) {
-  if (!value) return "";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value.slice(0, 16);
+  if (!value) {
+    return "";
   }
 
-  const offset = date.getTimezoneOffset();
+  /*
+   * Backend normally returns:
+   * 2026-09-17T12:00:00
+   *
+   * Could also return:
+   * 2026-09-17T12:00:00.000
+   *
+   * Or:
+   * 2026-09-17T12:00:00Z
+   *
+   * We intentionally do NOT create a Date object.
+   * This prevents timezone conversion.
+   */
 
-  return new Date(date.getTime() - offset * 60000)
-    .toISOString()
-    .slice(0, 16);
+  let result = value;
+
+  // Remove UTC suffix if present.
+  result = result.replace(/Z$/, "");
+
+  // Remove timezone offset if present.
+  result = result.replace(/[+-]\d{2}:\d{2}$/, "");
+
+  // Remove milliseconds.
+  result = result.replace(/\.\d+$/, "");
+
+  // datetime-local requires YYYY-MM-DDTHH:mm
+  return result.slice(0, 16);
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return "—";
+/* ============================================================
+   DISPLAY DATE
+============================================================ */
 
-  const date = new Date(value);
+function formatDate(value?: string | null) {
+  if (!value) {
+    return "—";
+  }
+
+  /*
+   * We intentionally avoid new Date() here as well.
+   *
+   * This keeps the event's stored local time exactly as it is.
+   */
+
+  const cleaned = toInputDateTime(value);
+
+  if (!cleaned) {
+    return "—";
+  }
+
+  const [datePart, timePart] = cleaned.split("T");
+
+  if (!datePart || !timePart) {
+    return value;
+  }
+
+  const [year, month, day] = datePart
+    .split("-")
+    .map(Number);
+
+  const [hours, minutes] = timePart
+    .split(":")
+    .map(Number);
+
+  if (
+    !year ||
+    !month ||
+    !day ||
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes)
+  ) {
+    return value;
+  }
+
+  const date = new Date(
+    year,
+    month - 1,
+    day,
+    hours,
+    minutes
+  );
 
   if (Number.isNaN(date.getTime())) {
     return value;
@@ -187,29 +264,41 @@ function formatDate(value?: string | null) {
 }
 
 /* ============================================================
-   FORM CONVERSION
+   CONVERT EVENT TO FORM
 ============================================================ */
 
-function eventFormFromItem(event: EventItem): FormState {
+function eventFormFromItem(
+  event: EventItem
+): FormState {
   return {
     title: event.title ?? "",
-    description: event.description ?? "",
-    event_type: event.event_type ?? "SEMINAR",
 
-    start_datetime: toInputDateTime(
-      event.start_datetime
-    ),
+    description:
+      event.description ?? "",
 
-    end_datetime: toInputDateTime(
-      event.end_datetime
-    ),
+    event_type:
+      event.event_type ?? "SEMINAR",
 
-    venue: event.venue ?? "",
-    organizer: event.organizer ?? "",
+    start_datetime:
+      toInputDateTime(
+        event.start_datetime
+      ),
 
-    registration_deadline: toInputDateTime(
-      event.registration_deadline
-    ),
+    end_datetime:
+      toInputDateTime(
+        event.end_datetime
+      ),
+
+    venue:
+      event.venue ?? "",
+
+    organizer:
+      event.organizer ?? "",
+
+    registration_deadline:
+      toInputDateTime(
+        event.registration_deadline
+      ),
 
     registration_link:
       event.registration_link ?? "",
@@ -232,28 +321,41 @@ function eventFormFromItem(event: EventItem): FormState {
 }
 
 /* ============================================================
-   COMPONENT
+   MAIN COMPONENT
 ============================================================ */
 
 export default function AdminEvents() {
-  const [events, setEvents] = useState<EventItem[]>([]);
+  const [events, setEvents] =
+    useState<EventItem[]>([]);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [error, setError] = useState("");
+  const [saving, setSaving] =
+    useState(false);
 
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("ALL");
-  const [type, setType] = useState("ALL");
+  const [error, setError] =
+    useState("");
 
-  const [modalOpen, setModalOpen] = useState(false);
+  const [search, setSearch] =
+    useState("");
 
-  const [editingId, setEditingId] = useState<number | null>(
-    null
-  );
+  const [status, setStatus] =
+    useState("ALL");
 
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [type, setType] =
+    useState("ALL");
+
+  const [modalOpen, setModalOpen] =
+    useState(false);
+
+  const [editingId, setEditingId] =
+    useState<number | null>(null);
+
+  const [form, setForm] =
+    useState<FormState>({
+      ...emptyForm,
+    });
 
   const [selectedEvent, setSelectedEvent] =
     useState<EventItem | null>(null);
@@ -270,11 +372,21 @@ export default function AdminEvents() {
     setError("");
 
     try {
-      const data = await api<EventsResponse>("/events/");
+      const data =
+        await api<EventsResponse>(
+          "/events/"
+        );
 
-      setEvents(data.events || []);
+      setEvents(
+        Array.isArray(data.events)
+          ? data.events
+          : []
+      );
     } catch (err) {
-      console.error("Load events error:", err);
+      console.error(
+        "Load events error:",
+        err
+      );
 
       setError(
         err instanceof Error
@@ -286,6 +398,10 @@ export default function AdminEvents() {
     }
   };
 
+  /* ============================================================
+     INITIAL LOAD
+  ============================================================ */
+
   useEffect(() => {
     loadEvents();
   }, []);
@@ -294,24 +410,26 @@ export default function AdminEvents() {
      EVENT TYPES
   ============================================================ */
 
-  const eventTypes = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          events
-            .map((event) => event.event_type)
-            .filter(Boolean)
-        )
-      ).sort(),
-    [events]
-  );
+  const eventTypes = useMemo(() => {
+    return Array.from(
+      new Set(
+        events
+          .map(
+            (event) =>
+              event.event_type
+          )
+          .filter(Boolean)
+      )
+    ).sort();
+  }, [events]);
 
   /* ============================================================
      FILTER EVENTS
   ============================================================ */
 
   const filteredEvents = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query =
+      search.trim().toLowerCase();
 
     return events.filter((event) => {
       const matchesSearch =
@@ -343,14 +461,20 @@ export default function AdminEvents() {
         matchesType
       );
     });
-  }, [events, search, status, type]);
+  }, [
+    events,
+    search,
+    status,
+    type,
+  ]);
 
   /* ============================================================
-     CREATE EVENT
+     OPEN CREATE
   ============================================================ */
 
   const openCreate = () => {
     setError("");
+
     setSelectedEvent(null);
 
     setEditingId(null);
@@ -365,18 +489,26 @@ export default function AdminEvents() {
   };
 
   /* ============================================================
-     EDIT EVENT
+     OPEN EDIT
   ============================================================ */
 
-  const openEdit = (event: EventItem) => {
-    console.log("Opening edit event:", event);
+  const openEdit = (
+    event: EventItem
+  ) => {
+    console.log(
+      "Opening edit event:",
+      event
+    );
 
     setError("");
+
     setSelectedEvent(null);
 
     setEditingId(event.id);
 
-    setForm(eventFormFromItem(event));
+    setForm(
+      eventFormFromItem(event)
+    );
 
     setAttachment(null);
 
@@ -388,18 +520,23 @@ export default function AdminEvents() {
   ============================================================ */
 
   const closeModal = () => {
-    if (saving) return;
+    if (saving) {
+      return;
+    }
 
     setModalOpen(false);
+
     setEditingId(null);
+
     setForm({
       ...emptyForm,
     });
+
     setAttachment(null);
   };
 
   /* ============================================================
-     FORM UPDATE
+     UPDATE FORM
   ============================================================ */
 
   const updateForm = (
@@ -413,20 +550,30 @@ export default function AdminEvents() {
   };
 
   /* ============================================================
-     BUILD API PAYLOAD
+     BUILD PAYLOAD
   ============================================================ */
 
   const buildPayload = () => {
+    /* --------------------------------------------------------
+       REQUIRED FIELDS
+    -------------------------------------------------------- */
+
     if (!form.title.trim()) {
-      throw new Error("Event title is required.");
+      throw new Error(
+        "Event title is required."
+      );
     }
 
     if (!form.description.trim()) {
-      throw new Error("Description is required.");
+      throw new Error(
+        "Description is required."
+      );
     }
 
     if (!form.event_type.trim()) {
-      throw new Error("Event type is required.");
+      throw new Error(
+        "Event type is required."
+      );
     }
 
     if (!form.start_datetime) {
@@ -441,6 +588,10 @@ export default function AdminEvents() {
       );
     }
 
+    /* --------------------------------------------------------
+       DATE COMPARISON WITHOUT UTC CONVERSION
+    -------------------------------------------------------- */
+
     const startDate = new Date(
       form.start_datetime
     );
@@ -450,8 +601,12 @@ export default function AdminEvents() {
     );
 
     if (
-      Number.isNaN(startDate.getTime()) ||
-      Number.isNaN(endDate.getTime())
+      Number.isNaN(
+        startDate.getTime()
+      ) ||
+      Number.isNaN(
+        endDate.getTime()
+      )
     ) {
       throw new Error(
         "Invalid event date or time."
@@ -464,29 +619,52 @@ export default function AdminEvents() {
       );
     }
 
-    if (
-      form.registration_deadline &&
-      new Date(form.registration_deadline) >
-        startDate
-    ) {
-      throw new Error(
-        "Registration deadline cannot be after event start."
-      );
-    }
+    /* --------------------------------------------------------
+       REGISTRATION DEADLINE
+    -------------------------------------------------------- */
 
     if (
-      form.registration_link.trim() &&
-      !/^https?:\/\/.+/i.test(
-        form.registration_link.trim()
-      )
+      form.registration_deadline
     ) {
-      throw new Error(
-        "Registration link must start with http:// or https://"
-      );
+      const deadlineDate =
+        new Date(
+          form.registration_deadline
+        );
+
+      if (
+        deadlineDate > startDate
+      ) {
+        throw new Error(
+          "Registration deadline cannot be after event start."
+        );
+      }
     }
+
+    /* --------------------------------------------------------
+       REGISTRATION LINK
+    -------------------------------------------------------- */
+
+    if (
+      form.registration_link.trim()
+    ) {
+      if (
+        !/^https?:\/\/.+/i.test(
+          form.registration_link.trim()
+        )
+      ) {
+        throw new Error(
+          "Registration link must start with http:// or https://"
+        );
+      }
+    }
+
+    /* --------------------------------------------------------
+       PAYLOAD
+    -------------------------------------------------------- */
 
     return {
-      title: form.title.trim(),
+      title:
+        form.title.trim(),
 
       description:
         form.description.trim(),
@@ -494,6 +672,10 @@ export default function AdminEvents() {
       event_type:
         form.event_type.trim(),
 
+      /*
+       * IMPORTANT:
+       * Keep local date/time exactly as selected.
+       */
       start_datetime:
         toApiDateTime(
           form.start_datetime
@@ -545,7 +727,7 @@ export default function AdminEvents() {
   };
 
   /* ============================================================
-     SAVE EVENT
+     SAVE / UPDATE EVENT
   ============================================================ */
 
   const saveEvent = async () => {
@@ -553,14 +735,23 @@ export default function AdminEvents() {
     setError("");
 
     try {
-      const payload = buildPayload();
+      const payload =
+        buildPayload();
 
       console.log(
         editingId
           ? `Updating event ${editingId}`
-          : "Creating event",
+          : "Creating event"
+      );
+
+      console.log(
+        "Payload:",
         payload
       );
+
+      /* --------------------------------------------------------
+         CREATE OR UPDATE
+      -------------------------------------------------------- */
 
       const result =
         await api<EventMutationResponse>(
@@ -579,9 +770,13 @@ export default function AdminEvents() {
         );
 
       console.log(
-        "Event API response:",
+        "Event response:",
         result
       );
+
+      /* --------------------------------------------------------
+         BACKEND RETURNS event_id
+      -------------------------------------------------------- */
 
       const eventId =
         result.event_id;
@@ -592,9 +787,9 @@ export default function AdminEvents() {
         );
       }
 
-      /* ========================================================
-         ATTACHMENT UPLOAD
-      ======================================================== */
+      /* --------------------------------------------------------
+         ATTACHMENT
+      -------------------------------------------------------- */
 
       if (attachment) {
         const body =
@@ -660,9 +855,9 @@ export default function AdminEvents() {
         }
       }
 
-      /* ========================================================
-         SUCCESS
-      ======================================================== */
+      /* --------------------------------------------------------
+         RESET
+      -------------------------------------------------------- */
 
       setModalOpen(false);
 
@@ -673,6 +868,10 @@ export default function AdminEvents() {
       });
 
       setAttachment(null);
+
+      /* --------------------------------------------------------
+         REFRESH
+      -------------------------------------------------------- */
 
       await loadEvents();
 
@@ -704,7 +903,9 @@ export default function AdminEvents() {
         `Delete "${event.title}"?`
       );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     setError("");
 
@@ -789,14 +990,29 @@ export default function AdminEvents() {
 
   const upcomingCount =
     events.filter((event) => {
-      const time =
-        new Date(
-          event.start_datetime
-        ).getTime();
+      const value =
+        event.start_datetime;
+
+      if (!value) {
+        return false;
+      }
+
+      /*
+       * Parse as local time for the
+       * upcoming calculation.
+       */
+      const input =
+        toInputDateTime(value);
+
+      const date =
+        new Date(input);
 
       return (
-        !Number.isNaN(time) &&
-        time >= Date.now()
+        !Number.isNaN(
+          date.getTime()
+        ) &&
+        date.getTime() >=
+          Date.now()
       );
     }).length;
 
@@ -805,7 +1021,7 @@ export default function AdminEvents() {
     publishedCount;
 
   /* ============================================================
-     UI
+     RENDER
   ============================================================ */
 
   return (
@@ -877,6 +1093,7 @@ export default function AdminEvents() {
       <section className="admin-events-stats">
 
         <div className="admin-events-stat">
+
           <span>
             Total Events
           </span>
@@ -884,9 +1101,11 @@ export default function AdminEvents() {
           <strong>
             {events.length}
           </strong>
+
         </div>
 
         <div className="admin-events-stat">
+
           <span>
             Published
           </span>
@@ -894,9 +1113,11 @@ export default function AdminEvents() {
           <strong>
             {publishedCount}
           </strong>
+
         </div>
 
         <div className="admin-events-stat">
+
           <span>
             Upcoming
           </span>
@@ -904,9 +1125,11 @@ export default function AdminEvents() {
           <strong>
             {upcomingCount}
           </strong>
+
         </div>
 
         <div className="admin-events-stat">
+
           <span>
             Drafts
           </span>
@@ -914,6 +1137,7 @@ export default function AdminEvents() {
           <strong>
             {draftCount}
           </strong>
+
         </div>
 
       </section>
@@ -942,6 +1166,7 @@ export default function AdminEvents() {
             )
           }
         >
+
           <option value="ALL">
             All Status
           </option>
@@ -953,6 +1178,7 @@ export default function AdminEvents() {
           <option value="DRAFT">
             Draft
           </option>
+
         </select>
 
         <select
@@ -963,6 +1189,7 @@ export default function AdminEvents() {
             )
           }
         >
+
           <option value="ALL">
             All Types
           </option>
@@ -977,6 +1204,7 @@ export default function AdminEvents() {
               </option>
             )
           )}
+
         </select>
 
         <button
@@ -1204,7 +1432,7 @@ export default function AdminEvents() {
       </section>
 
       {/* ======================================================
-          EVENT DETAILS MODAL
+          EVENT DETAILS
       ====================================================== */}
 
       {selectedEvent && (
@@ -1405,7 +1633,9 @@ export default function AdminEvents() {
 
             </div>
 
-            {/* FORM */}
+            {/* ==================================================
+                FORM
+            ================================================== */}
 
             <div className="admin-events-form">
 
@@ -1553,7 +1783,7 @@ export default function AdminEvents() {
 
               </label>
 
-              {/* REGISTRATION DEADLINE */}
+              {/* DEADLINE */}
 
               <label>
 
@@ -1698,7 +1928,9 @@ export default function AdminEvents() {
 
             </div>
 
-            {/* FOOTER */}
+            {/* ==================================================
+                FOOTER
+            ================================================== */}
 
             <div className="admin-events-modal-footer">
 
