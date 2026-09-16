@@ -792,7 +792,7 @@ export default function AdminDashboard() {
                       onClick={() => navigate("/app/admin/events")}
                     >
                       <div style={styles.eventDate}>
-                        <span>
+                        <span style={{ fontSize: 10, fontWeight: 800, lineHeight: 1.1 }}>
                           {event.start_datetime
                             ? formatDate(event.start_datetime).split(" ")[0]
                             : event.start_time
@@ -800,7 +800,7 @@ export default function AdminDashboard() {
                               : "—"}
                         </span>
 
-                        <small>
+                        <small style={{ fontSize: 8, lineHeight: 1.1 }}>
                           {event.start_datetime
                             ? formatDate(event.start_datetime).slice(4)
                             : event.start_time
@@ -1494,6 +1494,9 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(139,92,246,.10)",
     color: "#c4b5fd",
     flex: "0 0 auto",
+    fontSize: 9,
+    lineHeight: 1.15,
+    textAlign: "center",
   },
   quickGrid: {
     display: "grid",
