@@ -417,6 +417,14 @@ export default function AdminDashboard() {
         }
 
         @media (max-width: 980px) {
+          .admin-main-content {
+            padding: 24px 20px 30px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            overflow-x: hidden !important;
+          }
+
           .admin-sidebar { transform: translateX(-105%); transition: transform .25s ease; }
           .admin-sidebar.open { transform: translateX(0); }
           .admin-mobile-nav { display: flex; }
@@ -435,6 +443,14 @@ export default function AdminDashboard() {
           }
         }
         @media (max-width: 600px) {
+          .admin-main-content {
+            padding: 18px 16px 26px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            overflow-x: hidden !important;
+          }
+
           .admin-grid-4 { grid-template-columns: 1fr !important; }
           .admin-main-content {
             padding: 20px !important;
