@@ -1,9 +1,32 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from zoneinfo import ZoneInfo
+
+EVENT_TIMEZONE = ZoneInfo("Asia/Kolkata")
+
+
+def _normalize_datetime(value):
+    if value is None or value.tzinfo is None:
+        return value
+    return value.astimezone(EVENT_TIMEZONE).replace(tzinfo=None)
 
 
 class EventCreate(BaseModel):
+    @field_validator(
+        "start_datetime",
+        "end_datetime",
+        "registration_deadline",
+        mode="before",
+    )
+    @classmethod
+    def normalize_event_datetime(cls, value):
+        if value is None or value == "":
+            return None
+        if isinstance(value, datetime):
+            return _normalize_datetime(value)
+        return value
+
     title: str = Field(
         min_length=1,
         max_length=255,
@@ -59,6 +82,20 @@ class EventCreate(BaseModel):
 
 
 class EventUpdate(BaseModel):
+    @field_validator(
+        "start_datetime",
+        "end_datetime",
+        "registration_deadline",
+        mode="before",
+    )
+    @classmethod
+    def normalize_event_datetime(cls, value):
+        if value is None or value == "":
+            return None
+        if isinstance(value, datetime):
+            return _normalize_datetime(value)
+        return value
+
     title: str = Field(
         min_length=1,
         max_length=255,

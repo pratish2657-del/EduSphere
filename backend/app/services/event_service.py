@@ -5,6 +5,38 @@ from app.core.exceptions import (
 )
 from app.database import get_connection
 
+from zoneinfo import ZoneInfo
+
+# EduSphere institution-event timezone.
+# Naive datetimes from the frontend are treated as IST exactly as entered.
+EVENT_TIMEZONE = ZoneInfo("Asia/Kolkata")
+
+
+def _normalize_event_datetime(value):
+    """Normalize an event datetime to a naive IST datetime.
+
+    - Naive values are already treated as IST and are preserved exactly.
+    - Timezone-aware values are converted to IST and then made naive.
+    - This prevents UTC/IST conversion from changing a time such as 12:00 PM.
+    """
+    if value is None:
+        return None
+
+    if value.tzinfo is None:
+        return value
+
+    return value.astimezone(EVENT_TIMEZONE).replace(tzinfo=None)
+
+
+def _normalize_event_datetimes(data):
+    """Return the event datetimes using EduSphere's IST convention."""
+    data.start_datetime = _normalize_event_datetime(data.start_datetime)
+    data.end_datetime = _normalize_event_datetime(data.end_datetime)
+    data.registration_deadline = _normalize_event_datetime(
+        data.registration_deadline
+    )
+    return data
+
 # ============================================================
 # STUDENT ACADEMIC GROUP
 # ============================================================
@@ -603,6 +635,10 @@ def update_event(
     role,
     data,
 ):
+
+    # Normalize all incoming timestamps to the institution timezone
+    # before validation and database storage.
+    data = _normalize_event_datetimes(data)
 
     connection = get_connection()
 
