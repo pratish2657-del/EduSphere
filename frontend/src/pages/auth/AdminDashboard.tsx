@@ -72,9 +72,6 @@ type PendingResponse = {
   count?: number;
 };
 
-type AdminProfile = {
-  profile_photo_url?: string | null;
-};
 
 async function apiRequest<T>(
   endpoint: string,
@@ -165,7 +162,6 @@ export default function AdminDashboard() {
 
   const [pending, setPending] = useState<PendingProfessor[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
-  const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -176,13 +172,12 @@ export default function AdminDashboard() {
     setError("");
 
     try {
-      const [pendingResponse, eventsResponse, profileResponse] =
+      const [pendingResponse, eventsResponse] =
         await Promise.all([
           apiRequest<PendingProfessor[] | PendingResponse>(
             "/admin/professors/pending",
           ),
           apiRequest<EventItem[] | EventsResponse>("/events/"),
-          apiRequest<AdminProfile | { profile?: AdminProfile }>("/profile/admin"),
         ]);
 
       const pendingList = Array.isArray(pendingResponse)
@@ -193,16 +188,8 @@ export default function AdminDashboard() {
         ? eventsResponse
         : eventsResponse?.events ?? [];
 
-      const profile: AdminProfile | null =
-        profileResponse &&
-        typeof profileResponse === "object" &&
-        "profile" in profileResponse
-          ? profileResponse.profile ?? null
-          : (profileResponse as AdminProfile | null);
-
       setPending(pendingList);
       setEvents(eventList);
-      setAdminProfile(profile ?? null);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -367,21 +354,6 @@ export default function AdminDashboard() {
   const displayName =
     user?.full_name || user?.email?.split("@")[0] || "Admin";
 
-  const profileImageUrl = (() => {
-    const url = adminProfile?.profile_photo_url;
-    if (!url) return "";
-
-    if (
-      url.startsWith("http://") ||
-      url.startsWith("https://") ||
-      url.startsWith("blob:")
-    ) {
-      return url;
-    }
-
-    return `${API_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
-  })();
-
   const profileFallback = displayName.slice(0, 1).toUpperCase();
 
   const quickActions: [string, LucideIcon, string][] = [
@@ -489,17 +461,7 @@ export default function AdminDashboard() {
 
         <div style={styles.sidebarBottom}>
           <div style={styles.accountCard}>
-            <div style={styles.accountAvatar}>
-              {profileImageUrl ? (
-                <img
-                  src={profileImageUrl}
-                  alt={`${displayName} profile`}
-                  style={styles.profileAvatarImage}
-                />
-              ) : (
-                profileFallback
-              )}
-            </div>
+            <div style={styles.accountAvatar}>{profileFallback}</div>
             <div style={{ minWidth: 0 }}>
               <strong style={styles.accountName}>{displayName}</strong>
               <span style={styles.accountEmail}>{user?.email || "Admin"}</span>
@@ -541,17 +503,7 @@ export default function AdminDashboard() {
             <button type="button" style={styles.iconButton} title="Notifications">
               <Bell size={18} />
             </button>
-            <div style={styles.topAvatar}>
-              {profileImageUrl ? (
-                <img
-                  src={profileImageUrl}
-                  alt={`${displayName} profile`}
-                  style={styles.profileAvatarImage}
-                />
-              ) : (
-                profileFallback
-              )}
-            </div>
+            <div style={styles.topAvatar}>{profileFallback}</div>
           </div>
         </header>
 
@@ -1019,13 +971,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: "linear-gradient(135deg, #2563eb, #7c3aed)",
     fontSize: 12,
     fontWeight: 800,
-  },
-
-  profileAvatarImage: {
-    width: "100%",
-    height: "100%",
-    display: "block",
-    objectFit: "cover",
   },
   accountName: {
     display: "block",
