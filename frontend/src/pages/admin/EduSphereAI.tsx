@@ -1,10 +1,31 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Bot, BookOpen, Brain, ChevronRight, FileText, Lightbulb, MessageCircle, Send, Sparkles } from "lucide-react";
 
 type Message = {
-  id: number;
+  id: number | string;
   role: "user" | "ai";
   text: string;
+};
+
+type ConversationMessage = {
+  id?: number | string;
+  role?: "user" | "assistant" | "ai";
+  content?: string;
+  message?: string;
+  text?: string;
+};
+
+type ConversationResponse = {
+  conversation_id?: number | string | null;
+  messages?: ConversationMessage[];
+};
+
+type AskResponse = {
+  answer?: string;
+  context_used?: boolean;
+  ai_available?: boolean;
+  conversation_id?: number | string | null;
+  detail?: unknown;
 };
 
 const suggestions = [
@@ -16,14 +37,8 @@ const suggestions = [
 
 export default function EduSphereAI() {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      role: "ai",
-      text:
-        "Hello Admin! I’m EduSphere AI. I can help you understand academic data, prepare reports, summarize content, and assist with EduSphere administration.",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [conversationId, setConversationId] = useState<number | string | null>(null);
 
   const quickActions = useMemo(
     () => [
@@ -41,12 +56,122 @@ export default function EduSphereAI() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
+  const loadConversation = useCallback(async () => {
+    try {
+      setError("");
+
+      const response = await fetch(`${API_BASE_URL}/ai/conversation`, {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | ConversationResponse
+        | { detail?: unknown }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(
+          typeof data === "object" &&
+          data !== null &&
+          "detail" in data &&
+          typeof data.detail === "string"
+            ? data.detail
+            : `Unable to load EduSphere AI conversation (HTTP ${response.status}).`
+        );
+      }
+
+      const conversation = data as ConversationResponse;
+
+      setConversationId(conversation.conversation_id ?? null);
+
+      const loadedMessages = (conversation.messages ?? [])
+        .map((item, index): Message | null => {
+          const role =
+            item.role === "user"
+              ? "user"
+              : item.role === "assistant" || item.role === "ai"
+                ? "ai"
+                : null;
+
+          const content =
+            typeof item.content === "string"
+              ? item.content
+              : typeof item.message === "string"
+                ? item.message
+                : typeof item.text === "string"
+                  ? item.text
+                  : "";
+
+          if (!role || !content.trim()) return null;
+
+          return {
+            id: item.id ?? `history-${index}`,
+            role,
+            text: content,
+          };
+        })
+        .filter((item): item is Message => item !== null);
+
+      setMessages(loadedMessages);
+    } catch (requestError) {
+      setMessages([]);
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load EduSphere AI conversation."
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadConversation();
+  }, [loadConversation]);
+
+  const clearConversation = async () => {
+    try {
+      setError("");
+
+      const response = await fetch(`${API_BASE_URL}/ai/conversation`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | { detail?: unknown }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(
+          typeof data?.detail === "string"
+            ? data.detail
+            : `Unable to clear EduSphere AI conversation (HTTP ${response.status}).`
+        );
+      }
+
+      setConversationId(null);
+      setMessages([]);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to clear EduSphere AI conversation."
+      );
+    }
+  };
+
   const sendMessage = async () => {
     const value = input.trim();
     if (!value || sending) return;
 
-    const userId = Date.now();
-    const assistantId = userId + 1;
+    const userId = `user-${Date.now()}`;
+    const assistantId = `assistant-${Date.now()}`;
 
     setMessages((current) => [
       ...current,
@@ -66,16 +191,14 @@ export default function EduSphereAI() {
         },
         body: JSON.stringify({
           message: value,
+          ...(conversationId != null
+            ? { conversation_id: conversationId }
+            : {}),
         }),
       });
 
       const data = (await response.json().catch(() => null)) as
-        | {
-            answer?: string;
-            context_used?: boolean;
-            ai_available?: boolean;
-            detail?: unknown;
-          }
+        | AskResponse
         | null;
 
       if (!response.ok) {
@@ -95,6 +218,10 @@ export default function EduSphereAI() {
               : `Unable to reach EduSphere AI (HTTP ${response.status}).`;
 
         throw new Error(detail);
+      }
+
+      if (data?.conversation_id != null) {
+        setConversationId(data.conversation_id);
       }
 
       const answer =
@@ -209,9 +336,19 @@ export default function EduSphereAI() {
                   </span>
                 </div>
               </div>
-              <div style={styles.status}>
-                <span style={styles.statusDot} />
-                Ready
+              <div style={styles.headerActions}>
+                <button
+                  type="button"
+                  onClick={() => void clearConversation()}
+                  style={styles.clearButton}
+                  disabled={sending}
+                >
+                  New chat
+                </button>
+                <div style={styles.status}>
+                  <span style={styles.statusDot} />
+                  Ready
+                </div>
               </div>
             </div>
 
@@ -472,6 +609,21 @@ const styles: Record<string, React.CSSProperties> = {
     placeItems: "center",
     background: "rgba(99,102,241,.16)",
     color: "#a5b4fc",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  clearButton: {
+    border: "1px solid rgba(129,140,248,.2)",
+    background: "rgba(99,102,241,.06)",
+    color: "#a5b4fc",
+    borderRadius: 9,
+    padding: "6px 9px",
+    fontSize: 10,
+    fontWeight: 700,
+    cursor: "pointer",
   },
   status: { display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#94a3b8" },
   statusDot: { width: 7, height: 7, borderRadius: "50%", background: "#34d399" },
