@@ -13,22 +13,51 @@ from app.services.payment_gateway_service import (
 )
 
 
-def _request(method: str, path: str, *, json=None, idempotency_key: str | None = None):
+def _request(
+    method: str,
+    path: str,
+    *,
+    json=None,
+    idempotency_key: str | None = None,
+):
     config = get_cashfree_config()
     headers = get_cashfree_headers()
+
     if idempotency_key:
         headers["x-idempotency-key"] = idempotency_key
+
     headers["x-request-id"] = str(uuid.uuid4())
+
+    url = f"{config['base_url']}{path}"
+
+    print("========== CASHFREE EASY SPLIT REQUEST ==========")
+    print("METHOD:", method)
+    print("URL:", url)
+    print("PAYLOAD:", json)
+    print("IDEMPOTENCY:", idempotency_key)
+    print("==================================================")
+
     try:
         response = httpx.request(
             method,
-            f"{config['base_url']}{path}",
+            url,
             headers=headers,
             json=json,
             timeout=30.0,
         )
     except httpx.RequestError as exc:
-        raise ServiceUnavailableError(f"Cashfree Easy Split request failed: {exc}") from exc
+        print("========== CASHFREE REQUEST ERROR ==========")
+        print("ERROR:", repr(exc))
+        print("=============================================")
+        raise ServiceUnavailableError(
+            f"Cashfree Easy Split request failed: {exc}"
+        ) from exc
+
+    print("========== CASHFREE EASY SPLIT RESPONSE ==========")
+    print("STATUS:", response.status_code)
+    print("BODY:", response.text)
+    print("HEADERS:", dict(response.headers))
+    print("===================================================")
 
     try:
         payload = response.json() if response.content else {}
@@ -36,8 +65,17 @@ def _request(method: str, path: str, *, json=None, idempotency_key: str | None =
         payload = {"raw": response.text}
 
     if not response.is_success:
-        detail = payload.get("message") or payload.get("error") or payload.get("code") or response.text[:1000]
-        raise BadRequestError(f"Cashfree Easy Split error: {detail}")
+        detail = (
+            payload.get("message")
+            or payload.get("error")
+            or payload.get("code")
+            or response.text[:1000]
+        )
+
+        raise BadRequestError(
+            f"Cashfree Easy Split error ({response.status_code}): {detail}"
+        )
+
     return payload
 
 
