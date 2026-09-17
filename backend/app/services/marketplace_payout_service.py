@@ -323,32 +323,93 @@ def attempt_cashfree_split(order_id: int) -> dict[str, Any]:
         # Reconcile that known state instead of repeatedly retrying the API.
         if "Transaction already processed, not eligible for split" in error_text:
             reconnection = get_connection()
+
             try:
                 recursor = reconnection.cursor()
+
+        # The previous transaction was rolled back after Cashfree
+        # rejected the duplicate split. Therefore cashfree_vendor_id
+        # may still be NULL in marketplace_seller_payout_transactions.
+        #
+        # Recover the vendor ID from marketplace_seller_payouts and
+        # reconcile the local ledger.
+
                 recursor.execute(
                     """
-                    UPDATE marketplace_seller_payout_transactions
-                    SET
-                        cashfree_split_status = 'CREATED',
-                        status = 'TRANSFER_INITIATED',
-                        failure_reason = NULL
-                    WHERE order_id = %s
-                      AND status IN ('PENDING', 'READY', 'FAILED', 'ON_HOLD')
-                      AND cashfree_vendor_id IS NOT NULL
+                    SELECT
+                        pt.id,
+                        sp.cashfree_vendor_id
+                    FROM marketplace_seller_payout_transactions pt
+
+                    LEFT JOIN marketplace_seller_payouts sp
+                        ON sp.user_id = pt.seller_id
+
+                    WHERE pt.order_id = %s
+                        AND pt.status IN (
+                            'PENDING',
+                            'READY',
+                            'FAILED',
+                            'ON_HOLD'
+                        )
                     """,
                     (order_id,),
                 )
+
+                reconciliation_rows = recursor.fetchall()
+
+                updated = 0
+
+                for reconciliation_row in reconciliation_rows:
+                    vendor_id = reconciliation_row.get(
+                        "cashfree_vendor_id"
+                    )
+
+                    if not vendor_id:
+                        continue
+
+                    recursor.execute(
+                        """
+                        UPDATE marketplace_seller_payout_transactions
+
+                        SET
+                            cashfree_vendor_id = %s,
+                            cashfree_split_status = 'CREATED',
+                            status = 'TRANSFER_INITIATED',
+                            failure_reason = NULL
+
+                        WHERE id = %s
+                            AND status IN (
+                                'PENDING',
+                                'READY',
+                                'FAILED',
+                                'ON_HOLD'
+                            )
+                        """,
+                        (
+                            vendor_id,
+                            reconciliation_row["id"],
+                        ),
+                    )
+
+                    updated += recursor.rowcount
+
                 reconnection.commit()
+
             finally:
                 reconnection.close()
 
-            return {
-                "success": True,
-                "attempted": False,
-                "already_processed": True,
-                "cashfree_order_id": cashfree_order_id,
-                "reason": "Cashfree reports the transaction was already processed",
-            }
+        return {
+            "success": True,
+            "attempted": False,
+            "already_processed": True,
+            "reconciled": updated > 0,
+            "updated_rows": updated,
+            "cashfree_order_id": cashfree_order_id,
+            "reason": (
+                "Cashfree reports the transaction was already "
+                "processed; local payout ledger reconciled"
+            ),
+        }
 
         return {
             "success": False,
