@@ -21,7 +21,9 @@ def finalize_order_inventory(order_id, cursor):
               AND reserved_quantity >= %s
         """, (item['quantity'], item['quantity'], item['product_id'], item['quantity'], item['quantity']))
         if cursor.rowcount != 1:
-            raise RuntimeError(f"Inventory finalization failed for product {item['product_id']}")
+            raise RuntimeError(
+                f"Inventory finalization failed for product {item['product_id']}"
+            )
 
 
 def release_order_inventory(order_id, cursor):

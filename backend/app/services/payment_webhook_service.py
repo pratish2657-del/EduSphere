@@ -315,25 +315,26 @@ def _handle_payment_success(
         )
 
         # ----------------------------------------------------
-        # Confirm marketplace order
+        # Finalize inventory + confirm order
+        #
+        # /payments/verify and this webhook can both process the
+        # same successful payment. If the payment was already PAID,
+        # inventory was already finalized in the committed payment
+        # transaction, so do NOT finalize it a second time.
         # ----------------------------------------------------
 
-        finalize_order_inventory(payment["order_id"], cursor)
+        if not already_paid:
+            finalize_order_inventory(payment["order_id"], cursor)
 
-        cursor.execute(
-            """
-            UPDATE marketplace_orders
-
-            SET
-                status = 'CONFIRMED'
-
-            WHERE id = %s
-              AND status = 'PENDING'
-            """,
-            (
-                payment["order_id"],
-            ),
-        )
+            cursor.execute(
+                """
+                UPDATE marketplace_orders
+                SET status = 'CONFIRMED'
+                WHERE id = %s
+                  AND status = 'PENDING'
+                """,
+                (payment["order_id"],),
+            )
 
         connection.commit()
 

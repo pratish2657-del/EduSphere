@@ -573,16 +573,20 @@ def verify_payment(
         # ----------------------------------------------------
 
         if payment["status"] == "PAID":
-
+            # The payment/inventory/order state was already committed by
+            # an earlier verify/webhook request. Never finalize inventory
+            # again, but do retry Easy Split so a temporary split failure
+            # can be recovered without another customer payment.
             connection.commit()
 
+            split_result = attempt_cashfree_split(order_id)
+
             return {
-                "message": (
-                    "Payment already verified"
-                ),
+                "message": "Payment already verified; Easy Split checked",
                 "payment_id": payment["id"],
                 "order_id": order_id,
                 "status": "PAID",
+                "easy_split": split_result,
             }
 
         # ----------------------------------------------------

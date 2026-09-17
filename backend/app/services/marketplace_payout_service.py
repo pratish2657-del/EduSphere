@@ -91,6 +91,7 @@ def attempt_cashfree_split(order_id: int) -> dict[str, Any]:
                 pt.seller_id,
                 pt.seller_amount,
                 pt.status,
+                pt.cashfree_split_status,
 
                 sp.cashfree_vendor_id,
                 sp.payout_status,
@@ -124,6 +125,27 @@ def attempt_cashfree_split(order_id: int) -> dict[str, Any]:
                 "success": True,
                 "attempted": False,
                 "reason": "No payout rows",
+                "cashfree_order_id": cashfree_order_id,
+            }
+
+        # ====================================================
+        # 2A. Local Easy Split idempotency
+        #
+        # /payments/verify and the Cashfree webhook may both call
+        # attempt_cashfree_split(). Once the split is locally marked
+        # CREATED, never send the same order to Cashfree again.
+        # ====================================================
+
+        if any(
+            str(row.get("cashfree_split_status") or "").upper() == "CREATED"
+            for row in rows
+        ):
+            connection.commit()
+            return {
+                "success": True,
+                "attempted": False,
+                "already_processed": True,
+                "reason": "Cashfree Easy Split was already created",
                 "cashfree_order_id": cashfree_order_id,
             }
 
@@ -293,13 +315,45 @@ def attempt_cashfree_split(order_id: int) -> dict[str, Any]:
         }
 
     except Exception as exc:
-
+        error_text = str(exc)[:1000]
         connection.rollback()
+
+        # Cashfree can report this when the order-level split has already
+        # been processed but the local EduSphere ledger still says PENDING.
+        # Reconcile that known state instead of repeatedly retrying the API.
+        if "Transaction already processed, not eligible for split" in error_text:
+            reconnection = get_connection()
+            try:
+                recursor = reconnection.cursor()
+                recursor.execute(
+                    """
+                    UPDATE marketplace_seller_payout_transactions
+                    SET
+                        cashfree_split_status = 'CREATED',
+                        status = 'TRANSFER_INITIATED',
+                        failure_reason = NULL
+                    WHERE order_id = %s
+                      AND status IN ('PENDING', 'READY', 'FAILED', 'ON_HOLD')
+                      AND cashfree_vendor_id IS NOT NULL
+                    """,
+                    (order_id,),
+                )
+                reconnection.commit()
+            finally:
+                reconnection.close()
+
+            return {
+                "success": True,
+                "attempted": False,
+                "already_processed": True,
+                "cashfree_order_id": cashfree_order_id,
+                "reason": "Cashfree reports the transaction was already processed",
+            }
 
         return {
             "success": False,
             "attempted": True,
-            "error": str(exc)[:1000],
+            "error": error_text,
         }
 
     finally:
