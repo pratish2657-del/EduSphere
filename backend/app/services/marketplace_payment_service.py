@@ -15,6 +15,7 @@ from app.services.payment_gateway_service import (
     get_gateway_order,
 )
 
+
 # ============================================================
 # CREATE PAYMENT
 # BUYER
@@ -25,7 +26,6 @@ from app.services.payment_gateway_service import (
 
 
 def create_payment(user_id, order_id):
-
     # Release abandoned checkout reservations before
     # checking stock/payment state.
     expire_pending_orders()
@@ -56,7 +56,10 @@ def create_payment(user_id, order_id):
             WHERE id = %s
               AND buyer_id = %s
             """,
-            (order_id, user_id),
+            (
+                order_id,
+                user_id,
+            ),
         )
 
         order = cursor.fetchone()
@@ -73,7 +76,10 @@ def create_payment(user_id, order_id):
                 "Order has already been confirmed"
             )
 
-        if order["status"] in ["CANCELLED", "REFUNDED"]:
+        if order["status"] in [
+            "CANCELLED",
+            "REFUNDED",
+        ]:
             raise BadRequestError(
                 "Payment cannot be created for this order"
             )
@@ -99,7 +105,11 @@ def create_payment(user_id, order_id):
 
             expiry = cursor.fetchone()
 
-            if expiry and expiry["expires_at"] <= expiry["now"]:
+            if (
+                expiry
+                and expiry["expires_at"]
+                <= expiry["now"]
+            ):
                 raise BadRequestError(
                     "This checkout session has expired. "
                     "Please create a new order."
@@ -165,22 +175,25 @@ def create_payment(user_id, order_id):
 
             if (
                 existing_payment["gateway_order_id"]
-                and existing_payment["gateway"] == "CASHFREE"
+                and existing_payment["gateway"]
+                == "CASHFREE"
             ):
-                # The browser needs a Payment Session ID to open Cashfree
-                # checkout. Recover it from Cashfree for an existing local
-                # payment instead of trying to create the same order again.
+
+                # Recover existing Cashfree payment session.
                 existing_gateway_order = get_gateway_order(
                     existing_payment["gateway_order_id"]
                 )
+
                 existing_payment_session_id = (
-                    existing_gateway_order.get("payment_session_id")
+                    existing_gateway_order.get(
+                        "payment_session_id"
+                    )
                 )
 
                 if not existing_payment_session_id:
                     raise ServiceUnavailableError(
-                        "Cashfree did not return a payment session for "
-                        "the existing order"
+                        "Cashfree did not return a payment "
+                        "session for the existing order"
                     )
 
                 connection.commit()
@@ -191,9 +204,13 @@ def create_payment(user_id, order_id):
                     "order_id": order_id,
                     "gateway": existing_payment["gateway"],
                     "gateway_order_id": (
-                        existing_payment["gateway_order_id"]
+                        existing_payment[
+                            "gateway_order_id"
+                        ]
                     ),
-                    "payment_session_id": existing_payment_session_id,
+                    "payment_session_id": (
+                        existing_payment_session_id
+                    ),
                     "amount": existing_payment["amount"],
                     "currency": existing_payment["currency"],
                     "status": existing_payment["status"],
@@ -225,6 +242,7 @@ def create_payment(user_id, order_id):
                     gateway,
                     status
                 )
+
                 VALUES (
                     %s,
                     %s,
@@ -251,19 +269,34 @@ def create_payment(user_id, order_id):
         # Create Cashfree Sandbox order
         # ----------------------------------------------------
 
-        # Cashfree order IDs must be unique.  The old implementation used
-        # EDU-{order_id}, which becomes a duplicate when the same EduSphere
-        # checkout is retried after Cashfree has already created the remote
-        # order.  Include the local payment ID so every payment attempt gets
-        # a unique Cashfree order ID while retries of this same local payment
-        # remain idempotent.
+        # Cashfree order IDs must be unique.
+        #
+        # Include the local payment ID so each payment
+        # attempt gets a unique Cashfree order ID.
+        #
+        # IMPORTANT:
+        # return_url sends the browser back to EduSphere
+        # after the Cashfree checkout is completed.
+        # ----------------------------------------------------
+
         gateway_order = create_gateway_order(
             amount=amount,
             receipt=f"EDU-{order_id}-PAY-{payment_id}",
+
+            # Cashfree redirects the browser here after payment.
+            # The local EduSphere order ID is included so the
+            # success page can securely retrieve the payment record.
+            return_url=(
+                "https://edusphere-rho-sable.vercel.app/"
+                "app/marketplace/payment-success"
+                f"?edusphere_order_id={order_id}"
+            ),
+
             notify_url=(
                 "https://edusphere-fovh.onrender.com/"
                 "marketplace/payments/webhook"
             ),
+
             notes={
                 "edusphere_order_id": str(order_id),
                 "edusphere_payment_id": str(payment_id),
@@ -271,7 +304,10 @@ def create_payment(user_id, order_id):
         )
 
         gateway_order_id = gateway_order["order_id"]
-        payment_session_id = gateway_order["payment_session_id"]
+
+        payment_session_id = (
+            gateway_order["payment_session_id"]
+        )
 
         # ----------------------------------------------------
         # Save Cashfree order ID
@@ -298,7 +334,9 @@ def create_payment(user_id, order_id):
         connection.commit()
 
         return {
-            "message": "Cashfree payment order created",
+            "message": (
+                "Cashfree payment order created"
+            ),
             "payment_id": payment_id,
             "order_id": order_id,
             "gateway": "CASHFREE",
@@ -462,6 +500,7 @@ def get_order_payment(order_id, user_id):
 # 6. Mark local payment PAID
 # 7. Finalize inventory
 # 8. Confirm marketplace order
+# 9. Attempt Easy Split
 # ============================================================
 
 
@@ -475,18 +514,18 @@ def verify_payment(
     """
     Verify a Cashfree payment server-side.
 
-    The browser cannot decide whether a payment succeeded.
+    Cashfree is the authoritative payment source.
 
-    EduSphere asks Cashfree for the authoritative order status
-    and only marks the local payment as PAID when Cashfree
-    confirms that the order is PAID.
+    The browser cannot decide whether a payment
+    succeeded.
 
-    gateway_payment_id is optional because Cashfree order-status
-    verification does not require the browser to provide a
-    payment ID.
+    gateway_payment_id is optional because Cashfree
+    order-status verification does not require the
+    browser to provide a payment ID.
 
-    gateway_signature is retained for schema compatibility but
-    is not trusted for payment confirmation.
+    gateway_signature is retained for schema
+    compatibility but is not trusted for payment
+    confirmation.
     """
 
     connection = get_connection()
@@ -538,7 +577,9 @@ def verify_payment(
             connection.commit()
 
             return {
-                "message": "Payment already verified",
+                "message": (
+                    "Payment already verified"
+                ),
                 "payment_id": payment["id"],
                 "order_id": order_id,
                 "status": "PAID",
@@ -554,7 +595,7 @@ def verify_payment(
             )
 
         # ----------------------------------------------------
-        # Verify gateway order ID against our database
+        # Verify gateway order ID
         # ----------------------------------------------------
 
         if (
@@ -567,7 +608,10 @@ def verify_payment(
             )
 
         # ----------------------------------------------------
-        # Ask Cashfree for the authoritative order status
+        # IMPORTANT FIX
+        #
+        # Ask Cashfree for the ACTUAL Cashfree order,
+        # not the local EduSphere database order ID.
         # ----------------------------------------------------
 
         gateway_order = get_gateway_order(
@@ -582,7 +626,7 @@ def verify_payment(
         ).upper()
 
         # ----------------------------------------------------
-        # Verify Cashfree amount against our database
+        # Verify Cashfree amount
         # ----------------------------------------------------
 
         gateway_amount = gateway_order.get(
@@ -595,6 +639,7 @@ def verify_payment(
             )
 
         try:
+
             local_amount = float(
                 payment["amount"]
             )
@@ -604,11 +649,14 @@ def verify_payment(
             )
 
         except (TypeError, ValueError) as error:
+
             raise BadRequestError(
-                "Invalid payment amount returned by Cashfree"
+                "Invalid payment amount returned "
+                "by Cashfree"
             ) from error
 
         if cashfree_amount != local_amount:
+
             raise ConflictError(
                 "Cashfree payment amount does not "
                 "match the EduSphere order amount"
@@ -635,10 +683,8 @@ def verify_payment(
         # ----------------------------------------------------
         # Mark payment PAID
         #
-        # gateway_payment_id is optional.
-        #
-        # The frontend must NEVER send the Cashfree order ID
-        # as the payment ID.
+        # The frontend must NEVER send the Cashfree
+        # order ID as the payment ID.
         # ----------------------------------------------------
 
         cursor.execute(
@@ -703,9 +749,18 @@ def verify_payment(
 
         connection.commit()
 
-        # Easy Split is downstream of a successful customer payment.
-        # A missing/unverified seller must not roll back the paid order; the
-        # payout UI can retry the split after seller onboarding is complete.
+        # ----------------------------------------------------
+        # Cashfree Easy Split
+        #
+        # Runs AFTER successful customer payment.
+        #
+        # 5% EduSphere commission
+        # 95% seller amount
+        #
+        # A missing/unverified seller should not roll back
+        # an already successful customer payment.
+        # ----------------------------------------------------
+
         attempt_cashfree_split(order_id)
 
         return {
@@ -732,8 +787,8 @@ def verify_payment(
 #
 # COD is not a Cashfree transaction.
 #
-# Staff confirm cash collection, then the local payment becomes
-# PAID and the seller payout ledger becomes READY.
+# Staff confirm cash collection, then the local payment
+# becomes PAID and the seller payout ledger becomes READY.
 # ============================================================
 
 
@@ -746,6 +801,10 @@ def mark_cod_payment_collected(
 
     try:
         cursor = connection.cursor()
+
+        # ----------------------------------------------------
+        # Find payment
+        # ----------------------------------------------------
 
         cursor.execute(
             """
@@ -786,8 +845,11 @@ def mark_cod_payment_collected(
         cursor.execute(
             """
             SELECT role
+
             FROM users
+
             WHERE id = %s
+
             LIMIT 1
             """,
             (admin_user_id,),

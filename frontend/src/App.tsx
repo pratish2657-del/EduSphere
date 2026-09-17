@@ -69,6 +69,7 @@ import DeveloperVerification from "./pages/super-admin/DeveloperVerification";
 import LibraryPage from "./pages/library/LibraryPage";
 import SuperAdminLibrary from "./pages/super-admin/SuperAdminLibrary";
 import SuperAdminDeveloperSubmissions from "./pages/super-admin/SuperAdminDeveloperSubmissions";
+import MarketplacePaymentSuccess from "./pages/auth/MarketplacePaymentSuccess";
 
 type FloatingCardProps = {
   icon: typeof BookOpen;
@@ -708,6 +709,11 @@ export default function App() {
       />
       <Route path="/app/super-admin/marketplace-payouts" element={<SuperAdminMarketplacePayouts />} />
       <Route path="/app/marketplace/seller/route-onboarding" element={<MarketplaceRouteOnboarding />} />
+      <Route
+        path="/app/marketplace/payment-success"
+        element={
+        <MarketplacePaymentSuccess />}
+      />
       {/* Unknown URL */}
       <Route
         path="*"
