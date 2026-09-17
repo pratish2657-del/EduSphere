@@ -61,10 +61,10 @@ export default function SuperAdminMarketplacePayouts() {
 
     try {
       const [p, f] = await Promise.all([
-        fetch(`${API}/marketplace/route/payouts`, {
+        fetch(`${API}/marketplace/easy-split/payouts`, {
           credentials: "include",
         }),
-        fetch(`${API}/marketplace/route/finance-summary`, {
+        fetch(`${API}/marketplace/easy-split/finance-summary`, {
           credentials: "include",
         }),
       ]);
@@ -107,9 +107,7 @@ export default function SuperAdminMarketplacePayouts() {
     setMessage("");
 
     try {
-      const r = await fetch(
-        `${API}/marketplace/route/payouts/${id}/retry`,
-        {
+      const r = await fetch(`${API}/marketplace/easy-split/payouts/${id}/retry`, {
           method: "POST",
           credentials: "include",
           headers: {
@@ -213,9 +211,7 @@ export default function SuperAdminMarketplacePayouts() {
     setMessage("");
 
     try {
-      const r = await fetch(
-        `${API}/marketplace/route/payouts/${item.id}/reverse`,
-        {
+      const r = await fetch(`${API}/marketplace/easy-split/payouts/${item.id}/reverse`, {
           method: "POST",
           credentials: "include",
           headers: {
