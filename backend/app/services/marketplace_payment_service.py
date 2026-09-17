@@ -2,6 +2,7 @@ from app.core.exceptions import (
     BadRequestError,
     ConflictError,
     NotFoundError,
+    ServiceUnavailableError,
 )
 from app.database import get_connection
 from app.services.marketplace_inventory_service import (
@@ -166,6 +167,21 @@ def create_payment(user_id, order_id):
                 existing_payment["gateway_order_id"]
                 and existing_payment["gateway"] == "CASHFREE"
             ):
+                # The browser needs a Payment Session ID to open Cashfree
+                # checkout. Recover it from Cashfree for an existing local
+                # payment instead of trying to create the same order again.
+                existing_gateway_order = get_gateway_order(
+                    existing_payment["gateway_order_id"]
+                )
+                existing_payment_session_id = (
+                    existing_gateway_order.get("payment_session_id")
+                )
+
+                if not existing_payment_session_id:
+                    raise ServiceUnavailableError(
+                        "Cashfree did not return a payment session for "
+                        "the existing order"
+                    )
 
                 connection.commit()
 
@@ -177,6 +193,7 @@ def create_payment(user_id, order_id):
                     "gateway_order_id": (
                         existing_payment["gateway_order_id"]
                     ),
+                    "payment_session_id": existing_payment_session_id,
                     "amount": existing_payment["amount"],
                     "currency": existing_payment["currency"],
                     "status": existing_payment["status"],
@@ -234,9 +251,15 @@ def create_payment(user_id, order_id):
         # Create Cashfree Sandbox order
         # ----------------------------------------------------
 
+        # Cashfree order IDs must be unique.  The old implementation used
+        # EDU-{order_id}, which becomes a duplicate when the same EduSphere
+        # checkout is retried after Cashfree has already created the remote
+        # order.  Include the local payment ID so every payment attempt gets
+        # a unique Cashfree order ID while retries of this same local payment
+        # remain idempotent.
         gateway_order = create_gateway_order(
             amount=amount,
-            receipt=f"EDU-{order_id}",
+            receipt=f"EDU-{order_id}-PAY-{payment_id}",
             notify_url=(
                 "https://edusphere-fovh.onrender.com/"
                 "marketplace/payments/webhook"

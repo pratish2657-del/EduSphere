@@ -1,4 +1,5 @@
 import os
+import uuid
 
 import httpx
 
@@ -73,6 +74,7 @@ def create_gateway_order(
     customer_details=None,
     return_url=None,
     notify_url=None,
+    idempotency_key=None,
 ):
     """
     Create a Cashfree Payment Gateway order.
@@ -169,9 +171,24 @@ def create_gateway_order(
     # --------------------------------------------------------
 
     try:
+        headers = get_cashfree_headers()
+
+        # Cashfree supports an idempotency key for safe retries.  Keep the
+        # same key for the same logical order operation so a timeout/retry
+        # cannot create a second Cashfree order.
+        if not idempotency_key:
+            idempotency_key = str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"edusphere-cashfree-order:{receipt}",
+                )
+            )
+
+        headers["x-idempotency-key"] = idempotency_key
+
         response = httpx.post(
             f"{config['base_url']}/orders",
-            headers=get_cashfree_headers(),
+            headers=headers,
             json=payload,
             timeout=30.0,
         )
