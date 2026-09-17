@@ -938,7 +938,7 @@ export default function AppPlaceholder() {
         // ------------------------------------------------------------
         const checkoutResult = (await cashfree.checkout({
           paymentSessionId: payment.payment_session_id,
-          redirectTarget: "_modal",
+          redirectTarget: "_self",
         })) as {
           error?: {
             message?: string;
