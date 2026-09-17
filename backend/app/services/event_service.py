@@ -1,11 +1,11 @@
+from zoneinfo import ZoneInfo
+
 from app.core.exceptions import (
     BadRequestError,
     ForbiddenError,
     NotFoundError,
 )
 from app.database import get_connection
-
-from zoneinfo import ZoneInfo
 
 # EduSphere institution-event timezone.
 # Naive datetimes from the frontend are treated as IST exactly as entered.

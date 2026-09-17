@@ -12,7 +12,6 @@ from app.schemas.ai import (
     AIAskResponse,
     AIClearResponse,
     AIConversationResponse,
-    AIChatMessage,
 )
 from app.services.ai_service import (
     ask_ai,

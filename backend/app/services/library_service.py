@@ -152,7 +152,7 @@ def _signed_storage_url(path, expires_in=300, download_name=None):
     signed_path = result.get("signedURL") if isinstance(result, dict) else None
     if not signed_path:
         raise NotFoundError("Library file is not available in persistent storage")
-    if signed_path.startswith("http://") or signed_path.startswith("https://"):
+    if signed_path.startswith(("http://", "https://")):
         url = signed_path
     elif signed_path.startswith("/storage/v1/"):
         url = f"{SUPABASE_URL}{signed_path}"

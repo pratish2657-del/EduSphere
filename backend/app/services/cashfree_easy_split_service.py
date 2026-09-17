@@ -42,7 +42,9 @@ def _request(method: str, path: str, *, json=None, idempotency_key: str | None =
 
 
 def create_vendor(*, vendor_id: str, name: str, email: str, phone: str, bank_account_number: str,
-                  ifsc: str, account_holder: str, schedule_option: int = 1, verify_account: bool = True):
+                  ifsc: str, account_holder: str, pan: str | None = None,
+                  business_type: str = "E-commerce", account_type: str = "Individual",
+                  schedule_option: int = 1, verify_account: bool = True):
     return _request(
         "POST",
         "/easy-split/vendors",
@@ -59,6 +61,11 @@ def create_vendor(*, vendor_id: str, name: str, email: str, phone: str, bank_acc
                 "account_number": bank_account_number,
                 "account_holder": account_holder,
                 "ifsc": ifsc.upper().strip(),
+            },
+            "kyc_details": {
+                "account_type": account_type,
+                "business_type": business_type,
+                "pan": pan,
             },
         },
         idempotency_key=str(uuid.uuid5(uuid.NAMESPACE_URL, f"edusphere:vendor:{vendor_id}")),

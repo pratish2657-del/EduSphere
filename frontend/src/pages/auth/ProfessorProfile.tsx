@@ -496,7 +496,7 @@ export default function ProfessorProfile() {
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(String(data?.detail || "Unable to save payout details."));
       setSellerPayout({ enabled: Boolean(data.enabled), preferred_upi_app: data.preferred_upi_app || "", upi_id: data.upi_id || "", account_holder_name: data.account_holder_name || "", payout_status: data.payout_status });
-      setSellerMessage(data.enabled ? "Payout details saved. Verification is pending." : "Seller account disabled.");
+      setSellerMessage(data.enabled ? "Payout details saved. Complete Cashfree Easy Split onboarding to verify your seller account." : "Seller account disabled.");
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to save payout details."); }
     finally { setSellerSaving(false); }
   };
@@ -1285,7 +1285,7 @@ export default function ProfessorProfile() {
             {sellerMessage && <p style={{ color: "#86efac", fontSize: 12 }}>{sellerMessage}</p>}
             {sellerPayout.payout_status && <p style={{ color: "#8f9ab3", fontSize: 11 }}>Payout status: {sellerPayout.payout_status.replaceAll("_", " ")}</p>}
             <button type="button" onClick={saveSellerPayout} disabled={sellerSaving} style={styles.secondaryButton}>{sellerSaving ? "Saving..." : "Save payout details"}</button>
-              {sellerPayout.enabled && <button type="button" onClick={() => { window.location.href = "/app/marketplace/seller/route-onboarding"; }} style={{ marginTop: 10, minHeight: 38, padding: "0 14px", border: "1px solid rgba(117,100,255,.35)", borderRadius: 10, color: "#c4b5fd", background: "rgba(117,100,255,.08)", fontWeight: 800, cursor: "pointer" }}>Complete Route onboarding &amp; KYC</button>}
+              {sellerPayout.enabled && <button type="button" onClick={() => { window.location.href = "/app/marketplace/seller/easy-split-onboarding"; }} style={{ marginTop: 10, minHeight: 38, padding: "0 14px", border: "1px solid rgba(117,100,255,.35)", borderRadius: 10, color: "#c4b5fd", background: "rgba(117,100,255,.08)", fontWeight: 800, cursor: "pointer" }}>Complete Cashfree Easy Split onboarding</button>}
           </section>
 
           <div style={styles.actions}>

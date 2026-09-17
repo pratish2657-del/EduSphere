@@ -145,7 +145,7 @@ def get_professor_students(user_id, search=None, course_id=None, semester=None, 
                 WHERE sp.user_id IN ({marks})
                 ORDER BY c.name ASC
                 """,
-                tuple([professor["professor_id"], *user_ids]),
+                (professor["professor_id"], *user_ids),
             )
             for row in cursor.fetchall():
                 course_map.setdefault(row["user_id"], []).append(

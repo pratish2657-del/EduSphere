@@ -881,7 +881,7 @@ export default function StudentProfile() {
               {sellerMessage && <div style={{ marginTop: 14, color: "#86efac", fontSize: 12 }}>{sellerMessage}</div>}
               {sellerPayout.payout_status && <div style={{ marginTop: 8, color: "#8f9ab3", fontSize: 11 }}>Payout status: {sellerPayout.payout_status.replaceAll("_", " ")}</div>}
               <button type="button" onClick={saveSellerPayout} disabled={sellerSaving} style={{ marginTop: 14, minHeight: 42, padding: "0 16px", border: 0, borderRadius: 11, color: "white", background: "linear-gradient(135deg,#7564ff,#4b8dff)", fontWeight: 800, cursor: sellerSaving ? "not-allowed" : "pointer", opacity: sellerSaving ? .6 : 1 }}>{sellerSaving ? "Saving..." : "Save payout details"}</button>
-              {sellerPayout.enabled && <button type="button" onClick={() => { window.location.href = "/app/marketplace/seller/route-onboarding"; }} style={{ marginTop: 10, minHeight: 38, padding: "0 14px", border: "1px solid rgba(117,100,255,.35)", borderRadius: 10, color: "#c4b5fd", background: "rgba(117,100,255,.08)", fontWeight: 800, cursor: "pointer" }}>Complete Route onboarding &amp; KYC</button>}
+              {sellerPayout.enabled && <button type="button" onClick={() => { window.location.href = "/app/marketplace/seller/easy-split-onboarding"; }} style={{ marginTop: 10, minHeight: 38, padding: "0 14px", border: "1px solid rgba(117,100,255,.35)", borderRadius: 10, color: "#c4b5fd", background: "rgba(117,100,255,.08)", fontWeight: 800, cursor: "pointer" }}>Complete Cashfree Easy Split onboarding</button>}
             </div>
 
             <div className="profile-form-footer">

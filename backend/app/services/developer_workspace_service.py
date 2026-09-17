@@ -65,7 +65,7 @@ def _ide_request(method, path, payload=None):
     except urllib.error.HTTPError as exc:
         try:
             detail = exc.read().decode("utf-8")
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             detail = ""
         if exc.code in {401, 403}:
             raise ForbiddenError("Developer IDE authentication failed") from exc

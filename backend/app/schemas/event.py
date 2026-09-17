@@ -1,7 +1,7 @@
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, field_validator
-from zoneinfo import ZoneInfo
 
 EVENT_TIMEZONE = ZoneInfo("Asia/Kolkata")
 

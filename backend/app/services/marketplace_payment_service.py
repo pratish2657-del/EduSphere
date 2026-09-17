@@ -571,7 +571,7 @@ def verify_payment(
         # ----------------------------------------------------
 
         gateway_order = get_gateway_order(
-            order_id
+            payment["gateway_order_id"]
         )
 
         gateway_status = str(
