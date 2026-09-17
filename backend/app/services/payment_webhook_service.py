@@ -283,22 +283,20 @@ def _handle_payment_success(
         # ----------------------------------------------------
         # Idempotency
         # ----------------------------------------------------
-
-        if payment["status"] == "PAID":
-            connection.commit()
-
-            return {
-                "message": "Payment already processed",
-                "payment_id": payment["id"],
-                "order_id": payment["order_id"],
-                "status": "PAID",
-            }
-
-        # ----------------------------------------------------
-        # Mark payment as PAID
+        # A payment may already be PAID because the synchronous
+        # /payments/verify flow updated it before this webhook arrived.
+        # PAID does not mean Easy Split was already created.
         # ----------------------------------------------------
 
-        cursor.execute(
+        already_paid = payment["status"] == "PAID"
+
+        # ----------------------------------------------------
+        # Mark payment as PAID when this webhook is the first
+        # successful notification we have received.
+        # ----------------------------------------------------
+
+        if not already_paid:
+            cursor.execute(
             """
             UPDATE marketplace_payments
 
@@ -339,13 +337,27 @@ def _handle_payment_success(
 
         connection.commit()
 
-        attempt_cashfree_split(payment["order_id"])
+        # ----------------------------------------------------
+        # Always check Easy Split after a successful payment.
+        # This also runs when payment was already marked PAID by
+        # /payments/verify before the Cashfree webhook arrived.
+        # attempt_cashfree_split() uses the actual Cashfree
+        # gateway_order_id and returns safely when a split has
+        # already been initiated.
+        # ----------------------------------------------------
+
+        split_result = attempt_cashfree_split(payment["order_id"])
 
         return {
-            "message": "Cashfree payment processed successfully",
+            "message": (
+                "Cashfree payment processed successfully"
+                if not already_paid
+                else "Cashfree payment already processed; Easy Split checked"
+            ),
             "payment_id": payment["id"],
             "order_id": payment["order_id"],
             "status": "PAID",
+            "easy_split": split_result,
         }
 
     except Exception:
