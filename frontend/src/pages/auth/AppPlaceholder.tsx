@@ -37,6 +37,55 @@ const API_BASE_URL =
 
 const REQUEST_TIMEOUT_MS = 15000;
 
+function getDisplayMessage(
+  value: unknown,
+  fallback = "Something went wrong."
+): string {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+
+  if (value instanceof Error) {
+    return value.message || fallback;
+  }
+
+  if (Array.isArray(value)) {
+    const messages = value
+      .map((item) => getDisplayMessage(item, ""))
+      .filter(Boolean);
+
+    return messages.length ? messages.join(", ") : fallback;
+  }
+
+  if (value && typeof value === "object") {
+    const objectValue = value as Record<string, unknown>;
+
+    for (const key of ["detail", "message", "error", "description"]) {
+      const candidate = objectValue[key];
+
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate;
+      }
+
+      if (candidate && typeof candidate === "object") {
+        const nested = getDisplayMessage(candidate, "");
+        if (nested) {
+          return nested;
+        }
+      }
+    }
+
+    try {
+      const serialized = JSON.stringify(value);
+      return serialized && serialized !== "{}" ? serialized : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  return fallback;
+}
+
 function createRequestController() {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(
@@ -55,7 +104,7 @@ function getRequestError(
     return "The EduSphere server took too long to respond. Please try again.";
   }
 
-  return error instanceof Error ? error.message : fallback;
+  return getDisplayMessage(error, fallback);
 }
 
 type DashboardUser = {
@@ -409,7 +458,7 @@ export default function AppPlaceholder() {
           data?.message ||
           "Unable to load your dashboard.";
 
-        throw new Error(String(message));
+        throw new Error(getDisplayMessage(message, "Unable to load your dashboard."));
       }
 
       setDashboard(data as DashboardResponse);
@@ -444,7 +493,7 @@ export default function AppPlaceholder() {
           data?.detail ||
           data?.message ||
           "Unable to load your events.";
-        throw new Error(String(message));
+        throw new Error(getDisplayMessage(message, "Unable to load your timetable."));
       }
 
       if (!data || !Array.isArray(data.events)) {
@@ -571,7 +620,7 @@ export default function AppPlaceholder() {
 
       if (!response.ok) {
         throw new Error(
-          String(data?.detail || data?.message || "Unable to load cart.")
+          getDisplayMessage(data?.detail ?? data?.message, "Unable to load cart.")
         );
       }
 
@@ -607,7 +656,7 @@ export default function AppPlaceholder() {
 
       if (!response.ok) {
         throw new Error(
-          String(data?.detail || data?.message || "Unable to load orders.")
+          getDisplayMessage(data?.detail ?? data?.message, "Unable to load orders.")
         );
       }
 
@@ -2285,7 +2334,7 @@ function MarketplaceView({
     panel: "shop" | "sell" | "orders" | "sales"
   ) => void;
   onCreateProduct: () => void;
-  notice: string;
+  notice: unknown;
   busy: boolean;
   selectedProduct: MarketplaceProduct | null;
   onSelectProduct: (product: MarketplaceProduct | null) => void;
@@ -2384,7 +2433,9 @@ function MarketplaceView({
         ))}
       </div>
 
-      {notice && <div style={styles.marketplaceNotice}>{notice}</div>}
+      {Boolean(notice) && (
+        <div style={styles.marketplaceNotice}>{getDisplayMessage(notice)}</div>
+      )}
 
       {panel === "shop" && (
         <>

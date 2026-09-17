@@ -21,6 +21,34 @@ import AIChatbot from "../../components/ai/AIChatbot";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+function getDisplayMessage(
+  value: unknown,
+  fallback = "Something went wrong."
+): string {
+  if (typeof value === "string" && value.trim()) return value;
+  if (value instanceof Error) return value.message || fallback;
+  if (Array.isArray(value)) {
+    const messages = value.map((item) => getDisplayMessage(item, "")).filter(Boolean);
+    return messages.length ? messages.join(", ") : fallback;
+  }
+  if (value && typeof value === "object") {
+    const objectValue = value as Record<string, unknown>;
+    for (const key of ["detail", "message", "error", "description"]) {
+      const candidate = objectValue[key];
+      if (typeof candidate === "string" && candidate.trim()) return candidate;
+      if (candidate && typeof candidate === "object") {
+        const nested = getDisplayMessage(candidate, "");
+        if (nested) return nested;
+      }
+    }
+    try {
+      const serialized = JSON.stringify(value);
+      return serialized && serialized !== "{}" ? serialized : fallback;
+    } catch { return fallback; }
+  }
+  return fallback;
+}
+
 
 type MarketplaceProduct = {
   product_id: number;
@@ -177,7 +205,7 @@ export default function ProfessorMarketplace() {
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new Error(String(data?.detail || data?.message || `Request failed (${response.status})`));
+      throw new Error(getDisplayMessage(data?.detail ?? data?.message, `Request failed (${response.status})`));
     }
     return data as T;
   }, []);
@@ -271,7 +299,7 @@ export default function ProfessorMarketplace() {
       );
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(String(data?.detail || data?.message || "Unable to add product to cart."));
+        throw new Error(getDisplayMessage(data?.detail ?? data?.message, "Unable to add product to cart."));
       }
       setMarketplaceNotice("Added to cart.");
       await loadMarketplaceCart();
@@ -290,7 +318,7 @@ export default function ProfessorMarketplace() {
         { method: "PUT", credentials: "include", headers: { Accept: "application/json" } }
       ).then(async response => {
         const data = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(String(data?.detail || data?.message || "Unable to update cart."));
+        if (!response.ok) throw new Error(getDisplayMessage(data?.detail ?? data?.message, "Unable to update cart."));
       });
       await loadMarketplaceCart();
     } catch (err) {
@@ -308,7 +336,7 @@ export default function ProfessorMarketplace() {
         { method: "DELETE", credentials: "include", headers: { Accept: "application/json" } }
       );
       const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(String(data?.detail || data?.message || "Unable to remove cart item."));
+      if (!response.ok) throw new Error(getDisplayMessage(data?.detail ?? data?.message, "Unable to remove cart item."));
       await loadMarketplaceCart();
     } catch (err) {
       setMarketplaceNotice(err instanceof Error ? err.message : "Unable to remove cart item.");
@@ -354,7 +382,7 @@ export default function ProfessorMarketplace() {
       );
       const checkoutData = await checkoutResponse.json().catch(() => null);
       if (!checkoutResponse.ok) {
-        throw new Error(String(checkoutData?.detail || checkoutData?.message || "Unable to create marketplace order."));
+        throw new Error(getDisplayMessage(checkoutData?.detail ?? checkoutData?.message, "Unable to create marketplace order."));
       }
 
       const orderId = Number(checkoutData?.order_id);
@@ -381,7 +409,7 @@ export default function ProfessorMarketplace() {
       });
       const paymentData = await paymentResponse.json().catch(() => null);
       if (!paymentResponse.ok) {
-        throw new Error(String(paymentData?.detail || paymentData?.message || "Unable to create Cashfree payment."));
+        throw new Error(getDisplayMessage(paymentData?.detail ?? paymentData?.message, "Unable to create Cashfree payment."));
       }
 
       const payment = paymentData as MarketplacePaymentCreateResponse;
@@ -631,7 +659,7 @@ function MarketplaceView({
     panel: "shop" | "sell" | "orders" | "sales"
   ) => void;
   onCreateProduct: () => void;
-  notice: string;
+  notice: unknown;
   busy: boolean;
   selectedProduct: MarketplaceProduct | null;
   onSelectProduct: (product: MarketplaceProduct | null) => void;
@@ -730,7 +758,9 @@ function MarketplaceView({
         ))}
       </div>
 
-      {notice && <div style={styles.marketplaceNotice}>{notice}</div>}
+      {Boolean(notice) && (
+        <div style={styles.marketplaceNotice}>{getDisplayMessage(notice)}</div>
+      )}
 
       {panel === "shop" && (
         <>
