@@ -197,18 +197,38 @@ export default function ProfessorMarketplace() {
   const [marketplaceBusy, setMarketplaceBusy] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<MarketplaceProduct | null>(null);
 
-  const apiGet = useCallback(async <T,>(endpoint: string, options: RequestInit = {}): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      credentials: "include",
-      ...options,
-      headers: { Accept: "application/json", ...(options.headers || {}) },
-    });
-    const data = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(getDisplayMessage(data?.detail ?? data?.message, `Request failed (${response.status})`));
-    }
-    return data as T;
-  }, []);
+  const apiGet = useCallback(
+    async <T,>(
+      endpoint: string,
+      options: RequestInit = {}
+    ): Promise<T> => {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+          credentials: "include",
+        ...options,
+        headers: {
+          Accept: "application/json",
+          ...(options.body
+            ? { "Content-Type": "application/json" }
+            : {}),
+          ...(options.headers || {}),
+        },
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          getDisplayMessage(
+            data?.detail ?? data?.message,
+            `Request failed (${response.status})`
+          )
+        );
+      }
+
+      return data as T;
+    },
+    []
+  );
 
   const loadProfessorDashboard = useCallback(async () => {
     try {
