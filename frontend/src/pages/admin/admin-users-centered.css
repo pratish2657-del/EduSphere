@@ -1,0 +1,95 @@
+/* Admin Users — centered responsive statistic cards */
+.admin-users-stats,
+.admin-users-stats * {
+  box-sizing: border-box;
+}
+
+.admin-users-stat {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.admin-users-stat-content {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-users-stat-copy {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.admin-users-stat-copy strong,
+.admin-users-stat-copy span {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+@media (max-width: 820px) {
+  .admin-users-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  .admin-users-stat-content {
+    justify-content: center;
+    text-align: center;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 10px;
+  }
+
+  .admin-users-stat-icon {
+    margin: 0 auto;
+    flex: 0 0 auto;
+  }
+
+  .admin-users-stat-copy {
+    width: 100%;
+    text-align: center;
+  }
+
+  .admin-users-stat-copy strong {
+    font-size: 22px !important;
+    line-height: 1.1 !important;
+  }
+
+  .admin-users-stat-copy span {
+    font-size: 11px !important;
+    line-height: 1.35 !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-users-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .admin-users-stat {
+    min-height: 116px !important;
+  }
+
+  .admin-users-stat-content {
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 14px 8px !important;
+  }
+
+  .admin-users-stat-icon {
+    width: 38px !important;
+    height: 38px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 auto !important;
+  }
+}

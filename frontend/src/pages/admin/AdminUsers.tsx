@@ -278,108 +278,92 @@ export default function AdminUsers() {
           {/* Total Users */}
           <div
             className="admin-users-stat"
-            style={{
+            style={
               width: "100%",
               maxWidth: "100%",
               minWidth: 0,
               boxSizing: "border-box",
               overflow: "hidden",
-            }}
+            }
           >
-            <span className="admin-users-stat-icon">
-              <Users size={19} />
-            </span>
+            <div className="admin-users-stat-content">
+              <span className="admin-users-stat-icon">
+                <Users size={19} />
+              </span>
 
-            <div
-              style={{
-                minWidth: 0,
-                maxWidth: "100%",
-                overflow: "hidden",
-              }}
-            >
-              <strong>{total}</strong>
-              <span>Total users</span>
+              <div className="admin-users-stat-copy">
+                <strong>{total}</strong>
+                <span>Total users</span>
+              </div>
             </div>
           </div>
 
           {/* Students */}
           <div
             className="admin-users-stat"
-            style={{
+            style={
               width: "100%",
               maxWidth: "100%",
               minWidth: 0,
               boxSizing: "border-box",
               overflow: "hidden",
-            }}
+            }
           >
-            <span className="admin-users-stat-icon">
-              <UserRound size={19} />
-            </span>
+            <div className="admin-users-stat-content">
+              <span className="admin-users-stat-icon">
+                <UserRound size={19} />
+              </span>
 
-            <div
-              style={{
-                minWidth: 0,
-                maxWidth: "100%",
-                overflow: "hidden",
-              }}
-            >
-              <strong>{summary.students}</strong>
-              <span>Students on page</span>
+              <div className="admin-users-stat-copy">
+                <strong>{summary.students}</strong>
+                <span>Students on page</span>
+              </div>
             </div>
           </div>
 
           {/* Professors */}
           <div
             className="admin-users-stat"
-            style={{
+            style={
               width: "100%",
               maxWidth: "100%",
               minWidth: 0,
               boxSizing: "border-box",
               overflow: "hidden",
-            }}
+            }
           >
-            <span className="admin-users-stat-icon">
-              <ShieldCheck size={19} />
-            </span>
+            <div className="admin-users-stat-content">
+              <span className="admin-users-stat-icon">
+                <ShieldCheck size={19} />
+              </span>
 
-            <div
-              style={{
-                minWidth: 0,
-                maxWidth: "100%",
-                overflow: "hidden",
-              }}
-            >
-              <strong>{summary.professors}</strong>
-              <span>Professors on page</span>
+              <div className="admin-users-stat-copy">
+                <strong>{summary.professors}</strong>
+                <span>Professors on page</span>
+              </div>
             </div>
           </div>
 
           {/* Admins */}
           <div
             className="admin-users-stat"
-            style={{
+            style={
               width: "100%",
               maxWidth: "100%",
               minWidth: 0,
               boxSizing: "border-box",
               overflow: "hidden",
-            }}
+            }
           >
-            <span className="admin-users-stat-icon">
-              <ShieldCheck size={19} />
-            </span>
+            <div className="admin-users-stat-content">
+              <span className="admin-users-stat-icon">
+                <ShieldCheck size={19} />
+              </span>
 
-            <div
-              style={{
-                minWidth: 0,
-                maxWidth: "100%",
-                overflow: "hidden",
-              }}
-            >
-              <strong>{summary.admins}</strong>
-              <span>Admins on page</span>
+              <div className="admin-users-stat-copy">
+                <strong>{summary.admins}</strong>
+                <span>Admins on page</span>
+              </div>
             </div>
           </div>
         </section>
