@@ -128,7 +128,15 @@ def split_after_payment(order_id: str, splits: list[dict]):
 
 
 def get_split_and_settlement_details(order_id: str):
-    return _request("GET", f"/easy-split/orders/{order_id}/split")
+    """Get split and settlement details for a Cashfree order.
+
+    Cashfree's Get Split and Settlement Details by Order ID
+    endpoint is /easy-split/orders/{order_id}.
+    """
+    return _request(
+        "GET",
+        f"/easy-split/orders/{order_id}",
+    )
 
 
 def create_refund(order_id: str, refund_amount: float, refund_id: str, reason: str | None = None):
