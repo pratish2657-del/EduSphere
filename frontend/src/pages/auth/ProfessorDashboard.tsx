@@ -457,7 +457,7 @@ export default function ProfessorDashboard() {
   }
 
   return (
-    <div style={styles.page}>
+    <div className="professor-dashboard-page" style={styles.page}>
       <style>{`
         /* EduSphere 3D academic orb */
         .edu-3d-scene { width:150px; height:150px; position:relative; perspective:800px; display:grid; place-items:center; }
@@ -484,6 +484,299 @@ export default function ProfessorDashboard() {
         @keyframes eduDotA { 0%,100%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(8px,-7px,16px) scale(1.2)} }
         @keyframes eduDotB { 0%,100%{transform:translate3d(0,0,0)} 50%{transform:translate3d(-7px,7px,12px)} }
         @keyframes eduDotC { 0%,100%{transform:translate3d(0,0,0)} 50%{transform:translate3d(-4px,-9px,8px)} }
+
+        /* ======================================================
+           PROFESSOR DASHBOARD — RESPONSIVE MOBILE
+        ====================================================== */
+
+        .professor-dashboard-page {
+          width: 100%;
+          min-height: 100dvh;
+          overflow-x: hidden !important;
+        }
+
+        .professor-main-wrapper,
+        .professor-content,
+        .professor-welcome-card,
+        .professor-stats-grid,
+        .professor-main-grid,
+        .professor-quick-actions {
+          min-width: 0 !important;
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+        }
+
+        .professor-sidebar {
+          transition: transform .25s ease;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+        }
+
+        .professor-sidebar::-webkit-scrollbar {
+          width: 5px;
+        }
+
+        .professor-sidebar::-webkit-scrollbar-thumb {
+          background: rgba(148,163,184,.20);
+          border-radius: 999px;
+        }
+
+        .professor-menu-button {
+          flex-shrink: 0;
+        }
+
+        @media (max-width: 1100px) {
+          .professor-main-wrapper {
+            margin-left: 255px !important;
+          }
+
+          .professor-content {
+            padding: 24px 22px 45px !important;
+          }
+
+          .professor-stats-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          .professor-main-grid {
+            grid-template-columns: minmax(0, 1fr) !important;
+          }
+
+          .professor-quick-actions {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+        }
+
+        @media (max-width: 900px) {
+          .professor-dashboard-page {
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+          }
+
+          .professor-sidebar {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            bottom: 0 !important;
+            width: 280px !important;
+            max-width: 86vw !important;
+            height: 100dvh !important;
+            z-index: 200 !important;
+            transform: translateX(-105%);
+            box-shadow: 18px 0 55px rgba(0,0,0,.35);
+          }
+
+          .professor-sidebar.professor-sidebar-open {
+            transform: translateX(0);
+          }
+
+          .professor-mobile-close {
+            display: flex !important;
+          }
+
+          .professor-main-wrapper {
+            margin-left: 0 !important;
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .professor-topbar {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 100 !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            padding: 12px 18px !important;
+          }
+
+          .professor-menu-button {
+            display: flex !important;
+          }
+
+          .professor-topbarRight {
+            min-width: 0;
+          }
+
+          .professor-content {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 22px 18px 45px !important;
+          }
+
+          .professor-welcome-card {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 18px !important;
+            padding: 22px !important;
+          }
+
+          .professor-welcome-card > div:first-child {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .professor-welcome-card > div:last-child {
+            align-self: center !important;
+            width: 120px !important;
+            height: 120px !important;
+          }
+
+          .professor-stats-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 11px !important;
+          }
+
+          .professor-main-grid {
+            grid-template-columns: minmax(0, 1fr) !important;
+            gap: 14px !important;
+          }
+
+          .professor-quick-actions {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          .professor-mobile-overlay {
+            display: block !important;
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 150 !important;
+          }
+        }
+
+        @media (max-width: 600px) {
+          .professor-topbar {
+            min-height: 64px !important;
+            padding: 10px 13px !important;
+            gap: 10px !important;
+          }
+
+          .professor-topbar > div:first-of-type {
+            min-width: 0 !important;
+          }
+
+          .professor-topbar .page-eyebrow {
+            font-size: 8px !important;
+          }
+
+          .professor-topbar .page-title {
+            font-size: 19px !important;
+          }
+
+          .professor-topbarRight {
+            gap: 6px !important;
+          }
+
+          .professor-topbarRight > button > span {
+            display: none !important;
+          }
+
+          .professor-content {
+            padding: 15px 12px 35px !important;
+          }
+
+          .professor-welcome-card {
+            padding: 18px !important;
+            border-radius: 16px !important;
+            gap: 12px !important;
+          }
+
+          .professor-welcome-card h2 {
+            font-size: 23px !important;
+            line-height: 1.2 !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .professor-welcome-card p {
+            font-size: 12px !important;
+            line-height: 1.55 !important;
+          }
+
+          .professor-welcome-card > div:last-child {
+            width: 96px !important;
+            height: 96px !important;
+          }
+
+          .professor-welcome-card .edu-3d-scene {
+            transform: scale(.72);
+            transform-origin: center;
+          }
+
+          .professor-stats-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+          }
+
+          .professor-stats-grid > div {
+            min-width: 0 !important;
+            min-height: 82px !important;
+            padding: 11px !important;
+            gap: 8px !important;
+          }
+
+          .professor-stats-grid strong,
+          .professor-stats-grid span {
+            overflow-wrap: anywhere !important;
+          }
+
+          .professor-main-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+
+          .professor-main-grid > div {
+            min-width: 0 !important;
+            width: 100% !important;
+            padding: 15px !important;
+            border-radius: 14px !important;
+          }
+
+          .professor-main-grid .card-header {
+            flex-wrap: wrap !important;
+          }
+
+          .professor-quick-actions {
+            grid-template-columns: 1fr !important;
+          }
+
+          .professor-quick-actions > button {
+            min-width: 0 !important;
+          }
+
+          .professor-sidebar {
+            width: 275px !important;
+            max-width: 88vw !important;
+            padding: 15px !important;
+          }
+
+          .professor-sidebar-bottom {
+            padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+          }
+
+          .professor-dashboard-page {
+            overflow-y: auto !important;
+          }
+        }
+
+        @media (max-width: 390px) {
+          .professor-content {
+            padding-left: 10px !important;
+            padding-right: 10px !important;
+          }
+
+          .professor-stats-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .professor-topbar .page-title {
+            font-size: 18px !important;
+          }
+
+          .professor-welcome-card > div:last-child {
+            display: none !important;
+          }
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .edu-3d-orb,.edu-3d-ring,.edu-3d-dot { animation:none !important; }
         }
@@ -503,6 +796,7 @@ export default function ProfessorDashboard() {
 
       {mobileMenuOpen && (
         <div
+          className="professor-mobile-overlay"
           style={styles.mobileOverlay}
           onClick={() =>
             setMobileMenuOpen(false)
@@ -511,6 +805,7 @@ export default function ProfessorDashboard() {
       )}
 
       <aside
+        className={`professor-sidebar${mobileMenuOpen ? " professor-sidebar-open" : ""}`}
         style={{
           ...styles.sidebar,
           ...(mobileMenuOpen
@@ -585,7 +880,7 @@ export default function ProfessorDashboard() {
           )}
         </nav>
 
-        <div style={styles.sidebarBottom}>
+        <div className="professor-sidebar-bottom" style={styles.sidebarBottom}>
           <div style={styles.sidebarUser}>
             <div style={styles.smallAvatar}>
               {getInitials(
@@ -619,14 +914,15 @@ export default function ProfessorDashboard() {
         </div>
       </aside>
 
-      <div style={styles.mainWrapper}>
+      <div className="professor-main-wrapper" style={styles.mainWrapper}>
 
         {/* Top bar */}
 
-        <header style={styles.topbar}>
+        <header className="professor-topbar" style={styles.topbar}>
 
           <button
             type="button"
+            className="professor-menu-button"
             style={styles.menuButton}
             onClick={() =>
               setMobileMenuOpen(true)
@@ -677,11 +973,12 @@ export default function ProfessorDashboard() {
 
         </header>
 
-        <main style={styles.content}>
+        <main className="professor-content" style={styles.content}>
 
           {/* Welcome section */}
 
           <section
+            className="professor-welcome-card"
             style={styles.welcomeCard}
           >
             <div>
@@ -754,7 +1051,7 @@ export default function ProfessorDashboard() {
 
           {/* Statistics */}
 
-          <section style={styles.statsGrid}>
+          <section className="professor-stats-grid" style={styles.statsGrid}>
 
             <div
               style={{ ...styles.statCard, cursor: "pointer" }}
@@ -907,7 +1204,7 @@ export default function ProfessorDashboard() {
 
           {/* Main grid */}
 
-          <section style={styles.mainGrid}>
+          <section className="professor-main-grid" style={styles.mainGrid}>
 
             {/* Courses */}
 
