@@ -1403,7 +1403,7 @@ def refund_payment(
                             break
 
             payload = create_refund(
-                f"EDU-{payment['order_id']}",
+                payment["gateway_order_id"],
                 refund_amount,
                 refund_id,
                 reason,
