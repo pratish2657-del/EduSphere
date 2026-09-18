@@ -1195,11 +1195,8 @@ def refund_payment(
         cursor.execute(
             """
             SELECT *
-
             FROM marketplace_payments
-
             WHERE id = %s
-
             FOR UPDATE
             """,
             (payment_db_id,),
@@ -1212,25 +1209,17 @@ def refund_payment(
                 "Marketplace payment not found"
             )
 
-        if payment.get(
-            "status"
-        ) != "PAID":
+        if payment.get("status") != "PAID":
             raise BadRequestError(
-                "Only paid marketplace payments "
-                "can be refunded"
+                "Only paid marketplace payments can be refunded"
             )
 
         # ========================================================
-        # PAYMENT METHOD
+        # PAYMENT METHOD / AMOUNT
         # ========================================================
 
         is_cod = (
-            str(
-                payment.get(
-                    "payment_method"
-                )
-                or ""
-            ).upper()
+            str(payment.get("payment_method") or "").upper()
             == "COD"
         )
 
@@ -1245,67 +1234,41 @@ def refund_payment(
                 "Refund amount must be at least ₹1"
             )
 
-        # ========================================================
-        # COD FULL REFUND ONLY
-        # ========================================================
-
         if (
             is_cod
             and abs(
-                refund_amount
-                - float(
-                    payment["amount"]
-                )
-            )
-            > 0.0001
+                refund_amount - float(payment["amount"])
+            ) > 0.0001
         ):
             raise BadRequestError(
-                "COD refunds must refund "
-                "the full collected amount"
+                "COD refunds must refund the full collected amount"
             )
 
         # ========================================================
-        # PREVIOUS REFUNDS
+        # PREVIOUS PROCESSED REFUNDS
         # ========================================================
 
         cursor.execute(
             """
-            SELECT
-                COALESCE(
-                    SUM(amount),
-                    0
-                ) AS refunded
-
+            SELECT COALESCE(SUM(amount), 0) AS refunded
             FROM marketplace_refunds
-
             WHERE payment_id = %s
               AND status = 'PROCESSED'
-
             FOR UPDATE
             """,
-            (
-                payment_db_id,
-            ),
+            (payment_db_id,),
         )
 
         refunded = float(
-            cursor.fetchone()[
-                "refunded"
-            ]
-            or 0
+            cursor.fetchone()["refunded"] or 0
         )
 
         if (
-            refunded
-            + refund_amount
-            > float(
-                payment["amount"]
-            )
-            + 0.0001
+            refunded + refund_amount
+            > float(payment["amount"]) + 0.0001
         ):
             raise ConflictError(
-                "Refund amount exceeds "
-                "the remaining refundable amount"
+                "Refund amount exceeds the remaining refundable amount"
             )
 
         # ========================================================
@@ -1314,8 +1277,54 @@ def refund_payment(
 
         if is_cod:
             cashfree_refund_id = None
+            cashfree_refund_arn = None
+            cashfree_refund_splits = []
             status = "PROCESSED"
             processed_at = "CURRENT_TIMESTAMP"
+
+            cursor.execute(
+                """
+                INSERT INTO marketplace_refunds
+                    (
+                        order_id,
+                        payment_id,
+                        buyer_id,
+                        amount,
+                        reverse_transfers,
+                        cashfree_refund_id,
+                        cashfree_refund_arn,
+                        cashfree_refund_splits,
+                        status,
+                        created_by,
+                        processed_at
+                    )
+                VALUES
+                    (
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        NULL,
+                        NULL,
+                        %s,
+                        'PROCESSED',
+                        %s,
+                        CURRENT_TIMESTAMP
+                    )
+                """,
+                (
+                    payment["order_id"],
+                    payment_db_id,
+                    payment["buyer_id"],
+                    refund_amount,
+                    reverse_all,
+                    json.dumps([]),
+                    created_by,
+                ),
+            )
+
+            refund_db_id = cursor.lastrowid
 
         # ========================================================
         # CASHFREE REFUND
@@ -1329,12 +1338,6 @@ def refund_payment(
 
             # ----------------------------------------------------
             # Cashfree Easy Split refund allocation
-            #
-            # Cashfree expects refund_splits when a marketplace
-            # refund needs to debit vendor balances. Allocate the
-            # refund across the vendors in proportion to their
-            # original seller amounts. The platform keeps any
-            # remainder when the refund exceeds the vendor shares.
             # ----------------------------------------------------
 
             refund_splits = []
@@ -1356,17 +1359,25 @@ def refund_payment(
                 )
 
                 payout_rows = cursor.fetchall()
+
                 total_seller_amount = sum(
                     float(row.get("seller_amount") or 0)
                     for row in payout_rows
                 )
 
-                remaining_refund = round(refund_amount, 2)
+                remaining_refund = round(
+                    refund_amount,
+                    2,
+                )
 
                 if total_seller_amount > 0:
                     for index, row in enumerate(payout_rows):
-                        vendor_id = str(row["cashfree_vendor_id"])
-                        seller_amount = float(row.get("seller_amount") or 0)
+                        vendor_id = str(
+                            row["cashfree_vendor_id"]
+                        )
+                        seller_amount = float(
+                            row.get("seller_amount") or 0
+                        )
 
                         if index == len(payout_rows) - 1:
                             vendor_refund = min(
@@ -1385,7 +1396,10 @@ def refund_payment(
                                 remaining_refund,
                             )
 
-                        vendor_refund = round(vendor_refund, 2)
+                        vendor_refund = round(
+                            vendor_refund,
+                            2,
+                        )
 
                         if vendor_refund > 0:
                             refund_splits.append(
@@ -1394,59 +1408,141 @@ def refund_payment(
                                     "amount": vendor_refund,
                                 }
                             )
+
                             remaining_refund = round(
-                                remaining_refund - vendor_refund,
+                                remaining_refund
+                                - vendor_refund,
                                 2,
                             )
 
                         if remaining_refund <= 0:
                             break
 
-            payload = create_refund(
-                payment["gateway_order_id"],
-                refund_amount,
-                refund_id,
-                reason,
-                refund_splits=refund_splits,
+            # ----------------------------------------------------
+            # IMPORTANT:
+            #
+            # Create the local refund intent BEFORE calling
+            # Cashfree. Store the merchant refund ID temporarily
+            # in cashfree_refund_id so a webhook that arrives during
+            # the API call can locate this exact refund.
+            #
+            # The field is replaced with Cashfree's cf_refund_id
+            # immediately after the API response.
+            # ----------------------------------------------------
+
+            cursor.execute(
+                """
+                INSERT INTO marketplace_refunds
+                    (
+                        order_id,
+                        payment_id,
+                        buyer_id,
+                        amount,
+                        reverse_transfers,
+                        cashfree_refund_id,
+                        cashfree_refund_arn,
+                        cashfree_refund_splits,
+                        status,
+                        created_by,
+                        processed_at
+                    )
+                VALUES
+                    (
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        NULL,
+                        %s,
+                        'PENDING',
+                        %s,
+                        NULL
+                    )
+                """,
+                (
+                    payment["order_id"],
+                    payment_db_id,
+                    payment["buyer_id"],
+                    refund_amount,
+                    reverse_all,
+                    refund_id,
+                    json.dumps(refund_splits),
+                    created_by,
+                ),
             )
+
+            refund_db_id = cursor.lastrowid
+
+            # Make the refund intent visible before the external API
+            # call so the webhook cannot outrun the local record.
+            connection.commit()
+
+            try:
+                payload = create_refund(
+                    payment["gateway_order_id"],
+                    refund_amount,
+                    refund_id,
+                    reason,
+                    refund_splits=refund_splits,
+                )
+            except Exception as exc:
+                cursor.execute(
+                    """
+                    UPDATE marketplace_refunds
+                    SET
+                        status = 'FAILED',
+                        failure_reason = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (
+                        str(exc),
+                        refund_db_id,
+                    ),
+                )
+                connection.commit()
+                raise
 
             first = (
                 payload[0]
-                if isinstance(
-                    payload,
-                    list,
-                )
-                and payload
+                if isinstance(payload, list) and payload
                 else payload
             )
 
+            if not isinstance(first, dict):
+                raise BadRequestError(
+                    "Cashfree returned an invalid refund response"
+                )
+
             cashfree_refund_id = str(
-                first.get(
-                    "cf_refund_id"
-                )
-                or first.get(
-                    "refund_id"
-                )
+                first.get("cf_refund_id")
+                or first.get("refund_id")
                 or refund_id
             )
 
-            cashfree_refund_arn = first.get("refund_arn")
-            cashfree_refund_splits = first.get(
-                "refund_splits"
-            ) or refund_splits
+            cashfree_refund_arn = first.get(
+                "refund_arn"
+            )
 
-            status = str(
-                first.get(
-                    "refund_status"
-                )
+            cashfree_refund_splits = (
+                first.get("refund_splits")
+                or refund_splits
+            )
+
+            gateway_status = str(
+                first.get("refund_status")
                 or "PENDING"
             ).upper()
 
-            if status not in {
+            if gateway_status not in {
                 "PROCESSED",
                 "SUCCESS",
                 "PENDING",
                 "ONHOLD",
+                "FAILED",
+                "CANCELLED",
             }:
                 raise BadRequestError(
                     f"Cashfree refund failed: {first}"
@@ -1454,11 +1550,15 @@ def refund_payment(
 
             status = {
                 "SUCCESS": "PROCESSED",
+                "PROCESSED": "PROCESSED",
                 "PENDING": "PENDING",
                 "ONHOLD": "PENDING",
                 "FAILED": "FAILED",
                 "CANCELLED": "FAILED",
-            }.get(status, "PENDING")
+            }.get(
+                gateway_status,
+                "PENDING",
+            )
 
             processed_at = (
                 "CURRENT_TIMESTAMP"
@@ -1466,56 +1566,32 @@ def refund_payment(
                 else "NULL"
             )
 
-        # ========================================================
-        # INSERT REFUND
-        # ========================================================
+            # ----------------------------------------------------
+            # Update the pre-created refund row.
+            # ----------------------------------------------------
 
-        cursor.execute(
-            f"""
-            INSERT INTO marketplace_refunds
+            cursor.execute(
+                f"""
+                UPDATE marketplace_refunds
+                SET
+                    cashfree_refund_id = %s,
+                    cashfree_refund_arn = %s,
+                    cashfree_refund_splits = %s,
+                    status = %s,
+                    processed_at = {processed_at},
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
                 (
-                    order_id,
-                    payment_id,
-                    buyer_id,
-                    amount,
-                    reverse_transfers,
                     cashfree_refund_id,
                     cashfree_refund_arn,
-                    cashfree_refund_splits,
+                    json.dumps(
+                        cashfree_refund_splits
+                    ),
                     status,
-                    created_by,
-                    processed_at
-                )
-
-            VALUES
-                (
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    {processed_at}
-                )
-            """,
-            (
-                payment["order_id"],
-                payment_db_id,
-                payment["buyer_id"],
-                refund_amount,
-                reverse_all,
-                cashfree_refund_id,
-                cashfree_refund_arn,
-                json.dumps(cashfree_refund_splits),
-                status,
-                created_by,
-            ),
-        )
-
-        refund_db_id = cursor.lastrowid
+                    refund_db_id,
+                ),
+            )
 
         # ========================================================
         # REFUND FINALIZATION
@@ -1537,6 +1613,7 @@ def refund_payment(
             total_refunded = float(
                 cursor.fetchone()["refunded"] or 0
             )
+
             fully_refunded = (
                 total_refunded
                 >= float(payment["amount"]) - 0.0001
@@ -1603,37 +1680,21 @@ def refund_payment(
 
         return {
             "success": True,
-
-            "refund_id": (
-                cashfree_refund_id
-            ),
-
-            "refund_db_id": (
-                refund_db_id
-            ),
-
-            "amount": (
-                refund_amount
-            ),
-
-            "reverse_all": (
-                reverse_all
-            ),
-
+            "refund_id": cashfree_refund_id,
+            "refund_db_id": refund_db_id,
+            "amount": refund_amount,
+            "reverse_all": reverse_all,
             "gateway": (
                 "COD"
                 if is_cod
                 else "CASHFREE"
             ),
-
             "refund_mode": (
                 "MANUAL_CASH"
                 if is_cod
                 else "CASHFREE_EASY_SPLIT"
             ),
-
             "fully_refunded": fully_refunded,
-
             "refund_splits": (
                 cashfree_refund_splits
                 if not is_cod

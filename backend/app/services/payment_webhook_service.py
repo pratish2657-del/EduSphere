@@ -501,6 +501,9 @@ def _handle_refund_status_webhook(
         refund_data.get("cf_refund_id")
         or refund_data.get("refund_id")
     )
+
+    merchant_refund_id = refund_data.get("refund_id")
+
     refund_status = str(
         refund_data.get("refund_status") or ""
     ).upper()
@@ -517,6 +520,7 @@ def _handle_refund_status_webhook(
         "FAILED": "FAILED",
         "CANCELLED": "FAILED",
     }
+
     local_status = status_map.get(refund_status)
 
     if not local_status:
@@ -530,6 +534,10 @@ def _handle_refund_status_webhook(
 
     try:
         cursor = connection.cursor()
+
+        # ========================================================
+        # 1. Find by Cashfree refund ID
+        # ========================================================
 
         cursor.execute(
             """
@@ -552,136 +560,182 @@ def _handle_refund_status_webhook(
 
         refund = cursor.fetchone()
 
+        # ========================================================
+        # 2. Webhook may arrive while refund API request is running
+        #
+        # refund_payment() stores the merchant refund ID in
+        # cashfree_refund_id before calling Cashfree. Therefore
+        # retry lookup using Cashfree's merchant refund_id too.
+        # ========================================================
+
+        if not refund and merchant_refund_id:
+            cursor.execute(
+                """
+                SELECT
+                    r.id,
+                    r.order_id,
+                    r.payment_id,
+                    r.amount,
+                    r.status,
+                    r.inventory_restored,
+                    p.amount AS payment_amount
+                FROM marketplace_refunds r
+                INNER JOIN marketplace_payments p
+                    ON p.id = r.payment_id
+                WHERE r.cashfree_refund_id = %s
+                  AND r.status = 'PENDING'
+                FOR UPDATE
+                """,
+                (str(merchant_refund_id),),
+            )
+
+            refund = cursor.fetchone()
+
+        # ========================================================
+        # 3. Recovery for an external/untracked refund
+        #
+        # This is a fallback for refunds created outside the normal
+        # EduSphere refund workflow, or for the old race condition.
+        # ========================================================
+
         if not refund:
             if not cashfree_order_id:
                 connection.commit()
                 return {
-                    "message": "Refund webhook received without order ID",
+                    "message": (
+                        "Refund webhook received without order ID"
+                    ),
                     "processed": False,
                     "cashfree_refund_id": str(cf_refund_id),
                 }
 
-                cursor.execute(
-                     """
-                    SELECT
-                        id,
-                        order_id,
-                        buyer_id,
-                        amount AS payment_amount
-                    FROM marketplace_payments
-                    WHERE gateway = 'CASHFREE'
-                        AND gateway_order_id = %s
-                     FOR UPDATE
-                    """,
-                    (cashfree_order_id,),
+            cursor.execute(
+                """
+                SELECT
+                    id,
+                    order_id,
+                    buyer_id,
+                    amount AS payment_amount
+                FROM marketplace_payments
+                WHERE gateway = 'CASHFREE'
+                  AND gateway_order_id = %s
+                FOR UPDATE
+                """,
+                (cashfree_order_id,),
+            )
+
+            payment = cursor.fetchone()
+
+            if not payment:
+                raise NotFoundError(
+                    "EduSphere payment not found for Cashfree refund"
                 )
 
-                payment = cursor.fetchone()
+            refund_amount = float(
+                refund_data.get("refund_amount") or 0
+            )
 
-                if not payment:
-                    raise NotFoundError(
-                        "EduSphere payment not found for Cashfree refund"
-                    )
-
-                refund_amount = float(
-                    refund_data.get("refund_amount")
-                    or 0
+            if refund_amount <= 0:
+                raise BadRequestError(
+                    "Cashfree refund webhook contains an invalid refund amount"
                 )
 
-                if refund_amount <= 0:
-                    raise BadRequestError(
-                        "Cashfree refund webhook contains an invalid refund amount"
-                    )
+            processed_at = (
+                "CURRENT_TIMESTAMP"
+                if local_status == "PROCESSED"
+                else "NULL"
+            )
 
-                refund_status = local_status
-
-                processed_at = (
-                    "CURRENT_TIMESTAMP"
-                    if refund_status == "PROCESSED"
-                    else "NULL"
-                )
-
-                cursor.execute(
-                    f"""
-                    INSERT INTO marketplace_refunds
-                        (
-                            order_id,
-                            payment_id,
-                            buyer_id,
-                            amount,
-                            reverse_transfers,
-                            cashfree_refund_id,
-                            cashfree_refund_arn,
-                            cashfree_refund_splits,
-                            status,
-                            created_by,
-                            processed_at
-                        )
-                    VALUES
-                        (
-                            %s,
-                            %s,
-                            %s,
-                            %s,
-                            FALSE,
-                            %s,
-                            %s,
-                            %s,
-                            %s,
-                            NULL,
-                            {processed_at}
-                        )
-                    """,
+            cursor.execute(
+                f"""
+                INSERT INTO marketplace_refunds
                     (
-                        payment["order_id"],
-                        payment["id"],
-                        payment["buyer_id"],
-                        refund_amount,
-                        str(cf_refund_id),
-                        refund_data.get("refund_arn"),
-                        (
-                            json.dumps(refund_data.get("refund_splits"))
-                            if refund_data.get("refund_splits") is not None
-                            else None
-                        ),
-                        refund_status,
+                        order_id,
+                        payment_id,
+                        buyer_id,
+                        amount,
+                        reverse_transfers,
+                        cashfree_refund_id,
+                        cashfree_refund_arn,
+                        cashfree_refund_splits,
+                        status,
+                        created_by,
+                        processed_at
+                    )
+                VALUES
+                    (
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        FALSE,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        NULL,
+                        {processed_at}
+                    )
+                """,
+                (
+                    payment["order_id"],
+                    payment["id"],
+                    payment["buyer_id"],
+                    refund_amount,
+                    str(cf_refund_id),
+                    refund_data.get("refund_arn"),
+                    (
+                        json.dumps(
+                            refund_data.get("refund_splits")
+                        )
+                        if refund_data.get("refund_splits")
+                        is not None
+                        else None
                     ),
-                )
+                    local_status,
+                ),
+            )
 
-                refund_db_id = cursor.lastrowid
+            refund_db_id = cursor.lastrowid
 
-                # Reload the newly recovered refund so the existing
-                # finalization logic below can process it normally.
-                cursor.execute(
-                    """
-                    SELECT
-                        r.id,
-                        r.order_id,
-                        r.payment_id,
-                        r.amount,
-                        r.status,
-                        r.inventory_restored,
-                        p.amount AS payment_amount
-                    FROM marketplace_refunds r
-                    INNER JOIN marketplace_payments p
-                        ON p.id = r.payment_id
-                    WHERE r.id = %s
-                    FOR UPDATE
-                    """,
-                    (refund_db_id,),
-                )
+            cursor.execute(
+                """
+                SELECT
+                    r.id,
+                    r.order_id,
+                    r.payment_id,
+                    r.amount,
+                    r.status,
+                    r.inventory_restored,
+                    p.amount AS payment_amount
+                FROM marketplace_refunds r
+                INNER JOIN marketplace_payments p
+                    ON p.id = r.payment_id
+                WHERE r.id = %s
+                FOR UPDATE
+                """,
+                (refund_db_id,),
+            )
 
-                refund = cursor.fetchone()
+            refund = cursor.fetchone()
+
+        # ========================================================
+        # 4. Synchronize Cashfree status/details
+        # ========================================================
 
         cursor.execute(
             """
             UPDATE marketplace_refunds
             SET
                 status = %s,
-                cashfree_refund_arn = COALESCE(%s, cashfree_refund_arn),
-                cashfree_refund_splits = COALESCE(%s, cashfree_refund_splits),
+                cashfree_refund_id = %s,
+                cashfree_refund_arn =
+                    COALESCE(%s, cashfree_refund_arn),
+                cashfree_refund_splits =
+                    COALESCE(%s, cashfree_refund_splits),
                 processed_at = CASE
-                    WHEN %s = 'PROCESSED' THEN COALESCE(
+                    WHEN %s = 'PROCESSED'
+                    THEN COALESCE(
                         processed_at,
                         CURRENT_TIMESTAMP
                     )
@@ -692,14 +746,24 @@ def _handle_refund_status_webhook(
             """,
             (
                 local_status,
+                str(cf_refund_id),
                 refund_data.get("refund_arn"),
-                json.dumps(refund_data.get("refund_splits"))
-                if refund_data.get("refund_splits") is not None
-                else None,
+                (
+                    json.dumps(
+                        refund_data.get("refund_splits")
+                    )
+                    if refund_data.get("refund_splits")
+                    is not None
+                    else None
+                ),
                 local_status,
                 refund["id"],
             ),
         )
+
+        # ========================================================
+        # 5. Full-refund finalization
+        # ========================================================
 
         fully_refunded = False
 
@@ -717,6 +781,7 @@ def _handle_refund_status_webhook(
             total_refunded = float(
                 cursor.fetchone()["refunded"] or 0
             )
+
             fully_refunded = (
                 total_refunded
                 >= float(refund["payment_amount"]) - 0.0001
@@ -724,14 +789,15 @@ def _handle_refund_status_webhook(
 
             if fully_refunded:
                 if not refund.get("inventory_restored"):
-                    finalize_cursor = cursor
                     from app.services.marketplace_inventory_service import (
                         restore_order_inventory,
                     )
+
                     restore_order_inventory(
                         refund["order_id"],
-                        finalize_cursor,
+                        cursor,
                     )
+
                     cursor.execute(
                         """
                         UPDATE marketplace_refunds
@@ -776,7 +842,10 @@ def _handle_refund_status_webhook(
                         status = 'REFUNDED',
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s
-                      AND status NOT IN ('CANCELLED', 'REFUNDED')
+                      AND status NOT IN (
+                          'CANCELLED',
+                          'REFUNDED'
+                      )
                     """,
                     (refund["order_id"],),
                 )
@@ -798,4 +867,3 @@ def _handle_refund_status_webhook(
 
     finally:
         connection.close()
-
