@@ -1408,7 +1408,6 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
-    minWidth: 0,
   },
   statLabel: {
     overflowWrap: "anywhere",
