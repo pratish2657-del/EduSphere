@@ -1574,8 +1574,6 @@ export default function AppPlaceholder() {
               Attendance
             </button>
 
-            <div style={styles.navLabel}>ACCOUNT</div>
-
             <button
               type="button"
               style={styles.navItem}
