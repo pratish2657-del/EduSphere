@@ -70,6 +70,7 @@ import LibraryPage from "./pages/library/LibraryPage";
 import SuperAdminLibrary from "./pages/super-admin/SuperAdminLibrary";
 import SuperAdminDeveloperSubmissions from "./pages/super-admin/SuperAdminDeveloperSubmissions";
 import MarketplacePaymentSuccess from "./pages/auth/MarketplacePaymentSuccess";
+import ProfessorEvents from "./pages/auth/ProfessorEvents";
 
 type FloatingCardProps = {
   icon: typeof BookOpen;
@@ -619,6 +620,10 @@ export default function App() {
       <Route
         path="/app/professor/marketplace"
         element={<ProfessorMarketplace />}
+      />
+      <Route 
+        path="/app/professor/events"
+        element={<ProfessorEvents/>}
       />
       <Route path="/app/admin" element={<AdminDashboard />} />
       <Route path="/auth/profile/admin" element={<AdminProfile />} />

@@ -348,6 +348,11 @@ export default function ProfessorDashboard() {
       onClick: () => navigate("/app/professor/courses"),
     },
     {
+      label:"Events",
+      icon: CalendarDays,
+      onClick: () => navigate("/app/professor/events"),
+    },
+    {
       label: "Students",
       icon: Users,
       active: false,
