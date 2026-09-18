@@ -690,9 +690,9 @@ function EarthGlobe() {
           }
           color="#ffffff"
           emissive="#064bdb"
-          emissiveIntensity={0.32}
-          metalness={0.08}
-          roughness={0.62}
+          emissiveIntensity={0.12}
+          metalness={0.05}
+          roughness={0.72}
         />
       </mesh>
 
@@ -715,7 +715,7 @@ function EarthGlobe() {
             undefined
           }
           transparent
-          opacity={0.58}
+          opacity={0.34}
           depthWrite={false}
           roughness={1}
         />
@@ -732,34 +732,17 @@ function EarthGlobe() {
       ====================================================== */}
 
       <EarthGlowShell
-        color="#14cfff"
+        color="#19bfff"
         scale={1.045}
-        opacity={0.09}
+        opacity={0.055}
       />
 
       <EarthGlowShell
-        color="#168cff"
-        scale={1.075}
-        opacity={0.07}
-      />
-
-      <EarthGlowShell
-        color="#7055ff"
-        scale={1.115}
-        opacity={0.045}
-      />
-
-      <EarthAtmosphere
-        color="#35e4ff"
+        color="#35dfff"
         scale={1.055}
-        opacity={0.92}
+        opacity={0.42}
       />
 
-      <EarthAtmosphere
-        color="#725cff"
-        scale={1.09}
-        opacity={0.34}
-      />
 
       {/* ======================================================
           ATMOSPHERIC RIM
@@ -800,7 +783,7 @@ function EarthGlobe() {
           2.7,
         ]}
         color="#4ddcff"
-        intensity={3.2}
+        intensity={1.35}
         distance={6}
       />
 
@@ -811,7 +794,7 @@ function EarthGlobe() {
           2.3,
         ]}
         color="#6758ff"
-        intensity={2.4}
+        intensity={0.8}
         distance={5}
       />
     </group>
