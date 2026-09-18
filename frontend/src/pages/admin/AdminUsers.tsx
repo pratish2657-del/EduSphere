@@ -278,13 +278,13 @@ export default function AdminUsers() {
           {/* Total Users */}
           <div
             className="admin-users-stat"
-            style={
+            style={{
               width: "100%",
               maxWidth: "100%",
               minWidth: 0,
               boxSizing: "border-box",
               overflow: "hidden",
-            }
+            }}
           >
             <div className="admin-users-stat-content">
               <span className="admin-users-stat-icon">
@@ -301,13 +301,13 @@ export default function AdminUsers() {
           {/* Students */}
           <div
             className="admin-users-stat"
-            style={
+            style={{
               width: "100%",
               maxWidth: "100%",
               minWidth: 0,
               boxSizing: "border-box",
               overflow: "hidden",
-            }
+            }}
           >
             <div className="admin-users-stat-content">
               <span className="admin-users-stat-icon">
@@ -324,13 +324,13 @@ export default function AdminUsers() {
           {/* Professors */}
           <div
             className="admin-users-stat"
-            style={
+            style={{
               width: "100%",
               maxWidth: "100%",
               minWidth: 0,
               boxSizing: "border-box",
               overflow: "hidden",
-            }
+            }}
           >
             <div className="admin-users-stat-content">
               <span className="admin-users-stat-icon">
@@ -347,13 +347,13 @@ export default function AdminUsers() {
           {/* Admins */}
           <div
             className="admin-users-stat"
-            style={
+            style={{
               width: "100%",
               maxWidth: "100%",
               minWidth: 0,
               boxSizing: "border-box",
               overflow: "hidden",
-            }
+            }}
           >
             <div className="admin-users-stat-content">
               <span className="admin-users-stat-icon">
