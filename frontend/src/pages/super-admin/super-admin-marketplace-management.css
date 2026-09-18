@@ -746,3 +746,22 @@
     height: 36px;
   }
 }
+
+
+
+/* ============================================================
+   EduSphere Super Admin — Advanced 3D UI Layer
+   ============================================================ */
+.sam-page{position:relative;overflow:hidden;background:radial-gradient(circle at 10% 0%,rgba(99,102,241,.17),transparent 30%),radial-gradient(circle at 92% 78%,rgba(14,165,233,.08),transparent 28%),#050816;perspective:1600px}
+.sam-page::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.14;background-image:linear-gradient(rgba(129,140,248,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(129,140,248,.08) 1px,transparent 1px);background-size:45px 45px;animation:saMarketGrid 20s linear infinite}
+.sam-shell{position:relative;z-index:1}
+.sam-card,.sam-panel,.sam-stat,.sam-table-wrap,.sam-item{box-shadow:0 17px 42px rgba(0,0,0,.26),inset 0 1px rgba(255,255,255,.035);transition:transform .26s ease,box-shadow .26s ease,border-color .26s ease}
+.sam-card:hover,.sam-item:hover{transform:translateY(-6px) rotateX(1deg);box-shadow:0 30px 62px rgba(0,0,0,.36),0 0 34px rgba(99,102,241,.10)}
+.sam-back,.sam-refresh,.sam-action,.sam-tabs button{box-shadow:inset 0 1px rgba(255,255,255,.08),0 8px 22px rgba(0,0,0,.2)}
+@keyframes saMarketGrid{to{background-position:45px 45px}}
+
+
+/* 3D interaction safety */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}

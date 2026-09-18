@@ -10,3 +10,20 @@
   background: rgba(120, 140, 180, 0.08);
   color: inherit;
 }
+
+
+/* ============================================================
+   EduSphere Super Admin — Advanced 3D UI Layer
+   ============================================================ */
+.sa-payout-page{position:relative;overflow:hidden;background:radial-gradient(circle at 12% 0%,rgba(99,102,241,.16),transparent 30%),radial-gradient(circle at 90% 80%,rgba(34,197,94,.06),transparent 28%),#050816;perspective:1500px}
+.sa-payout-page::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.13;background-image:linear-gradient(rgba(129,140,248,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(129,140,248,.08) 1px,transparent 1px);background-size:44px 44px;animation:saPayoutGrid 20s linear infinite}
+.sa-finance-grid>div,.sa-payout-card,.sa-payout-table,.sa-payout-row{box-shadow:0 16px 38px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.035);transition:transform .25s ease,box-shadow .25s ease}
+.sa-finance-grid>div:hover,.sa-payout-card:hover,.sa-payout-row:hover{transform:translateY(-5px) rotateX(1deg);box-shadow:0 28px 55px rgba(0,0,0,.34),0 0 30px rgba(99,102,241,.09)}
+.sa-action{box-shadow:inset 0 1px rgba(255,255,255,.08),0 8px 20px rgba(0,0,0,.2)}
+@keyframes saPayoutGrid{to{background-position:44px 44px}}
+
+
+/* 3D interaction safety */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}

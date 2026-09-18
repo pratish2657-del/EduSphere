@@ -24,3 +24,22 @@
 .sai-modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,.78);backdrop-filter:blur(8px);display:grid;place-items:center;padding:20px;z-index:1000}.sai-modal{width:min(720px,100%);max-height:90vh;overflow:auto;background:#0b1122;border:1px solid rgba(129,140,248,.22);border-radius:18px;box-shadow:0 30px 100px rgba(0,0,0,.55)}.sai-modal-head{padding:20px;display:flex;justify-content:space-between;border-bottom:1px solid rgba(148,163,184,.1)}.sai-modal-head h2{margin:5px 0 0}.sai-form{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:15px}.sai-form label.full{grid-column:1/-1}.sai-form label span{display:block;color:#94a3b8;font-size:12px;margin-bottom:7px}.sai-form input{width:100%;box-sizing:border-box;padding:11px 12px;border-radius:9px;border:1px solid rgba(148,163,184,.15);outline:0;background:#070c19;color:#e2e8f0}.sai-form input:focus{border-color:#6366f1}.sai-modal-actions{display:flex;justify-content:flex-end;gap:10px;padding:16px 20px;border-top:1px solid rgba(148,163,184,.1)}
 @media(max-width:900px){.sai-overview{grid-template-columns:1fr 1fr}.sai-header{align-items:flex-start;flex-direction:column}.sai-header-actions{width:100%}.sai-header-actions button{flex:1;justify-content:center}}
 @media(max-width:560px){.sai-page{padding:16px}.sai-overview{grid-template-columns:1fr}.sai-toolbar{align-items:stretch;flex-direction:column;gap:10px}.sai-search{width:auto}.sai-form{grid-template-columns:1fr}.sai-form label.full{grid-column:auto}}
+
+
+
+/* ============================================================
+   EduSphere Super Admin — Advanced 3D UI Layer
+   ============================================================ */
+.sai-page{position:relative;overflow:hidden;background:radial-gradient(circle at 12% 0%,rgba(59,130,246,.14),transparent 30%),radial-gradient(circle at 90% 80%,rgba(168,85,247,.10),transparent 28%),#050816;perspective:1500px}
+.sai-page::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.14;background-image:linear-gradient(rgba(96,165,250,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(96,165,250,.08) 1px,transparent 1px);background-size:44px 44px;animation:saInstGrid 20s linear infinite}
+.sai-shell{position:relative;z-index:1}
+.sai-card,.sai-panel,.sai-stats>div{box-shadow:0 16px 40px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.035);transition:transform .25s ease,box-shadow .25s ease}
+.sai-card:hover,.sai-stats>div:hover{transform:translateY(-6px) rotateX(1deg);box-shadow:0 30px 60px rgba(0,0,0,.35),0 0 30px rgba(59,130,246,.09)}
+.sai-icon-btn,.sai-primary,.sai-secondary,.sai-edit{box-shadow:inset 0 1px rgba(255,255,255,.08),0 8px 20px rgba(0,0,0,.2)}
+@keyframes saInstGrid{to{background-position:44px 44px}}
+
+
+/* 3D interaction safety */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}

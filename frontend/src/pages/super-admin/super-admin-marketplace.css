@@ -481,3 +481,26 @@
 }
 
 .marketplace-fee-note { display:block; margin-top:5px; color:#7f8aa5; font-size:10px; line-height:1.4; }
+
+
+
+/* ============================================================
+   EduSphere Super Admin Marketplace — Advanced 3D UI Layer
+   ============================================================ */
+.admin-marketplace-page{position:relative;overflow:hidden;background:radial-gradient(circle at 10% 0%,rgba(99,102,241,.18),transparent 30%),radial-gradient(circle at 90% 72%,rgba(14,165,233,.09),transparent 30%),#040713;perspective:1700px}
+.admin-marketplace-page::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.14;background-image:linear-gradient(rgba(129,140,248,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(129,140,248,.08) 1px,transparent 1px);background-size:46px 46px;animation:saMarketplaceGrid 20s linear infinite}
+.admin-marketplace-header,.admin-marketplace-stats,.admin-marketplace-tabs,.admin-marketplace-toolbar,.admin-marketplace-grid,.admin-marketplace-list-panel,.admin-marketplace-seller-panel{position:relative;z-index:1}
+.admin-marketplace-stats>div,.admin-marketplace-product,.admin-marketplace-list-panel,.admin-marketplace-seller-panel,.admin-marketplace-order-card,.admin-marketplace-cart,.admin-marketplace-modal{box-shadow:0 18px 45px rgba(0,0,0,.27),inset 0 1px rgba(255,255,255,.035);transition:transform .27s ease,box-shadow .27s ease,border-color .27s ease}
+.admin-marketplace-stats>div:hover,.admin-marketplace-product:hover,.admin-marketplace-order-card:hover{transform:translateY(-7px) translateZ(8px) rotateX(1.2deg);box-shadow:0 32px 68px rgba(0,0,0,.38),0 0 36px rgba(99,102,241,.11)}
+.admin-marketplace-product{transform-style:preserve-3d}
+.admin-marketplace-product-icon{box-shadow:inset 0 1px rgba(255,255,255,.10),0 12px 25px rgba(0,0,0,.25);transition:transform .25s ease}
+.admin-marketplace-product:hover .admin-marketplace-product-icon{transform:translateZ(16px) rotate(-3deg) scale(1.04)}
+.admin-marketplace-primary,.admin-marketplace-header-actions button,.admin-marketplace-tabs button,.admin-marketplace-section-head button,.admin-marketplace-refresh{box-shadow:inset 0 1px rgba(255,255,255,.08),0 9px 24px rgba(0,0,0,.2)}
+@keyframes saMarketplaceGrid{to{background-position:46px 46px}}
+@media (prefers-reduced-motion:reduce){.admin-marketplace-page::before,.admin-marketplace-product,.admin-marketplace-stats>div,.admin-marketplace-order-card{animation:none;transition:none}.admin-marketplace-product:hover,.admin-marketplace-stats>div:hover,.admin-marketplace-order-card:hover{transform:none}}
+
+
+/* 3D interaction safety */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}

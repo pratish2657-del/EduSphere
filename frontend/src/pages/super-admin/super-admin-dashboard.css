@@ -178,3 +178,25 @@
   50% { transform:rotateY(180deg) rotateZ(2deg); }
   100% { transform:rotateY(360deg) rotateZ(0deg); }
 }
+
+
+
+/* ============================================================
+   EduSphere Super Admin — Advanced 3D UI Layer
+   ============================================================ */
+.sa-page{position:relative;overflow:hidden;background:radial-gradient(circle at 20% 0%,rgba(79,70,229,.18),transparent 30%),radial-gradient(circle at 92% 70%,rgba(34,211,238,.08),transparent 28%),#040713;perspective:1600px}
+.sa-page::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.13;background-image:linear-gradient(rgba(129,140,248,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(129,140,248,.08) 1px,transparent 1px);background-size:46px 46px;animation:saDashboardGrid 22s linear infinite}
+.sa-shell{position:relative;z-index:1}
+.sa-sidebar{box-shadow:18px 0 55px rgba(0,0,0,.25),inset -1px 0 rgba(129,140,248,.08)}
+.sa-main{transform-style:preserve-3d}
+.sa-stat-card,.sa-panel,.sa-application,.sa-card,.sa-widget,.sa-table-wrap{box-shadow:0 18px 45px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.035);transition:transform .28s ease,box-shadow .28s ease,border-color .28s ease}
+.sa-stat-card:hover,.sa-application:hover,.sa-card:hover,.sa-widget:hover{transform:translateY(-6px) translateZ(8px) rotateX(1deg);box-shadow:0 30px 65px rgba(0,0,0,.36),0 0 35px rgba(99,102,241,.10)}
+.sa-stat-icon{box-shadow:inset 0 1px rgba(255,255,255,.10),0 10px 25px rgba(0,0,0,.22)}
+.sa-actions button,.sa-refresh,.sa-account{box-shadow:inset 0 1px rgba(255,255,255,.07),0 8px 22px rgba(0,0,0,.18)}
+@keyframes saDashboardGrid{to{background-position:46px 46px}}
+
+
+/* 3D interaction safety */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
