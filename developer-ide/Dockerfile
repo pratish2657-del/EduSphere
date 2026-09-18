@@ -1,9 +1,14 @@
-FROM codercom/code-server:latest
+FROM codercom/code-server:4.137.0
 
 USER root
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-venv nginx gettext-base supervisor \
+    && apt-get install -y --no-install-recommends \
+        python3 \
+        python3-venv \
+        nginx \
+        gettext-base \
+        supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/ide
@@ -20,8 +25,17 @@ COPY supervisord.conf /opt/ide/supervisord.conf
 COPY start.sh /usr/local/bin/start.sh
 
 RUN chmod +x /usr/local/bin/start.sh \
-    && mkdir -p /home/coder/workspace \
-    && chown -R coder:coder /home/coder/workspace /opt/ide
+    && mkdir -p \
+        /home/coder/workspace \
+        /home/coder/.config/code-server \
+        /home/coder/.local/share/code-server \
+        /home/coder/.cache \
+    && chown -R coder:coder \
+        /home/coder/workspace \
+        /home/coder/.config \
+        /home/coder/.local \
+        /home/coder/.cache \
+        /opt/ide
 
 ENV IDE_WORKSPACE_ROOT=/home/coder/workspace
 ENV IDE_BRIDGE_PORT=8081
