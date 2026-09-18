@@ -1,8 +1,10 @@
 FROM codercom/code-server:4.137.0
 
+# Disable the code-server base-image entrypoint.
+# Supervisor will be the only process manager.
+
 USER root
 
-# Install required system packages
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         nginx \
@@ -14,14 +16,12 @@ RUN apt-get update \
 
 WORKDIR /opt/ide
 
-# Python environment
 COPY requirements.txt /opt/ide/requirements.txt
 
 RUN python3 -m venv /opt/ide/venv \
     && /opt/ide/venv/bin/pip install --no-cache-dir --upgrade pip \
     && /opt/ide/venv/bin/pip install --no-cache-dir -r /opt/ide/requirements.txt
 
-# IDE files
 COPY start.sh /usr/local/bin/start.sh
 COPY supervisord.conf /opt/ide/supervisord.conf
 COPY nginx.conf /opt/ide/nginx.conf
