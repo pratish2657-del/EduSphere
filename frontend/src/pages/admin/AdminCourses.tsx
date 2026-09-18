@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import "./admin-courses.css";
 import {
   BookOpen,
   CheckCircle2,
