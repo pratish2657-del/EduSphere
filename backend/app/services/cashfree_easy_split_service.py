@@ -19,6 +19,7 @@ def _request(
     *,
     json=None,
     idempotency_key: str | None = None,
+    log_response: bool = False,
 ):
     config = get_cashfree_config()
     headers = get_cashfree_headers()
@@ -41,6 +42,23 @@ def _request(
             f"Cashfree Easy Split request failed: {exc}"
         ) from exc
 
+    # ------------------------------------------------------------
+    # Optional response logging
+    #
+    # Enabled only for Cashfree split verification/reconciliation.
+    # This lets us inspect the actual Cashfree response body in
+    # Render logs without logging every Easy Split API response.
+    # ------------------------------------------------------------
+
+    if log_response:
+        print(
+            "\n[CASHFREE EASY SPLIT]\n"
+            f"METHOD: {method}\n"
+            f"PATH: {path}\n"
+            f"STATUS: {response.status_code}\n"
+            f"BODY: {response.text}\n"
+        )
+
     try:
         payload = response.json() if response.content else {}
     except ValueError:
@@ -53,11 +71,17 @@ def _request(
             or payload.get("code")
             or response.text[:1000]
         )
+
         raise BadRequestError(
             f"Cashfree Easy Split error: {detail}"
         )
 
     return payload
+
+
+# ============================================================
+# CREATE VENDOR
+# ============================================================
 
 
 def create_vendor(
@@ -99,6 +123,11 @@ def create_vendor(
     )
 
 
+# ============================================================
+# GET VENDOR
+# ============================================================
+
+
 def get_vendor(vendor_id: str):
     return _request(
         "GET",
@@ -106,7 +135,15 @@ def get_vendor(vendor_id: str):
     )
 
 
-def update_vendor(vendor_id: str, payload: dict):
+# ============================================================
+# UPDATE VENDOR
+# ============================================================
+
+
+def update_vendor(
+    vendor_id: str,
+    payload: dict,
+):
     return _request(
         "PATCH",
         f"/easy-split/vendors/{vendor_id}",
@@ -114,13 +151,24 @@ def update_vendor(vendor_id: str, payload: dict):
     )
 
 
-def split_after_payment(order_id: str, splits: list[dict]):
+# ============================================================
+# LEGACY SPLIT AFTER PAYMENT
+# ============================================================
+
+
+def split_after_payment(
+    order_id: str,
+    splits: list[dict],
+):
     """Legacy split-after-payment API.
 
-    New EduSphere checkouts do not use this endpoint. Splits are attached
-    to the Cashfree PG order during order creation. This function remains
-    available only for backward compatibility with old callers.
+    New EduSphere checkouts do not use this endpoint.
+
+    Splits are attached to the Cashfree PG order during order
+    creation. This function remains available only for backward
+    compatibility with old callers.
     """
+
     return _request(
         "POST",
         f"/easy-split/orders/{order_id}/split",
@@ -137,16 +185,49 @@ def split_after_payment(order_id: str, splits: list[dict]):
     )
 
 
-def get_split_and_settlement_details(order_id: str):
-    # Cashfree's current endpoint is the order-level resource, not
-    # /easy-split/orders/{order_id}/split.
+# ============================================================
+# GET SPLIT + SETTLEMENT DETAILS
+# ============================================================
+
+
+def get_split_and_settlement_details(
+    order_id: str,
+):
+    """Fetch Cashfree order-level Easy Split information.
+
+    This is a READ/VERIFICATION operation.
+
+    Important:
+        The current Cashfree endpoint is:
+
+            GET /easy-split/orders/{order_id}
+
+        not:
+
+            GET /easy-split/orders/{order_id}/split
+    """
+
     return _request(
         "GET",
         f"/easy-split/orders/{order_id}",
+        log_response=True,
     )
 
 
-def get_split_reconciliation(order_id: str):
+# ============================================================
+# GET VENDOR RECONCILIATION
+# ============================================================
+
+
+def get_split_reconciliation(
+    order_id: str,
+):
+    """Fetch Cashfree vendor reconciliation for an order.
+
+    This is used to determine whether Cashfree actually reports
+    a vendor split for the given order.
+    """
+
     return _request(
         "POST",
         "/split/order/vendor/recon",
@@ -154,7 +235,9 @@ def get_split_reconciliation(order_id: str):
             "filters": {
                 "start_date": None,
                 "end_date": None,
-                "order_ids": [order_id],
+                "order_ids": [
+                    order_id,
+                ],
             },
             "pagination": {
                 "limit": 100,
@@ -167,7 +250,13 @@ def get_split_reconciliation(order_id: str):
                 f"edusphere:split-recon:{order_id}",
             )
         ),
+        log_response=True,
     )
+
+
+# ============================================================
+# CREATE REFUND
+# ============================================================
 
 
 def create_refund(
@@ -180,9 +269,15 @@ def create_refund(
         "POST",
         f"/orders/{order_id}/refunds",
         json={
-            "refund_amount": round(float(refund_amount), 2),
+            "refund_amount": round(
+                float(refund_amount),
+                2,
+            ),
             "refund_id": refund_id,
-            "refund_note": reason or "EduSphere marketplace refund",
+            "refund_note": (
+                reason
+                or "EduSphere marketplace refund"
+            ),
             "refund_speed": "STANDARD",
         },
         idempotency_key=str(
@@ -192,6 +287,11 @@ def create_refund(
             )
         ),
     )
+
+
+# ============================================================
+# TRANSFER VENDOR BALANCE
+# ============================================================
 
 
 def transfer_vendor_balance(
@@ -207,7 +307,10 @@ def transfer_vendor_balance(
         json={
             "transfer_from": transfer_from,
             "transfer_type": "ADJUSTMENT",
-            "transfer_amount": round(float(amount), 2),
+            "transfer_amount": round(
+                float(amount),
+                2,
+            ),
             "remark": remark,
         },
         idempotency_key=str(uuid.uuid4()),
