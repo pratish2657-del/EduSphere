@@ -494,73 +494,10 @@ export default function ProfessorMarketplace() {
     <div style={styles.page}>
       <style>{`
         .prof-marketplace-shell { min-height:100vh; }
-
-        .pmv-root { min-width:0; width:100%; }
-        .pmv-root * { min-width:0; }
-        .pmv-root .edusphere-timetable-header { min-width:0; }
-        .pmv-root .edusphere-marketplace-grid { min-width:0; }
-        .pmv-root .pmv-product-card { min-width:0; }
-        .pmv-root .pmv-order-row { min-width:0; }
-        @media (max-width: 1100px) {
-          .prof-marketplace-main { padding: 28px 24px !important; }
-          .prof-marketplace-header { gap:20px !important; }
-          .pmv-root .edusphere-marketplace-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:12px !important; }
-          .pmv-root .pmv-root {}
-        }
         @media (max-width: 900px) {
-          .prof-marketplace-main { padding: 22px 16px 36px !important; }
-          .prof-marketplace-header { flex-direction:column !important; align-items:stretch !important; gap:14px !important; margin-bottom:20px !important; }
-          .prof-marketplace-header > div:first-child { width:100% !important; }
-          .prof-marketplace-header > div:last-child { align-self:flex-start !important; }
-          .prof-marketplace-header h1 { font-size:32px !important; line-height:1.08 !important; }
-          .prof-marketplace-header p { font-size:11px !important; line-height:1.55 !important; max-width:650px !important; }
-          .pmv-root .edusphere-timetable-header { flex-direction:column !important; align-items:stretch !important; gap:13px !important; margin-bottom:15px !important; }
-          .pmv-root .edusphere-timetable-header h2 { font-size:28px !important; }
-          .pmv-root .marketplaceHeaderActions { width:100%; }
-          .pmv-root .pmv-product-card { border-radius:15px !important; }
-          .pmv-root .pmv-order-row { align-items:flex-start !important; }
+          .prof-marketplace-main { padding: 24px 16px !important; }
+          .prof-marketplace-header { flex-direction:column !important; align-items:flex-start !important; }
         }
-        @media (max-width: 700px) {
-          .prof-marketplace-main { padding:18px 13px 30px !important; }
-          .prof-marketplace-header h1 { font-size:28px !important; letter-spacing:-.03em !important; }
-          .prof-marketplace-header p { font-size:10px !important; }
-          .pmv-root .edusphere-timetable-header h2 { font-size:25px !important; }
-          .pmv-root .marketplaceHeaderActions { display:grid !important; grid-template-columns:1fr 1fr !important; gap:7px !important; }
-          .pmv-root .marketplaceHeaderActions > button:last-child { grid-column:1/-1 !important; }
-          .pmv-root .marketplace-tabs { overflow-x:auto !important; scrollbar-width:none !important; }
-          .pmv-root .marketplace-toolbar { display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important; }
-          .pmv-root .marketplace-toolbar > *:first-child { grid-column:1/-1 !important; min-width:0 !important; max-width:none !important; }
-          .pmv-root .marketplace-toolbar select, .pmv-root .marketplace-toolbar button { width:100% !important; min-width:0 !important; }
-          .pmv-root .edusphere-marketplace-grid { grid-template-columns:1fr !important; gap:9px !important; }
-          .pmv-root .pmv-product-card { border-radius:14px !important; }
-          .pmv-root .pmv-sell-panel { flex-direction:column !important; align-items:stretch !important; padding:17px !important; gap:14px !important; }
-          .pmv-root .pmv-sell-panel button { width:100% !important; }
-          .pmv-root .pmv-order-row { flex-direction:column !important; gap:10px !important; padding:13px !important; }
-          .pmv-root .pmv-order-row > span { align-self:flex-start !important; }
-          .pmv-root .pmv-cart-modal, .pmv-root .pmv-product-modal, .pmv-root .pmv-form-modal { width:calc(100vw - 20px) !important; max-height:calc(100vh - 20px) !important; border-radius:16px !important; }
-          .pmv-root .pmv-modal-backdrop { padding:10px !important; }
-        }
-        @media (max-width: 480px) {
-          .prof-marketplace-main { padding:14px 10px 26px !important; }
-          .prof-marketplace-header { gap:11px !important; margin-bottom:15px !important; }
-          .prof-marketplace-header h1 { font-size:25px !important; }
-          .prof-marketplace-header p { font-size:9px !important; line-height:1.5 !important; }
-          .pmv-root .edusphere-timetable-header h2 { font-size:22px !important; }
-          .pmv-root .edusphere-timetable-header p { font-size:9px !important; line-height:1.5 !important; }
-          .pmv-root .marketplaceHeaderActions { grid-template-columns:1fr 1fr !important; }
-          .pmv-root .marketplace-tabs { gap:3px !important; padding:4px !important; }
-          .pmv-root .marketplace-tabs button { padding:8px 10px !important; font-size:9px !important; }
-          .pmv-root .marketplace-toolbar { grid-template-columns:1fr !important; }
-          .pmv-root .marketplace-toolbar > *:first-child { grid-column:auto !important; }
-          .pmv-root .pmv-product-card > button:first-child { padding:14px !important; }
-          .pmv-root .pmv-product-card h3 { font-size:15px !important; }
-          .pmv-root .pmv-product-card p { font-size:9px !important; line-height:1.45 !important; }
-          .pmv-root .pmv-product-card strong { font-size:18px !important; }
-          .pmv-root .pmv-product-card .pmv-product-card { padding:0 !important; }
-          .pmv-root .pmv-sell-panel h3 { font-size:19px !important; }
-          .pmv-root .pmv-sell-panel p { font-size:10px !important; line-height:1.55 !important; }
-        }
-
       `}</style>
       <div style={styles.backgroundGlowOne} />
       <div style={styles.backgroundGlowTwo} />
@@ -773,7 +710,7 @@ function MarketplaceView({
   });
 
   return (
-    <section className="pmv-root">
+    <section>
       <div style={styles.timetableHeader} className="edusphere-timetable-header">
         <div>
           <span style={styles.eyebrow}>CAMPUS COMMERCE</span>
@@ -940,7 +877,7 @@ function MarketplaceView({
       )}
 
       {panel === "sell" && (
-        <div className="pmv-sell-panel" style={styles.sellPanel}>
+        <div style={styles.sellPanel}>
           <div>
             <span style={styles.eyebrow}>SELLER SPACE</span>
             <h3 style={styles.sellTitle}>List a product</h3>
@@ -1022,7 +959,7 @@ function MarketplaceProductCard({
   const price = Number(product.price);
 
   return (
-    <article className="pmv-product-card" style={styles.marketplaceProductCard}>
+    <article style={styles.marketplaceProductCard}>
       <button
         type="button"
         style={styles.marketplaceProductMain}
@@ -1099,9 +1036,8 @@ function MarketplaceProductModal({
   busy: boolean;
 }) {
   return (
-    <div className="pmv-modal-backdrop" style={styles.modalBackdrop} onClick={onClose}>
+    <div style={styles.modalBackdrop} onClick={onClose}>
       <div
-        className="pmv-product-modal"
         style={styles.eventModal}
         onClick={(event) => event.stopPropagation()}
       >
@@ -1213,9 +1149,8 @@ function MarketplaceCartModal({
   onShippingAddressChange: (value: string) => void;
 }) {
   return (
-    <div className="pmv-modal-backdrop" style={styles.modalBackdrop} onClick={onClose}>
+    <div style={styles.modalBackdrop} onClick={onClose}>
       <div
-        className="pmv-cart-modal"
         style={styles.cartModal}
         onClick={(event) => event.stopPropagation()}
       >
@@ -1444,7 +1379,7 @@ function MarketplaceOrders({
   }
 
   return (
-    <div className="pmv-order-list" style={styles.orderList}>
+    <div style={styles.orderList}>
       {orders.orders.map((order) => {
         const digitalFiles = order.digital_files || [];
         const canDownload = ["CONFIRMED", "PROCESSING", "COMPLETED"].includes(
@@ -1452,7 +1387,7 @@ function MarketplaceOrders({
         );
 
         return (
-          <div className="pmv-order-row" key={order.order_id} style={styles.orderRow}>
+          <div key={order.order_id} style={styles.orderRow}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <span style={styles.cardEyebrow}>ORDER #{order.order_id}</span>
               <strong style={styles.orderTitle}>
@@ -1569,9 +1504,9 @@ function MarketplaceSales({
   }
 
   return (
-    <div className="pmv-order-list" style={styles.orderList}>
+    <div style={styles.orderList}>
       {orders.orders.map((order) => (
-        <div className="pmv-order-row" key={order.order_item_id} style={styles.orderRow}>
+        <div key={order.order_item_id} style={styles.orderRow}>
           <div>
             <span style={styles.cardEyebrow}>
               ORDER #{order.order_id}
@@ -1719,9 +1654,8 @@ function MarketplaceProductForm({
   };
 
   return (
-    <div className="pmv-modal-backdrop" style={styles.modalBackdrop} onClick={onClose}>
+    <div style={styles.modalBackdrop} onClick={onClose}>
       <div
-        className="pmv-product-modal"
         style={styles.eventModal}
         onClick={(event) => event.stopPropagation()}
       >
@@ -1888,10 +1822,32 @@ function MarketplaceProductForm({
 }
 
 function formatMarketplaceDate(value: string) {
-  const date = new Date(value);
+  if (!value) return value;
+
+  /*
+   * Marketplace timestamps come from MySQL/Backend and may be returned
+   * without a timezone suffix. A value such as:
+   *   2026-09-18 19:29:00
+   * is a timezone-naive database timestamp, not a browser-local timestamp.
+   *
+   * EduSphere uses IST for marketplace display, so normalize naive
+   * backend timestamps as UTC first, then explicitly display Asia/Kolkata.
+   */
+  const raw = String(value).trim();
+
+  const hasTimezone =
+    /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+
+  const normalized =
+    !hasTimezone && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(raw)
+      ? `${raw.replace(" ", "T")}Z`
+      : raw;
+
+  const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) return value;
 
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
     dateStyle: "medium",
     timeStyle: "short",
   });
