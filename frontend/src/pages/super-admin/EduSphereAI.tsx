@@ -249,11 +249,11 @@ export default function EduSphereAI() {
   };
 
   return (
-    <div style={styles.page}>
+    <div className="edusphere-ai-page" style={styles.page}>
       <div style={styles.backgroundGlowOne} />
       <div style={styles.backgroundGlowTwo} />
 
-      <header style={styles.header}>
+      <header className="edusphere-ai-header" style={styles.header}>
         <div style={styles.brand}>
           <div style={styles.logoBox}>
             <img src="/edusphere-logo.jpeg" alt="EduSphere" style={styles.logo} />
@@ -272,8 +272,8 @@ export default function EduSphereAI() {
         </div>
       </header>
 
-      <main style={styles.main}>
-        <section style={styles.hero}>
+      <main className="edusphere-ai-main" style={styles.main}>
+        <section className="edusphere-ai-hero" style={styles.hero}>
           <div style={styles.heroIcon}>
             <Bot size={28} />
           </div>
@@ -287,8 +287,8 @@ export default function EduSphereAI() {
           </div>
         </section>
 
-        <section style={styles.contentGrid}>
-          <aside style={styles.sidebarCard}>
+        <section className="edusphere-ai-content-grid" style={styles.contentGrid}>
+          <aside className="edusphere-ai-sidebar-card" style={styles.sidebarCard}>
             <div style={styles.cardHeading}>
               <MessageCircle size={18} />
               <span>Quick actions</span>
@@ -323,8 +323,8 @@ export default function EduSphereAI() {
             </div>
           </aside>
 
-          <section style={styles.chatCard}>
-            <div style={styles.chatHeader}>
+          <section className="edusphere-ai-chat-card" style={styles.chatCard}>
+            <div className="edusphere-ai-chat-header" style={styles.chatHeader}>
               <div style={styles.chatIdentity}>
                 <div style={styles.botAvatar}>
                   <Bot size={21} />
@@ -352,7 +352,7 @@ export default function EduSphereAI() {
               </div>
             </div>
 
-            <div style={styles.messages}>
+            <div className="edusphere-ai-messages" style={styles.messages}>
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -378,7 +378,7 @@ export default function EduSphereAI() {
               ))}
             </div>
 
-            <div style={styles.suggestions}>
+            <div className="edusphere-ai-suggestions" style={styles.suggestions}>
               {suggestions.map((suggestion) => (
                 <button
                   key={suggestion}
@@ -391,7 +391,7 @@ export default function EduSphereAI() {
               ))}
             </div>
 
-            <div style={styles.composer}>
+            <div className="edusphere-ai-composer" style={styles.composer}>
               <textarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
@@ -433,6 +433,173 @@ export default function EduSphereAI() {
       </main>
     </div>
   );
+}
+
+/* =========================================================
+   RESPONSIVE MOBILE / TABLET
+========================================================= */
+
+if (typeof document !== "undefined") {
+  const styleId = "edusphere-ai-page-responsive";
+
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = `
+      .edusphere-ai-page,
+      .edusphere-ai-page * {
+        box-sizing: border-box;
+        min-width: 0;
+      }
+
+      .edusphere-ai-page {
+        width: 100%;
+        max-width: 100vw;
+        overflow-x: hidden;
+      }
+
+      .edusphere-ai-content-grid {
+        width: 100%;
+      }
+
+      .edusphere-ai-chat-card,
+      .edusphere-ai-sidebar-card {
+        min-width: 0;
+        max-width: 100%;
+      }
+
+      .edusphere-ai-chat-card {
+        overflow: hidden;
+      }
+
+      .edusphere-ai-messages {
+        min-width: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+
+      .edusphere-ai-message-row {
+        min-width: 0;
+      }
+
+      @media (max-width: 900px) {
+        .edusphere-ai-header {
+          height: auto !important;
+          min-height: 74px !important;
+          padding: 12px 20px !important;
+          gap: 10px !important;
+          flex-wrap: wrap !important;
+        }
+
+        .edusphere-ai-main {
+          padding: 28px 20px 40px !important;
+        }
+
+        .edusphere-ai-content-grid {
+          grid-template-columns: minmax(0, 1fr) !important;
+          gap: 16px !important;
+        }
+
+        .edusphere-ai-chat-card {
+          order: -1;
+          min-height: 520px !important;
+        }
+
+        .edusphere-ai-sidebar-card {
+          width: 100%;
+        }
+
+        .edusphere-ai-chat-header {
+          gap: 10px !important;
+          flex-wrap: wrap !important;
+          align-items: flex-start !important;
+        }
+
+        .edusphere-ai-header > * {
+          max-width: 100%;
+        }
+
+        .edusphere-ai-suggestions {
+          max-width: 100%;
+        }
+      }
+
+      @media (max-width: 600px) {
+        .edusphere-ai-header {
+          padding: 10px 14px !important;
+        }
+
+        .edusphere-ai-main {
+          padding: 22px 12px 30px !important;
+        }
+
+        .edusphere-ai-hero {
+          align-items: flex-start !important;
+          gap: 12px !important;
+          margin-bottom: 20px !important;
+        }
+
+        .edusphere-ai-hero h1 {
+          font-size: 27px !important;
+          line-height: 1.12 !important;
+        }
+
+        .edusphere-ai-hero p {
+          max-width: 100% !important;
+        }
+
+        .edusphere-ai-chat-card {
+          min-height: 500px !important;
+          border-radius: 16px !important;
+        }
+
+        .edusphere-ai-chat-header {
+          padding: 12px 13px !important;
+        }
+
+        .edusphere-ai-chat-header .edusphere-ai-status {
+          display: none;
+        }
+
+        .edusphere-ai-messages {
+          min-height: 190px !important;
+          padding: 14px !important;
+        }
+
+        .edusphere-ai-suggestions {
+          padding: 0 13px 10px !important;
+          gap: 6px !important;
+        }
+
+        .edusphere-ai-suggestions button {
+          max-width: 100%;
+          font-size: 10px !important;
+          padding: 6px 8px !important;
+        }
+
+        .edusphere-ai-composer {
+          margin: 0 12px !important;
+          padding: 6px !important;
+        }
+
+        .edusphere-ai-composer textarea {
+          font-size: 16px !important;
+          min-width: 0 !important;
+        }
+
+        .edusphere-ai-composer button {
+          width: 38px !important;
+          height: 38px !important;
+        }
+
+        .edusphere-ai-sidebar-card {
+          padding: 14px !important;
+          border-radius: 16px !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
 }
 
 const styles: Record<string, React.CSSProperties> = {
