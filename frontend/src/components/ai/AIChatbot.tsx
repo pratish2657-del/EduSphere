@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { FormEvent } from "react";
 import {
   Bot,
@@ -20,7 +21,6 @@ type AIResponse = {
   course_id: number | null;
   context_used: boolean;
   ai_available: boolean;
-  conversation_id?: number | null;
 };
 
 type ChatMessage = {
@@ -28,17 +28,6 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   contextUsed?: boolean;
-  createdAt?: string;
-};
-
-type ConversationResponse = {
-  conversation_id?: number | null;
-  messages?: Array<{
-    id: number;
-    role: "user" | "assistant";
-    content: string;
-    created_at?: string | null;
-  }>;
 };
 
 /* =========================================================
@@ -227,10 +216,6 @@ export default function AIChatbot() {
   const [messages, setMessages] = useState<ChatMessage[]>(
     []
   );
-  const [conversationId, setConversationId] = useState<number | null>(
-    null
-  );
-  const [loadingHistory, setLoadingHistory] = useState(false);
   const [minimized, setMinimized] = useState(false);
 
   const [starterPrompts, setStarterPrompts] = useState<
@@ -241,85 +226,6 @@ export default function AIChatbot() {
 
   const messagesEndRef =
     useRef<HTMLDivElement | null>(null);
-
-  /* =======================================================
-     LOAD PERSISTENT CONVERSATION
-  ======================================================= */
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadConversation = async () => {
-      if (!user?.user_id) {
-        setMessages([]);
-        setConversationId(null);
-        return;
-      }
-
-      setLoadingHistory(true);
-      setError("");
-
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/ai/conversation`,
-          {
-            method: "GET",
-            credentials: "include",
-            headers: {
-              Accept: "application/json",
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("Unable to load AI conversation.");
-        }
-
-        const data =
-          (await response.json()) as ConversationResponse;
-
-        if (cancelled) return;
-
-        setConversationId(
-          data.conversation_id ?? null
-        );
-
-        const restoredMessages = (data.messages || []).map(
-          (item) => ({
-            id: item.id,
-            role: item.role,
-            content: item.content,
-          })
-        );
-
-        setMessages(restoredMessages);
-
-        if (restoredMessages.length === 0) {
-          setStarterPrompts(
-            getRandomPrompts(userRole)
-          );
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Unable to load previous AI conversation."
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingHistory(false);
-        }
-      }
-    };
-
-    void loadConversation();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.user_id, userRole]);
 
   useEffect(() => {
     const openAssistant = () => {
@@ -336,36 +242,24 @@ export default function AIChatbot() {
   ======================================================= */
 
   useEffect(() => {
-    if (
-      messages.length === 0 &&
-      !loadingHistory
-    ) {
+    if (messages.length === 0) {
       setStarterPrompts(
         getRandomPrompts(userRole)
       );
     }
-  }, [userRole, messages.length, loadingHistory]);
+  }, [userRole, messages.length]);
 
   /* =======================================================
      GENERATE RANDOM PROMPTS WHEN CHAT OPENS
   ======================================================= */
 
   useEffect(() => {
-    if (
-      open &&
-      messages.length === 0 &&
-      !loadingHistory
-    ) {
+    if (open && messages.length === 0) {
       setStarterPrompts(
         getRandomPrompts(userRole)
       );
     }
-  }, [
-    open,
-    userRole,
-    messages.length,
-    loadingHistory,
-  ]);
+  }, [open, userRole, messages.length]);
 
   /* =======================================================
      AUTO SCROLL
@@ -414,7 +308,6 @@ export default function AIChatbot() {
           },
           body: JSON.stringify({
             message: trimmed,
-            conversation_id: conversationId,
           }),
         }
       );
@@ -452,10 +345,6 @@ export default function AIChatbot() {
       }
 
       const result = data as AIResponse;
-
-      if (result.conversation_id) {
-        setConversationId(result.conversation_id);
-      }
 
       setMessages((current) => [
         ...current,
@@ -495,41 +384,14 @@ export default function AIChatbot() {
      CLEAR CONVERSATION
   ======================================================= */
 
-  const clearConversation = async () => {
-    if (sending) return;
-
+  const clearConversation = () => {
+    setMessages([]);
     setError("");
+    setMessage("");
 
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/ai/conversation`,
-        {
-          method: "DELETE",
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Unable to clear AI conversation.");
-      }
-
-      setMessages([]);
-      setConversationId(null);
-      setMessage("");
-
-      setStarterPrompts(
-        getRandomPrompts(userRole)
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to clear AI conversation."
-      );
-    }
+    setStarterPrompts(
+      getRandomPrompts(userRole)
+    );
   };
 
   /* =======================================================
@@ -551,7 +413,7 @@ export default function AIChatbot() {
      UI
   ======================================================= */
 
-  return (
+  const chatbotUI = (
     <>
       {/* =================================================
           FLOATING AI BUTTON
@@ -570,6 +432,7 @@ export default function AIChatbot() {
               );
             }
           }}
+          className="edusphere-ai-floating-button"
           style={styles.floatingButton}
         >
           <span style={styles.floatingPulse} />
@@ -589,6 +452,7 @@ export default function AIChatbot() {
       {open && (
         <section
           aria-label="EduSphere AI Assistant"
+          className="edusphere-ai-chat-window"
           style={{
             ...styles.chatWindow,
             ...(minimized
@@ -666,24 +530,7 @@ export default function AIChatbot() {
           {!minimized && (
             <>
               <div style={styles.body}>
-                {loadingHistory ? (
-                  <div style={styles.emptyState}>
-                    <div style={styles.emptyOrb}>
-                      <Loader2
-                        size={23}
-                        style={styles.spin}
-                      />
-                    </div>
-
-                    <h3 style={styles.emptyTitle}>
-                      Restoring your conversation...
-                    </h3>
-
-                    <p style={styles.emptyText}>
-                      Loading your saved EduSphere AI history.
-                    </p>
-                  </div>
-                ) : messages.length === 0 ? (
+                {messages.length === 0 ? (
                   <div style={styles.emptyState}>
                     <div style={styles.emptyOrb}>
                       <MessageCircle size={23} />
@@ -871,9 +718,7 @@ export default function AIChatbot() {
                       style={
                         styles.clearButton
                       }
-                      disabled={
-                        sending || loadingHistory
-                      }
+                      disabled={sending}
                     >
                       Clear
                     </button>
@@ -894,6 +739,7 @@ export default function AIChatbot() {
                     placeholder="Ask EduSphere AI..."
                     maxLength={5000}
                     disabled={sending}
+                    className="edusphere-ai-chat-input"
                     style={styles.input}
                   />
 
@@ -930,6 +776,84 @@ export default function AIChatbot() {
       )}
     </>
   );
+
+  // Render outside page containers so parent overflow/transform rules
+  // cannot clip or hide the floating AI control on mobile/tablet.
+  return typeof document !== "undefined"
+    ? createPortal(chatbotUI, document.body)
+    : null;
+}
+
+/* =========================================================
+   RESPONSIVE AI OVERLAY
+========================================================= */
+
+if (typeof document !== "undefined") {
+  const responsiveStyleId = "edusphere-ai-responsive";
+
+  if (!document.getElementById(responsiveStyleId)) {
+    const style = document.createElement("style");
+    style.id = responsiveStyleId;
+    style.textContent = `
+      .edusphere-ai-floating-button,
+      .edusphere-ai-chat-window {
+        box-sizing: border-box !important;
+        max-width: calc(100vw - 20px) !important;
+      }
+
+      .edusphere-ai-floating-button {
+        z-index: 2147483647 !important;
+        touch-action: manipulation;
+      }
+
+      .edusphere-ai-chat-window {
+        z-index: 2147483647 !important;
+        max-height: calc(100dvh - 32px) !important;
+      }
+
+      @media (max-width: 900px) {
+        .edusphere-ai-floating-button {
+          right: max(16px, env(safe-area-inset-right)) !important;
+          bottom: max(18px, env(safe-area-inset-bottom)) !important;
+          width: 56px !important;
+          height: 56px !important;
+        }
+
+        .edusphere-ai-chat-window {
+          left: 12px !important;
+          right: 12px !important;
+          bottom: max(12px, env(safe-area-inset-bottom)) !important;
+          width: auto !important;
+          height: min(680px, calc(100dvh - 24px)) !important;
+          max-height: calc(100dvh - 24px) !important;
+          border-radius: 18px !important;
+        }
+
+        .edusphere-ai-chat-window .edusphere-ai-chat-input {
+          font-size: 16px !important;
+        }
+      }
+
+      @media (max-width: 600px) {
+        .edusphere-ai-floating-button {
+          right: 14px !important;
+          bottom: max(14px, env(safe-area-inset-bottom)) !important;
+          width: 54px !important;
+          height: 54px !important;
+        }
+
+        .edusphere-ai-chat-window {
+          left: 8px !important;
+          right: 8px !important;
+          bottom: max(8px, env(safe-area-inset-bottom)) !important;
+          height: min(700px, calc(100dvh - 16px)) !important;
+          max-height: calc(100dvh - 16px) !important;
+          border-radius: 16px !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
 }
 
 /* =========================================================
@@ -1106,7 +1030,6 @@ const styles: Record<
     flex: 1,
     minHeight: 0,
     overflowY: "auto",
-    overflowX: "hidden",
     padding: 15,
   },
 

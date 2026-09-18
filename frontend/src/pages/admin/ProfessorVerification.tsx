@@ -1,3 +1,4 @@
+import "./professor-verification.css";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -199,12 +200,12 @@ export default function ProfessorVerification() {
     user?.full_name || user?.email?.split("@")[0] || "Admin";
 
   return (
-    <div style={styles.page}>
+    <div className="prof-verification-page" style={styles.page}>
       <div style={styles.glowOne} />
       <div style={styles.glowTwo} />
 
-      <main style={styles.main}>
-        <header style={styles.header}>
+      <main className="prof-verification-main" style={styles.main}>
+        <header className="prof-verification-header" style={styles.header}>
           <div style={styles.headerLeft}>
             <button
               type="button"
@@ -235,8 +236,8 @@ export default function ProfessorVerification() {
           </button>
         </header>
 
-        <section style={styles.summaryGrid}>
-          <div style={styles.summaryCard}>
+        <section className="prof-verification-summary" style={styles.summaryGrid}>
+          <div className="prof-verification-summary-card" style={styles.summaryCard}>
             <div style={styles.summaryIcon}>
               <Clock3 size={19} />
             </div>
@@ -246,7 +247,7 @@ export default function ProfessorVerification() {
             </div>
           </div>
 
-          <div style={styles.summaryCard}>
+          <div className="prof-verification-summary-card" style={styles.summaryCard}>
             <div style={styles.summaryIcon}>
               <ShieldCheck size={19} />
             </div>
@@ -256,7 +257,7 @@ export default function ProfessorVerification() {
             </div>
           </div>
 
-          <div style={styles.summaryCard}>
+          <div className="prof-verification-summary-card" style={styles.summaryCard}>
             <div style={styles.summaryIcon}>
               <UserRound size={19} />
             </div>
@@ -295,8 +296,8 @@ export default function ProfessorVerification() {
           </div>
         ) : null}
 
-        <section style={styles.panel}>
-          <div style={styles.panelHeader}>
+        <section className="prof-verification-panel" style={styles.panel}>
+          <div className="prof-verification-panel-header" style={styles.panelHeader}>
             <div>
               <span style={styles.panelEyebrow}>VERIFICATION QUEUE</span>
               <h2 style={styles.panelTitle}>Pending Professor Profiles</h2>
@@ -305,7 +306,7 @@ export default function ProfessorVerification() {
               </p>
             </div>
 
-            <div style={styles.searchBox}>
+            <div className="prof-verification-search" style={styles.searchBox}>
               <Search size={16} />
               <input
                 value={search}
@@ -342,6 +343,7 @@ export default function ProfessorVerification() {
 
                 return (
                   <article
+                    className="prof-verification-application"
                     key={id ?? professor.user_id ?? professor.email}
                     style={styles.application}
                   >
@@ -349,8 +351,8 @@ export default function ProfessorVerification() {
                       {(professor.full_name || "P").slice(0, 1).toUpperCase()}
                     </div>
 
-                    <div style={styles.person}>
-                      <div style={styles.nameRow}>
+                    <div className="prof-verification-person" style={styles.person}>
+                      <div className="prof-verification-name-row" style={styles.nameRow}>
                         <h3>{professor.full_name || "Professor"}</h3>
                         <span style={styles.pendingBadge}>PENDING</span>
                       </div>
@@ -383,7 +385,7 @@ export default function ProfessorVerification() {
                       </small>
                     </div>
 
-                    <div style={styles.rowActions}>
+                    <div className="prof-verification-row-actions" style={styles.rowActions}>
                       <button
                         type="button"
                         style={styles.detailsButton}
@@ -455,7 +457,7 @@ export default function ProfessorVerification() {
               </button>
             </div>
 
-            <div style={styles.detailGrid}>
+            <div className="prof-verification-detail-grid" style={styles.detailGrid}>
               <Detail label="Email" value={selected.email} />
               <Detail label="Employee ID" value={selected.employee_id} />
               <Detail label="Department" value={selected.department} />
@@ -486,7 +488,7 @@ export default function ProfessorVerification() {
               />
             </label>
 
-            <div style={styles.modalActions}>
+            <div className="prof-verification-modal-actions" style={styles.modalActions}>
               <button
                 type="button"
                 style={styles.rejectLarge}

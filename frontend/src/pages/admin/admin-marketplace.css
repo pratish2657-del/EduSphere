@@ -423,3 +423,8 @@
 }
 
 .marketplace-fee-note { display:block; margin-top:5px; color:#7f8aa5; font-size:10px; line-height:1.4; }
+
+/* ===== FINAL RESPONSIVE OVERRIDES ===== */
+.admin-marketplace-page,.admin-marketplace-page *{box-sizing:border-box}.admin-marketplace-page{width:100%;max-width:100%;overflow-x:hidden}.admin-marketplace-header>*,.admin-marketplace-toolbar>*{min-width:0}.admin-marketplace-header h1,.admin-marketplace-header p{overflow-wrap:anywhere}.admin-marketplace-table-wrap{width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media (min-width:561px) and (max-width:900px){.admin-marketplace-page{padding:18px}.admin-marketplace-header h1{font-size:27px}.admin-marketplace-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-marketplace-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-marketplace-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-marketplace-search{grid-column:1/-1}}
+@media (max-width:560px){.admin-marketplace-page{padding:12px}.admin-marketplace-header{gap:12px}.admin-marketplace-header h1{font-size:22px}.admin-marketplace-header p{font-size:12px;line-height:1.5}.admin-marketplace-header-actions{width:100%;flex-wrap:wrap}.admin-marketplace-header-actions button{flex:1 1 0;min-width:0}.admin-marketplace-stats,.admin-marketplace-grid,.admin-marketplace-form-grid,.admin-marketplace-detail-grid{grid-template-columns:1fr}.admin-marketplace-toolbar{grid-template-columns:1fr}.admin-marketplace-search{grid-column:auto}.admin-marketplace-modal{width:100%;max-width:100%}}

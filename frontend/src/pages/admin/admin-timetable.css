@@ -579,3 +579,8 @@
     width: 100%;
   }
 }
+
+/* ===== FINAL RESPONSIVE OVERRIDES ===== */
+.admin-timetable-page,.admin-timetable-page *{box-sizing:border-box}.admin-timetable-page{width:100%;max-width:100%;overflow-x:hidden}.admin-timetable-header>*,.admin-timetable-toolbar>*{min-width:0}.admin-timetable-header h1,.admin-timetable-header p{overflow-wrap:anywhere}.admin-timetable-table-wrap{width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}.admin-timetable-table-wrap table{min-width:1040px}
+@media (min-width:601px) and (max-width:900px){.admin-timetable-page{padding:18px}.admin-timetable-header h1{font-size:26px}.admin-timetable-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-timetable-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-timetable-search{grid-column:1/-1}}
+@media (max-width:600px){.admin-timetable-page{padding:12px}.admin-timetable-header{gap:12px}.admin-timetable-header h1{font-size:22px}.admin-timetable-header p{font-size:12px;line-height:1.5}.admin-timetable-header-actions{width:100%;flex-wrap:wrap}.admin-timetable-header-actions button{flex:1 1 0;min-width:0}.admin-timetable-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.admin-timetable-toolbar{grid-template-columns:1fr}.admin-timetable-search{grid-column:auto}.admin-timetable-modal-backdrop{padding:10px}.admin-timetable-modal{width:100%;max-width:100%;max-height:calc(100vh - 20px)}}

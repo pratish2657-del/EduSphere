@@ -1,0 +1,21 @@
+/* EduSphere Admin Results — responsive layout */
+.admin-results-page,.admin-results-page *{box-sizing:border-box}
+.admin-results-page{width:100%;max-width:100%;min-width:0;overflow-x:hidden}
+.admin-results-header,.admin-results-panel-header{min-width:0}
+.admin-results-header>*{min-width:0}
+.admin-results-header h2,.admin-results-header p{overflow-wrap:anywhere}
+.admin-results-form,.admin-results-panel{width:100%;max-width:100%;min-width:0;overflow:hidden}
+.admin-results-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));min-width:0}
+.admin-results-form-grid>div{min-width:0}
+.admin-results-form-grid input,.admin-results-form-grid select{max-width:100%}
+.admin-results-actions{display:flex;justify-content:flex-start;gap:8px;flex-wrap:wrap}
+.admin-results-filter-grid{min-width:0}
+.admin-results-filter-grid>div,.admin-results-filter-grid>button{min-width:0}
+.admin-results-filter-grid input{max-width:100%}
+.admin-results-record-list{width:100%;max-width:100%;min-width:0;overflow:hidden}
+.admin-results-record{min-width:0;max-width:100%;display:flex;align-items:center;gap:12px;flex-wrap:nowrap;overflow:hidden}
+.admin-results-record>*{min-width:0}
+.admin-results-record strong,.admin-results-record span{overflow-wrap:anywhere;word-break:break-word}
+.admin-results-metric{min-width:72px!important;max-width:100%;overflow:hidden}
+@media (min-width:601px) and (max-width:900px){.admin-results-page{gap:14px!important}.admin-results-header h2{font-size:23px!important}.admin-results-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.admin-results-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media (max-width:600px){.admin-results-page{gap:12px!important}.admin-results-header{flex-direction:column!important;gap:12px!important}.admin-results-header>button{width:100%}.admin-results-form,.admin-results-panel{padding:14px!important;border-radius:14px!important}.admin-results-form-grid{grid-template-columns:1fr!important;gap:10px!important;padding:0!important}.admin-results-panel-header{align-items:flex-start!important;gap:10px!important;flex-direction:column!important}.admin-results-filter-grid{grid-template-columns:1fr!important;gap:9px!important}.admin-results-actions{flex-direction:column}.admin-results-actions button{width:100%}.admin-results-record{display:grid!important;grid-template-columns:minmax(0,1fr) repeat(2,minmax(52px,.5fr))!important;gap:9px!important;padding:11px!important}.admin-results-record>.admin-results-metric:nth-of-type(n+3){grid-column:auto}.admin-results-record>button{grid-column:1/-1;width:100%}.admin-results-metric{min-width:0!important}.admin-results-metric span{font-size:8px!important}.admin-results-metric strong{font-size:11px!important}.admin-results-note{font-size:9px!important;line-height:1.45}.admin-results-page h2{font-size:22px!important}}

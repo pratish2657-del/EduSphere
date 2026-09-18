@@ -613,3 +613,7 @@
     width: 100%;
   }
 }
+/* ===== FINAL RESPONSIVE OVERRIDES ===== */
+.refund-page,.refund-page *{box-sizing:border-box}.refund-page{width:100%;max-width:100%;overflow-x:hidden}.refund-head>*{min-width:0}.refund-table-wrap{width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media (min-width:701px) and (max-width:900px){.refund-page{padding:18px}.refund-head h1{font-size:23px}}
+@media (max-width:700px){.refund-page{padding:12px}.refund-head{gap:12px;margin-bottom:15px}.refund-head h1{font-size:21px;line-height:1.25}.refund-head p{font-size:12px;line-height:1.5}.refund-head-actions{width:100%;flex-wrap:wrap}.refund-head-actions button{flex:1 1 0;min-width:0}}

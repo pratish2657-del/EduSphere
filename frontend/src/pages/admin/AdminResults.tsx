@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import "./admin-results.css";
 import type { FormEvent } from "react";
 import {
   CheckCircle2,
@@ -292,8 +293,9 @@ export default function ResultsManagementView() {
   };
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+    <section className="admin-results-page" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <div
+        className="admin-results-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -345,8 +347,8 @@ export default function ResultsManagementView() {
         </div>
       )}
 
-      <form onSubmit={submit} style={panel}>
-        <div style={panelHeader}>
+      <form onSubmit={submit} className="admin-results-form" style={panel}>
+        <div className="admin-results-panel-header" style={panelHeader}>
           <div>
             <span style={cardEyebrow}>
               {editingId ? "EDIT RECORD" : "NEW RECORD"}
@@ -358,7 +360,7 @@ export default function ResultsManagementView() {
           <GraduationCap size={21} color="#a5b4fc" />
         </div>
 
-        <div style={formGrid}>
+        <div className="admin-results-form-grid" style={formGrid}>
           <div>
             <label style={labelStyle()}>Enrollment Number *</label>
             <input
@@ -515,6 +517,7 @@ export default function ResultsManagementView() {
         </div>
 
         <div
+          className="admin-results-note"
           style={{
             marginTop: 14,
             padding: "10px 12px",
@@ -529,7 +532,7 @@ export default function ResultsManagementView() {
           Marks are optional because the Statement of Grades can be grade-only.
         </div>
 
-        <div style={actions}>
+        <div className="admin-results-actions" style={actions}>
           <button type="submit" disabled={saving} style={primaryButton}>
             {saving ? <RefreshCw size={15} /> : editingId ? <Save size={15} /> : <CheckCircle2 size={15} />}
             {saving ? "Saving..." : editingId ? "Update Result" : "Save Result"}
@@ -544,8 +547,8 @@ export default function ResultsManagementView() {
         </div>
       </form>
 
-      <section style={panel}>
-        <div style={panelHeader}>
+      <section className="admin-results-panel" style={panel}>
+        <div className="admin-results-panel-header" style={panelHeader}>
           <div>
             <span style={cardEyebrow}>LIVE DATABASE</span>
             <h3 style={panelTitle}>Existing Result Records</h3>
@@ -561,7 +564,7 @@ export default function ResultsManagementView() {
           </button>
         </div>
 
-        <div style={filterGrid}>
+        <div className="admin-results-filter-grid" style={filterGrid}>
           <div>
             <label style={labelStyle()}>Enrollment</label>
             <input
@@ -614,9 +617,9 @@ export default function ResultsManagementView() {
             <span>Use the form above to enter a student's official grade statement.</span>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+          <div className="admin-results-record-list" style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             {results.map((result) => (
-              <div key={result.result_id} style={recordRow}>
+              <div key={result.result_id} className="admin-results-record" style={recordRow}>
                 <div style={{ minWidth: 0, flex: 1.7 }}>
                   <strong style={recordTitle}>{result.course_name}</strong>
                   <div style={recordMeta}>
@@ -624,27 +627,27 @@ export default function ResultsManagementView() {
                   </div>
                 </div>
 
-                <div style={recordMetric}>
+                <div className="admin-results-metric" style={recordMetric}>
                   <span>ENROLLMENT</span>
                   <strong>{result.enrollment_number || "—"}</strong>
                 </div>
 
-                <div style={recordMetric}>
+                <div className="admin-results-metric" style={recordMetric}>
                   <span>GRADE</span>
                   <strong style={{ color: "#a5b4fc" }}>{result.grade || "—"}</strong>
                 </div>
 
-                <div style={recordMetric}>
+                <div className="admin-results-metric" style={recordMetric}>
                   <span>POINT</span>
                   <strong>{result.grade_point ?? "—"}</strong>
                 </div>
 
-                <div style={recordMetric}>
+                <div className="admin-results-metric" style={recordMetric}>
                   <span>CREDITS</span>
                   <strong>{result.credits ?? "—"}</strong>
                 </div>
 
-                <div style={recordMetric}>
+                <div className="admin-results-metric" style={recordMetric}>
                   <span>CREDIT POINTS</span>
                   <strong>{result.credit_points ?? "—"}</strong>
                 </div>
