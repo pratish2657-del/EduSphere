@@ -6,76 +6,340 @@ import {
   Stars,
   Text,
 } from "@react-three/drei";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 /* ============================================================
-   EDUSPHERE 3D HERO
-   - Futuristic education globe
-   - White + cyan/blue EduSphere branding
-   - Neon orbital rings
-   - Floating glass cards
-   - Fully rotatable with OrbitControls
+   EDUSPHERE 3D — EARTH EDITION
+   - Earth-like blue oceans + green land masses
+   - Atmospheric glow + cloud layer
+   - Neon education orbit rings
+   - EduSphere wordmark remains readable in front
+   - Mouse + touch rotatable
 ============================================================ */
 
-function CoreSphere() {
-  const mesh = useRef<THREE.Mesh>(null);
+function makeEarthTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1536;
+  canvas.height = 768;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
 
-  useFrame((_, delta) => {
-    if (!mesh.current) return;
-    mesh.current.rotation.y += delta * 0.08;
-    mesh.current.rotation.x += delta * 0.012;
-  });
+  // Deep ocean base.
+  const ocean = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  ocean.addColorStop(0, "#061c62");
+  ocean.addColorStop(0.48, "#0b3fa8");
+  ocean.addColorStop(1, "#041a63");
+  ctx.fillStyle = ocean;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Subtle ocean lighting bands.
+  const glow = ctx.createRadialGradient(
+    canvas.width * 0.58,
+    canvas.height * 0.38,
+    10,
+    canvas.width * 0.58,
+    canvas.height * 0.38,
+    canvas.width * 0.7
+  );
+  glow.addColorStop(0, "rgba(55,180,255,.25)");
+  glow.addColorStop(1, "rgba(0,40,130,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Deterministic pseudo-random generator so the continents never change.
+  let seed = 82731;
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+
+  const landColors = ["#28784c", "#3d8b55", "#6b9b45", "#8e9f52"];
+
+  // Draw irregular continent-like polygon blobs in equirectangular space.
+  const continents = [
+    { x: 0.18, y: 0.31, w: 0.23, h: 0.25, rot: -0.18 },
+    { x: 0.31, y: 0.59, w: 0.12, h: 0.31, rot: 0.18 },
+    { x: 0.48, y: 0.27, w: 0.25, h: 0.20, rot: -0.08 },
+    { x: 0.57, y: 0.53, w: 0.19, h: 0.31, rot: 0.16 },
+    { x: 0.73, y: 0.32, w: 0.22, h: 0.18, rot: 0.1 },
+    { x: 0.82, y: 0.63, w: 0.12, h: 0.18, rot: -0.2 },
+    { x: 0.07, y: 0.69, w: 0.10, h: 0.10, rot: 0.1 },
+  ];
+
+  for (const continent of continents) {
+    const cx = continent.x * canvas.width;
+    const cy = continent.y * canvas.height;
+    const w = continent.w * canvas.width;
+    const h = continent.h * canvas.height;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(continent.rot);
+    ctx.beginPath();
+
+    const points = 18;
+    for (let i = 0; i < points; i += 1) {
+      const a = (i / points) * Math.PI * 2;
+      const radial = 0.68 + random() * 0.38;
+      const px = Math.cos(a) * (w / 2) * radial;
+      const py = Math.sin(a) * (h / 2) * radial;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+
+    const land = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+    land.addColorStop(0, landColors[Math.floor(random() * landColors.length)]);
+    land.addColorStop(0.55, "#4e984f");
+    land.addColorStop(1, "#236b47");
+    ctx.fillStyle = land;
+    ctx.fill();
+
+    // Mountain / terrain flecks.
+    for (let i = 0; i < 18; i += 1) {
+      const px = (random() - 0.5) * w * 0.75;
+      const py = (random() - 0.5) * h * 0.7;
+      ctx.fillStyle = "rgba(170,170,95,.22)";
+      ctx.beginPath();
+      ctx.ellipse(px, py, 7 + random() * 14, 3 + random() * 7, random(), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // Polar ice caps.
+  const cap = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.15);
+  cap.addColorStop(0, "rgba(245,252,255,.95)");
+  cap.addColorStop(1, "rgba(220,245,255,0)");
+  ctx.fillStyle = cap;
+  ctx.fillRect(0, 0, canvas.width, canvas.height * 0.14);
+
+  const southCap = ctx.createLinearGradient(
+    0,
+    canvas.height,
+    0,
+    canvas.height * 0.84
+  );
+  southCap.addColorStop(0, "rgba(245,252,255,.92)");
+  southCap.addColorStop(1, "rgba(220,245,255,0)");
+  ctx.fillStyle = southCap;
+  ctx.fillRect(0, canvas.height * 0.86, canvas.width, canvas.height * 0.14);
+
+  // Fine longitude/latitude grid for the digital globe look.
+  ctx.strokeStyle = "rgba(120,205,255,.10)";
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 12; i += 1) {
+    const x = (i / 12) * canvas.width;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+  for (let i = 1; i < 6; i += 1) {
+    const y = (i / 6) * canvas.height;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function makeCloudTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1536;
+  canvas.height = 768;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  let seed = 19283;
+  const random = () => {
+    seed = (seed * 1103515245 + 12345) >>> 0;
+    return seed / 4294967296;
+  };
+
+  // Soft elongated cloud systems.
+  for (let i = 0; i < 95; i += 1) {
+    const x = random() * canvas.width;
+    const y = canvas.height * (0.12 + random() * 0.76);
+    const w = 25 + random() * 150;
+    const h = 5 + random() * 22;
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, w);
+    gradient.addColorStop(0, "rgba(255,255,255,.30)");
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.ellipse(x, y, w, h, random() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  return texture;
+}
+
+function EarthAtmosphere({ color, scale, opacity }: { color: string; scale: number; opacity: number }) {
+  const material = useMemo(() => {
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        glowColor: { value: new THREE.Color(color) },
+        glowOpacity: { value: opacity },
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPosition.xyz;
+          vNormal = normalize(mat3(modelMatrix) * normal);
+          gl_Position = projectionMatrix * viewMatrix * worldPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 glowColor;
+        uniform float glowOpacity;
+        varying vec3 vNormal;
+        varying vec3 vWorldPosition;
+        void main() {
+          vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+          float fresnel = pow(1.0 - max(dot(normalize(vNormal), viewDir), 0.0), 3.2);
+          float intensity = fresnel * glowOpacity;
+          gl_FragColor = vec4(glowColor, intensity);
+        }
+      `,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      side: THREE.BackSide,
+      depthWrite: false,
+    });
+    return material;
+  }, [color, opacity]);
+
+  useEffect(() => () => material.dispose(), [material]);
 
   return (
-    <mesh ref={mesh}>
-      <icosahedronGeometry args={[2.05, 6]} />
-      <meshStandardMaterial
-        color="#102e9d"
-        emissive="#09277f"
-        emissiveIntensity={0.9}
-        metalness={0.62}
-        roughness={0.24}
-        transparent
-        opacity={0.78}
-      />
+    <mesh scale={scale} renderOrder={5}>
+      <sphereGeometry args={[2.05, 64, 64]} />
+      <primitive object={material} attach="material" />
     </mesh>
   );
 }
 
-function WireSphere() {
-  const mesh = useRef<THREE.Mesh>(null);
-
-  useFrame((_, delta) => {
-    if (!mesh.current) return;
-    mesh.current.rotation.y -= delta * 0.055;
-    mesh.current.rotation.z += delta * 0.012;
-  });
-
+function EarthGlowShell({ color, scale, opacity }: { color: string; scale: number; opacity: number }) {
   return (
-    <mesh ref={mesh}>
-      <icosahedronGeometry args={[2.1, 5]} />
-      <meshBasicMaterial
-        color="#67dfff"
-        wireframe
-        transparent
-        opacity={0.34}
-      />
-    </mesh>
-  );
-}
-
-function GlobeGlow() {
-  return (
-    <mesh scale={1.035}>
+    <mesh scale={scale} renderOrder={4}>
       <sphereGeometry args={[2.05, 64, 64]} />
       <meshBasicMaterial
-        color="#248dff"
+        color={color}
         transparent
-        opacity={0.045}
+        opacity={opacity}
         side={THREE.BackSide}
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
       />
     </mesh>
+  );
+}
+
+function EarthGlobe() {
+  const group = useRef<THREE.Group>(null);
+  const earthTexture = useMemo(() => makeEarthTexture(), []);
+  const cloudTexture = useMemo(() => makeCloudTexture(), []);
+
+  useEffect(() => {
+    return () => {
+      earthTexture?.dispose();
+      cloudTexture?.dispose();
+    };
+  }, [earthTexture, cloudTexture]);
+
+  useFrame((_, delta) => {
+    if (!group.current) return;
+    group.current.rotation.y += delta * 0.045;
+  });
+
+  return (
+    <group ref={group}>
+      {/* Main Earth surface */}
+      <mesh>
+        <sphereGeometry args={[2.05, 96, 64]} />
+        <meshStandardMaterial
+          map={earthTexture ?? undefined}
+          color="#5ccfff"
+          emissive="#075dff"
+          emissiveIntensity={1.15}
+          metalness={0.18}
+          roughness={0.38}
+        />
+      </mesh>
+
+      {/* Moving translucent cloud layer */}
+      <mesh scale={1.012}>
+        <sphereGeometry args={[2.05, 96, 64]} />
+        <meshStandardMaterial
+          map={cloudTexture ?? undefined}
+          transparent
+          opacity={0.58}
+          depthWrite={false}
+          roughness={1}
+        />
+      </mesh>
+
+      {/* Bright digital wireframe shell */}
+      <mesh scale={1.026}>
+        <icosahedronGeometry args={[2.05, 5]} />
+        <meshBasicMaterial
+          color="#8cecff"
+          wireframe
+          transparent
+          opacity={0.42}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* Layered cinematic bloom */}
+      <EarthGlowShell color="#19bfff" scale={1.045} opacity={0.12} />
+      <EarthGlowShell color="#168cff" scale={1.075} opacity={0.10} />
+      <EarthGlowShell color="#7055ff" scale={1.11} opacity={0.075} />
+      <EarthAtmosphere color="#48e7ff" scale={1.055} opacity={1.35} />
+      <EarthAtmosphere color="#7857ff" scale={1.09} opacity={0.58} />
+
+      {/* Bright atmospheric rim */}
+      <mesh scale={1.045} renderOrder={6}>
+        <sphereGeometry args={[2.05, 64, 64]} />
+        <meshBasicMaterial
+          color="#8feeff"
+          transparent
+          opacity={0.10}
+          side={THREE.BackSide}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* Hot rim light around the Earth */}
+      <pointLight
+        position={[1.4, 0.8, 2.7]}
+        color="#4ddcff"
+        intensity={7.5}
+        distance={6}
+      />
+      <pointLight
+        position={[-1.5, -0.8, 2.3]}
+        color="#6758ff"
+        intensity={5.5}
+        distance={5}
+      />
+    </group>
   );
 }
 
@@ -84,35 +348,41 @@ function OrbitRing({
   radius,
   color,
   speed,
-  tilt = 0,
 }: {
   rotation: [number, number, number];
   radius: number;
   color: string;
   speed: number;
-  tilt?: number;
 }) {
   const group = useRef<THREE.Group>(null);
 
   useFrame((_, delta) => {
     if (!group.current) return;
     group.current.rotation.z += delta * speed;
-    group.current.rotation.x += delta * tilt;
   });
 
   return (
     <group ref={group} rotation={rotation}>
       <mesh>
         <torusGeometry args={[radius, 0.027, 16, 180]} />
-        <meshBasicMaterial color={color} transparent opacity={0.72} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.86}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
 
-      {/* Bright orbit node */}
       <mesh position={[radius, 0, 0]}>
-        <sphereGeometry args={[0.075, 24, 24]} />
-        <meshBasicMaterial color={color} />
+        <sphereGeometry args={[0.085, 24, 24]} />
+        <meshBasicMaterial color={color} blending={THREE.AdditiveBlending} />
       </mesh>
-      <pointLight position={[radius, 0, 0]} color={color} intensity={1.8} distance={2} />
+      <pointLight
+        position={[radius, 0, 0]}
+        color={color}
+        intensity={2}
+        distance={2.2}
+      />
     </group>
   );
 }
@@ -121,38 +391,37 @@ function EnergyNodes() {
   const points = useRef<THREE.Points>(null);
 
   const positions = useMemo(() => {
-    const count = 220;
+    const count = 180;
     const data = new Float32Array(count * 3);
+    let seed = 91821;
+    const random = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
 
     for (let i = 0; i < count; i += 1) {
-      const radius = 2.25 + Math.random() * 1.55;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-
+      const radius = 2.25 + random() * 1.45;
+      const theta = random() * Math.PI * 2;
+      const phi = Math.acos(2 * random() - 1);
       data[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
       data[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
       data[i * 3 + 2] = radius * Math.cos(phi);
     }
-
     return data;
   }, []);
 
   useFrame((_, delta) => {
-    if (!points.current) return;
-    points.current.rotation.y += delta * 0.018;
+    if (points.current) points.current.rotation.y += delta * 0.015;
   });
 
   return (
     <points ref={points}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          args={[positions, 3]}
-        />
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <pointsMaterial
-        color="#9b8cff"
-        size={0.028}
+        color="#b09cff"
+        size={0.025}
         transparent
         opacity={0.72}
         sizeAttenuation
@@ -163,29 +432,28 @@ function EnergyNodes() {
 
 function BrandText() {
   return (
-    <group position={[0, 0.05, 2.32]}>
+    <group position={[0, 0.03, 2.32]}>
       <Text
-        position={[-0.68, 0, 0]}
+        position={[-0.67, 0, 0]}
         fontSize={0.47}
         color="#ffffff"
         anchorX="right"
         anchorY="middle"
         fontWeight={800}
-        outlineWidth={0.008}
+        outlineWidth={0.014}
         outlineColor="#ffffff"
       >
         Edu
       </Text>
-
       <Text
         position={[-0.58, 0, 0]}
         fontSize={0.47}
-        color="#18bfff"
+        color="#14c9ff"
         anchorX="left"
         anchorY="middle"
         fontWeight={800}
-        outlineWidth={0.008}
-        outlineColor="#168cff"
+        outlineWidth={0.014}
+        outlineColor="#087dff"
       >
         Sphere
       </Text>
@@ -210,7 +478,8 @@ function GlassCard({
 
   useFrame(({ clock }) => {
     if (!group.current) return;
-    group.current.position.y = position[1] + Math.sin(clock.elapsedTime * 0.7 + position[0]) * 0.035;
+    group.current.position.y =
+      position[1] + Math.sin(clock.elapsedTime * 0.7 + position[0]) * 0.035;
   });
 
   return (
@@ -227,10 +496,10 @@ function GlassCard({
       </RoundedBox>
 
       <RoundedBox
-        position={[-1.17, 0, 0.055]}
         args={[0.5, 0.5, 0.04]}
         radius={0.12}
         smoothness={4}
+        position={[-1.17, 0, 0.055]}
       >
         <meshBasicMaterial color="#22226c" transparent opacity={0.95} />
       </RoundedBox>
@@ -260,7 +529,7 @@ function GlassCard({
       <Text
         position={[-0.72, -0.13, 0.09]}
         fontSize={0.125}
-        color="#8390b5"
+        color="#9aa7ca"
         anchorX="left"
         anchorY="middle"
       >
@@ -278,47 +547,42 @@ function GlassCard({
 function Scene() {
   return (
     <>
-      <ambientLight intensity={0.5} />
-
-      <pointLight position={[4, 4, 5]} intensity={12} color="#5467ff" />
-      <pointLight position={[-4, -2, 4]} intensity={10} color="#27dfff" />
-      <pointLight position={[0, 0, 3]} intensity={4} color="#725cff" />
+      <ambientLight intensity={0.7} />
+      <pointLight position={[4, 4, 5]} intensity={24} color="#5276ff" />
+      <pointLight position={[-4, -2, 4]} intensity={22} color="#20dfff" />
+      <pointLight position={[0, 0, 3]} intensity={12} color="#795cff" />
 
       <Stars
-        radius={22}
-        depth={12}
-        count={1000}
+        radius={24}
+        depth={14}
+        count={1100}
         factor={2.2}
         saturation={0}
         fade
-        speed={0.3}
+        speed={0.28}
       />
 
-      <Float speed={1.05} rotationIntensity={0.04} floatIntensity={0.18}>
-        <CoreSphere />
-        <WireSphere />
-        <GlobeGlow />
+      <Float speed={1.0} rotationIntensity={0.025} floatIntensity={0.16}>
+        <EarthGlobe />
         <EnergyNodes />
         <BrandText />
 
         <OrbitRing
           rotation={[0.42, 0.1, 0]}
           radius={2.72}
-          color="#8b5cff"
+          color="#9b62ff"
           speed={0.13}
         />
-
         <OrbitRing
           rotation={[-0.72, 0.2, 0.32]}
           radius={3.0}
           color="#42e7ff"
           speed={-0.09}
         />
-
         <OrbitRing
           rotation={[1.05, -0.18, 0.5]}
           radius={3.28}
-          color="#aa7cff"
+          color="#b17cff"
           speed={0.06}
         />
 
@@ -329,7 +593,6 @@ function Scene() {
           accent="#8d7cff"
           icon="▢"
         />
-
         <GlassCard
           position={[3.6, 0.55, -0.15]}
           title="AI Assistant"
@@ -337,7 +600,6 @@ function Scene() {
           accent="#c18cff"
           icon="✦"
         />
-
         <GlassCard
           position={[-3.15, -2.05, -0.1]}
           title="Timetable"
@@ -366,7 +628,7 @@ function Scene() {
 export default function EduSphere3D() {
   return (
     <Canvas
-      camera={{ position: [0, 0, 8.2], fov: 43 }}
+      camera={{ position: [0, 0, 8], fov: 42 }}
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
     >
