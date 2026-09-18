@@ -712,23 +712,26 @@ export default function SuperAdminMarketplacePayouts() {
               : "Verify Cashfree"}
           </button>
 
-          <button
-            className="sa-action danger"
-            disabled={
-              busy === item.id
-            }
-            onClick={() =>
-              reverse(item)
-            }
-          >
-            <RotateCcw
-              size={14}
-            />
+          {getSettlementState(item) === "SETTLED" && (
+            <button
+              className="sa-action danger"
+              disabled={
+                busy === item.id
+              }
+              onClick={() =>
+                reverse(item)
+              }
+              title="Reverse only after Cashfree confirms settlement"
+            >
+              <RotateCcw
+                size={14}
+              />
 
-            {busy === item.id
-              ? "Working…"
-              : "Reverse"}
-          </button>
+              {busy === item.id
+                ? "Working…"
+                : "Reverse"}
+            </button>
+          )}
 
         </div>
       );
