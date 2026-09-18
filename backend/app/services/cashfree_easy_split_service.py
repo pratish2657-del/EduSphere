@@ -165,3 +165,29 @@ def transfer_vendor_balance(vendor_id: str, amount: float, *, transfer_from: str
         },
         idempotency_key=str(uuid.uuid4()),
     )
+    
+
+def get_split_reconciliation(order_id: str):
+    """Get authoritative Easy Split vendor reconciliation for an order."""
+
+    return _request(
+        "POST",
+        "/split/order/vendor/recon",
+        json={
+            "filters": {
+                "start_date": None,
+                "end_date": None,
+                "order_ids": [order_id],
+            },
+            "pagination": {
+                "limit": 100,
+                "cursor": None,
+            },
+        },
+        idempotency_key=str(
+            uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"edusphere:split-recon:{order_id}",
+            )
+        ),
+    )

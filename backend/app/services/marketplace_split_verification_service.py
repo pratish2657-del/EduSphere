@@ -5,7 +5,7 @@ from typing import Any
 from app.core.exceptions import NotFoundError
 from app.database import get_connection
 from app.services.cashfree_easy_split_service import (
-    get_split_and_settlement_details,
+    get_split_and_settlement_details, get_split_reconciliation,
 )
 
 
@@ -67,7 +67,11 @@ def verify_cashfree_split(
                 "to this payout"
             )
 
-        cashfree = get_split_and_settlement_details(
+        cashfree_settlement = get_split_and_settlement_details(
+            cashfree_order_id
+        )
+
+        cashfree_reconciliation = get_split_reconciliation(
             cashfree_order_id
         )
 
@@ -76,19 +80,20 @@ def verify_cashfree_split(
             "payout_transaction_id": payout_transaction_id,
             "order_id": payout["order_id"],
             "cashfree_order_id": cashfree_order_id,
+
             "local": {
                 "status": payout.get("status"),
-                "cashfree_vendor_id": (
-                    payout.get("cashfree_vendor_id")
+                "cashfree_vendor_id": payout.get(
+                    "cashfree_vendor_id"
                 ),
-                "cashfree_split_status": (
-                    payout.get("cashfree_split_status")
+                "cashfree_split_status": payout.get(
+                    "cashfree_split_status"
                 ),
-                "cashfree_settlement_id": (
-                    payout.get("cashfree_settlement_id")
+                "cashfree_settlement_id": payout.get(
+                    "cashfree_settlement_id"
                 ),
-                "cashfree_transfer_id": (
-                    payout.get("cashfree_transfer_id")
+                "cashfree_transfer_id": payout.get(
+                    "cashfree_transfer_id"
                 ),
                 "gross_amount": float(
                     payout.get("gross_amount") or 0
@@ -100,8 +105,11 @@ def verify_cashfree_split(
                     payout.get("seller_amount") or 0
                 ),
             },
-            "cashfree": cashfree,
-        }
 
+            "cashfree": {
+                "settlement": cashfree_settlement,
+                "reconciliation": cashfree_reconciliation,
+            },
+        }
     finally:
         connection.close()
