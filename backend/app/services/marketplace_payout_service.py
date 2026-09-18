@@ -194,8 +194,7 @@ def attempt_cashfree_split(order_id: int) -> dict[str, Any]:
                     WHERE id = %s
                     """,
                     (
-                        "Cashfree Easy Split vendor "
-                        "is not verified/ACTIVE",
+                        "Cashfree Easy Split vendor is not verified/ACTIVE",
                         row["id"],
                     ),
                 )
@@ -314,7 +313,7 @@ def attempt_cashfree_split(order_id: int) -> dict[str, Any]:
             "result": result,
         }
 
-    except Exception as exc:
+    except (ValueError, RuntimeError) as exc:
         error_text = str(exc)[:1000]
         connection.rollback()
 

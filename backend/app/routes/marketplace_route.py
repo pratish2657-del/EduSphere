@@ -18,6 +18,9 @@ from app.services.marketplace_route_service import (
     reverse_payout,
     submit_route_onboarding,
 )
+from app.services.marketplace_split_verification_service import (
+    verify_cashfree_split,
+)
 
 router = APIRouter(prefix="/marketplace/easy-split", tags=["Marketplace Easy Split"])
 
@@ -72,6 +75,19 @@ async def admin_retry_payout(request: Request, payout_id: int):
     user = require_admin(request)
     try:
         return retry_payout(payout_id, user["id"])
+    except Exception as error:
+        raise _error(error) from error
+
+
+@router.get("/payouts/{payout_id}/verify")
+async def admin_verify_payout(
+    request: Request,
+    payout_id: int,
+):
+    require_admin(request)
+
+    try:
+        return verify_cashfree_split(payout_id)
     except Exception as error:
         raise _error(error) from error
 

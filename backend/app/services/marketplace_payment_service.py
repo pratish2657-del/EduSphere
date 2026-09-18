@@ -9,12 +9,10 @@ from app.services.marketplace_inventory_service import (
     expire_pending_orders,
     finalize_order_inventory,
 )
-from app.services.marketplace_payout_service import attempt_cashfree_split
 from app.services.payment_gateway_service import (
     create_gateway_order,
     get_gateway_order,
 )
-
 
 # ============================================================
 # CREATE PAYMENT
