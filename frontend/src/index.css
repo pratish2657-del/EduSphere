@@ -458,7 +458,7 @@ button:focus-visible {
   right: -1vw;
   top: 7vh;
 
-  width: 66vw;
+  width: 65vw;
   height: 83vh;
 
   z-index: 10;
@@ -468,6 +468,10 @@ button:focus-visible {
 
 .sphere-container {
   position: absolute;
+
+  pointer-events: auto;
+
+  cursor: grab;
 
   inset: 0;
 
@@ -487,8 +491,20 @@ button:focus-visible {
 .sphere-container canvas {
   display: block;
 
+  pointer-events: auto !important;
+  cursor: grab;
+  touch-action: none;
+
   width: 100% !important;
   height: 100% !important;
+}
+
+.sphere-container canvas:active {
+  cursor: grabbing;
+}
+
+.floating-card {
+  z-index: 20;
 }
 
 .sphere-back-glow {
@@ -1250,7 +1266,7 @@ button:focus-visible {
   }
 
   .floating-card {
-    width: 190px;
+    width: 178px;
     min-height: 68px;
 
     padding: 10px 11px;
@@ -1281,17 +1297,17 @@ button:focus-visible {
 
   .courses-card {
     left: 1%;
-    top: 13%;
+    top: 10%;
   }
 
   .ai-card {
     right: 0;
-    top: 43%;
+    top: 42%;
   }
 
   .timetable-card {
-    left: 7%;
-    bottom: 4%;
+    left: 5%;
+    bottom: 3%;
   }
 
   .scroll-indicator {

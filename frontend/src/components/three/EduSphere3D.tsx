@@ -2,7 +2,6 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import {
   Float,
   OrbitControls,
-  RoundedBox,
   Stars,
   Text,
 } from "@react-three/drei";
@@ -263,7 +262,7 @@ function EarthGlobe() {
 
   useFrame((_, delta) => {
     if (!group.current) return;
-    group.current.rotation.y += delta * 0.045;
+    group.current.rotation.y += delta * 0.022;
   });
 
   return (
@@ -273,11 +272,11 @@ function EarthGlobe() {
         <sphereGeometry args={[2.05, 96, 64]} />
         <meshStandardMaterial
           map={earthTexture ?? undefined}
-          color="#5ccfff"
-          emissive="#075dff"
-          emissiveIntensity={1.15}
-          metalness={0.18}
-          roughness={0.38}
+          color="#ffffff"
+          emissive="#064bdb"
+          emissiveIntensity={0.32}
+          metalness={0.08}
+          roughness={0.62}
         />
       </mesh>
 
@@ -300,18 +299,18 @@ function EarthGlobe() {
           color="#8cecff"
           wireframe
           transparent
-          opacity={0.42}
+          opacity={0.18}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />
       </mesh>
 
       {/* Layered cinematic bloom */}
-      <EarthGlowShell color="#19bfff" scale={1.045} opacity={0.12} />
-      <EarthGlowShell color="#168cff" scale={1.075} opacity={0.10} />
-      <EarthGlowShell color="#7055ff" scale={1.11} opacity={0.075} />
-      <EarthAtmosphere color="#48e7ff" scale={1.055} opacity={1.35} />
-      <EarthAtmosphere color="#7857ff" scale={1.09} opacity={0.58} />
+      <EarthGlowShell color="#14cfff" scale={1.045} opacity={0.09} />
+      <EarthGlowShell color="#168cff" scale={1.075} opacity={0.07} />
+      <EarthGlowShell color="#7055ff" scale={1.115} opacity={0.045} />
+      <EarthAtmosphere color="#35e4ff" scale={1.055} opacity={0.92} />
+      <EarthAtmosphere color="#725cff" scale={1.09} opacity={0.34} />
 
       {/* Bright atmospheric rim */}
       <mesh scale={1.045} renderOrder={6}>
@@ -319,7 +318,7 @@ function EarthGlobe() {
         <meshBasicMaterial
           color="#8feeff"
           transparent
-          opacity={0.10}
+          opacity={0.055}
           side={THREE.BackSide}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
@@ -330,13 +329,13 @@ function EarthGlobe() {
       <pointLight
         position={[1.4, 0.8, 2.7]}
         color="#4ddcff"
-        intensity={7.5}
+        intensity={3.2}
         distance={6}
       />
       <pointLight
         position={[-1.5, -0.8, 2.3]}
         color="#6758ff"
-        intensity={5.5}
+        intensity={2.4}
         distance={5}
       />
     </group>
@@ -364,11 +363,11 @@ function OrbitRing({
   return (
     <group ref={group} rotation={rotation}>
       <mesh>
-        <torusGeometry args={[radius, 0.027, 16, 180]} />
+        <torusGeometry args={[radius, 0.018, 12, 180]} />
         <meshBasicMaterial
           color={color}
           transparent
-          opacity={0.86}
+          opacity={0.72}
           blending={THREE.AdditiveBlending}
         />
       </mesh>
@@ -434,7 +433,7 @@ function BrandText() {
   return (
     <group position={[0, 0.03, 2.32]}>
       <Text
-        position={[-0.67, 0, 0]}
+        position={[-0.08, 0, 0]}
         fontSize={0.47}
         color="#ffffff"
         anchorX="right"
@@ -446,7 +445,7 @@ function BrandText() {
         Edu
       </Text>
       <Text
-        position={[-0.58, 0, 0]}
+        position={[-0.01, 0, 0]}
         fontSize={0.47}
         color="#14c9ff"
         anchorX="left"
@@ -461,96 +460,13 @@ function BrandText() {
   );
 }
 
-function GlassCard({
-  position,
-  title,
-  subtitle,
-  accent,
-  icon,
-}: {
-  position: [number, number, number];
-  title: string;
-  subtitle: string;
-  accent: string;
-  icon: string;
-}) {
-  const group = useRef<THREE.Group>(null);
-
-  useFrame(({ clock }) => {
-    if (!group.current) return;
-    group.current.position.y =
-      position[1] + Math.sin(clock.elapsedTime * 0.7 + position[0]) * 0.035;
-  });
-
-  return (
-    <group ref={group} position={position}>
-      <RoundedBox args={[3.15, 0.82, 0.075]} radius={0.16} smoothness={5}>
-        <meshPhysicalMaterial
-          color="#111b48"
-          transparent
-          opacity={0.88}
-          roughness={0.28}
-          metalness={0.18}
-          transmission={0.05}
-        />
-      </RoundedBox>
-
-      <RoundedBox
-        args={[0.5, 0.5, 0.04]}
-        radius={0.12}
-        smoothness={4}
-        position={[-1.17, 0, 0.055]}
-      >
-        <meshBasicMaterial color="#22226c" transparent opacity={0.95} />
-      </RoundedBox>
-
-      <Text
-        position={[-1.17, 0.015, 0.085]}
-        fontSize={0.27}
-        color={accent}
-        anchorX="center"
-        anchorY="middle"
-        fontWeight={700}
-      >
-        {icon}
-      </Text>
-
-      <Text
-        position={[-0.72, 0.13, 0.09]}
-        fontSize={0.19}
-        color="#ffffff"
-        anchorX="left"
-        anchorY="middle"
-        fontWeight={700}
-      >
-        {title}
-      </Text>
-
-      <Text
-        position={[-0.72, -0.13, 0.09]}
-        fontSize={0.125}
-        color="#9aa7ca"
-        anchorX="left"
-        anchorY="middle"
-      >
-        {subtitle}
-      </Text>
-
-      <mesh position={[1.25, 0, 0.09]}>
-        <sphereGeometry args={[0.045, 20, 20]} />
-        <meshBasicMaterial color={accent} />
-      </mesh>
-    </group>
-  );
-}
-
 function Scene() {
   return (
     <>
-      <ambientLight intensity={0.7} />
-      <pointLight position={[4, 4, 5]} intensity={24} color="#5276ff" />
-      <pointLight position={[-4, -2, 4]} intensity={22} color="#20dfff" />
-      <pointLight position={[0, 0, 3]} intensity={12} color="#795cff" />
+      <ambientLight intensity={0.32} />
+      <pointLight position={[4, 4, 5]} intensity={7} color="#5276ff" />
+      <pointLight position={[-4, -2, 4]} intensity={6} color="#20dfff" />
+      <pointLight position={[0, 0, 3]} intensity={4} color="#795cff" />
 
       <Stars
         radius={24}
@@ -585,32 +501,10 @@ function Scene() {
           color="#b17cff"
           speed={0.06}
         />
-
-        <GlassCard
-          position={[-3.65, 1.7, -0.2]}
-          title="Courses"
-          subtitle="Academic learning"
-          accent="#8d7cff"
-          icon="▢"
-        />
-        <GlassCard
-          position={[3.6, 0.55, -0.15]}
-          title="AI Assistant"
-          subtitle="Smart academic help"
-          accent="#c18cff"
-          icon="✦"
-        />
-        <GlassCard
-          position={[-3.15, -2.05, -0.1]}
-          title="Timetable"
-          subtitle="Stay organized"
-          accent="#55e7ff"
-          icon="▦"
-        />
       </Float>
 
       <OrbitControls
-        enableZoom
+        enableZoom={false}
         enablePan={false}
         enableDamping
         dampingFactor={0.055}
@@ -628,7 +522,7 @@ function Scene() {
 export default function EduSphere3D() {
   return (
     <Canvas
-      camera={{ position: [0, 0, 8], fov: 42 }}
+      camera={{ position: [0, 0, 8.4], fov: 40 }}
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
     >
