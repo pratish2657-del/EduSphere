@@ -1361,6 +1361,22 @@ if (typeof document !== "undefined" && !document.getElementById(styleId)) {
 /* ======================================================
    PROFESSOR COURSES — TABLET + MOBILE
 ====================================================== */
+@media (max-width:900px){
+ .professor-courses-page,.professor-courses-page *{box-sizing:border-box;min-width:0;max-width:100%;}
+ .professor-courses-hero > div,.professor-courses-hero > div *{min-width:0;overflow-wrap:anywhere;}
+ .professor-courses-stats > div{min-width:0!important;overflow:hidden;}
+ .professor-courses-stats > div > *{min-width:0!important;max-width:100%;overflow-wrap:anywhere;}
+ .professor-courses-stats > div:nth-child(3){grid-column:auto;}
+}
+@media (max-width:800px){
+ .professor-courses-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+ .professor-courses-stats > div:nth-child(3){grid-column:1/-1;}
+ .professor-courses-hero h1{font-size:clamp(34px,9vw,46px)!important;line-height:1!important;}
+ .professor-courses-hero p{max-width:100%!important;overflow-wrap:anywhere;}
+ .professor-courses-header{width:100%!important;}
+ .professor-courses-toolbar{width:100%!important;}
+}
+
 .professor-courses-page{box-sizing:border-box;width:100%;min-height:100dvh;overflow-x:hidden}
 .professor-courses-page *{box-sizing:border-box;min-width:0}
 @media (max-width:1100px){

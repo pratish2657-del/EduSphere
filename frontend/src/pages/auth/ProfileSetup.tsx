@@ -400,6 +400,22 @@ export default function ProfileSetup() {
         background: #34343d;
       }
 
+      @media (max-width: 1024px) {
+        .edusphere-profile-shell {
+          width: min(100% - 32px, 920px);
+        }
+        .edusphere-role-grid {
+          gap: 16px;
+        }
+        .edusphere-role-card {
+          padding: 23px;
+          min-height: 265px;
+        }
+        .edusphere-role-title {
+          font-size: 25px;
+        }
+      }
+
       @media (max-width: 760px) {
         .edusphere-profile-shell {
           width: min(100% - 24px, 600px);
@@ -443,6 +459,63 @@ export default function ProfileSetup() {
 
         .edusphere-security-note {
           justify-content: center;
+        }
+
+        .edusphere-continue {
+          width: 100%;
+        }
+
+        .edusphere-profile-topbar {
+          align-items: flex-start;
+          gap: 12px;
+        }
+
+        .edusphere-brand-logo {
+          width: 40px;
+          height: 40px;
+        }
+
+        .edusphere-brand-name {
+          font-size: 13px;
+        }
+
+        .edusphere-back-button {
+          padding: 9px 11px;
+          font-size: 12px;
+        }
+
+        .edusphere-profile-title {
+          font-size: clamp(30px, 9vw, 38px);
+        }
+
+        .edusphere-profile-subtitle {
+          line-height: 1.55;
+        }
+
+        .edusphere-role-card {
+          padding: 20px;
+          min-height: 0;
+          border-radius: 18px;
+        }
+
+        .edusphere-role-icon {
+          width: 46px;
+          height: 46px;
+          margin-bottom: 18px;
+        }
+
+        .edusphere-role-title {
+          font-size: 23px;
+        }
+
+        .edusphere-role-description {
+          font-size: 12px;
+        }
+
+        .edusphere-profile-footer {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 14px;
         }
 
         .edusphere-continue {

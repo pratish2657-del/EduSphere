@@ -130,12 +130,45 @@ const studentProfileStyles = `
   .profile-continue-button { display:inline-flex; align-items:center; justify-content:center; gap:9px; min-height:48px; padding:0 20px; border:0; border-radius:13px; color:white; background:linear-gradient(135deg,#7564ff,#4b8dff); font-weight:800; cursor:pointer; box-shadow:0 12px 35px rgba(92,91,255,.28); white-space:nowrap; transition:transform .18s, filter .18s; }
   .profile-continue-button:hover:not(:disabled) { transform:translateY(-1px); filter:brightness(1.08); }
   .profile-continue-button:disabled { opacity:.48; cursor:not-allowed; box-shadow:none; }
+  @media (max-width: 1024px) and (min-width: 721px) {
+    .student-profile-container { width: min(100% - 32px, 900px); }
+    .profile-setup-card { padding: 28px; }
+    .profile-form-grid { gap: 14px; }
+    .profile-setup-header h1 { font-size: 42px; }
+  }
+
   @media (max-width: 720px) {
     .profile-setup-container { width:min(100% - 20px, 1120px); padding-top:20px; }
     .profile-setup-card { padding:22px 18px; border-radius:21px; }
     .profile-form-grid { grid-template-columns:1fr; }
     .profile-form-footer { flex-direction:column; align-items:stretch; }
     .profile-continue-button { width:100%; }
+    .profile-setup-container { width: calc(100% - 24px); padding: 16px 0 34px; }
+    .profile-brand { gap: 10px; margin-bottom: 16px; }
+    .profile-brand-logo { width: 44px; height: 44px; flex-basis: 44px; }
+    .profile-brand-name { font-size: 13px; }
+    .profile-brand-subtitle { font-size: 10px; }
+    .profile-setup-card { padding: 20px 15px; border-radius: 18px; }
+    .profile-setup-header { margin-bottom: 22px; }
+    .profile-setup-header h1 { font-size: clamp(28px, 8vw, 36px); }
+    .profile-setup-header p { font-size: 12px; line-height: 1.55; }
+    .profile-form-section { padding: 20px 0; }
+    .profile-form-section-heading { gap: 9px; margin-bottom: 14px; }
+    .profile-form-section-heading h2 { font-size: 15px; }
+    .profile-form-section-heading p { font-size: 11px; }
+    .profile-form-grid { gap: 12px; }
+    .profile-form-field { gap: 6px; }
+    .profile-form-field > span { font-size: 11px; }
+    .profile-form-field input, .profile-form-field select { min-height: 44px; font-size: 13px; padding: 0 11px; }
+    .profile-form-footer { gap: 14px; padding-top: 20px; }
+    .profile-form-security span { font-size: 10px; }
+    .profile-continue-button { min-height: 46px; font-size: 13px; }
+  }
+
+  @media (max-width: 380px) {
+    .profile-setup-container { width: calc(100% - 16px); }
+    .profile-setup-card { padding: 18px 13px; }
+    .profile-step-label { font-size: 9px; }
   }
 `;
 

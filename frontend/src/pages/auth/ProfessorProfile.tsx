@@ -205,7 +205,7 @@ function Field({
 }) {
   return (
     <label style={styles.field}>
-      <span style={styles.label}>
+      <span className="professor-profile-field-label" style={styles.label}>
         <Icon size={15} />
 
         {label}
@@ -224,6 +224,7 @@ function Field({
         placeholder={placeholder}
         required={required}
         disabled={disabled}
+        className="professor-profile-input"
         style={{
           ...styles.input,
           ...(disabled
@@ -279,6 +280,7 @@ function TextAreaField({
         required={required}
         disabled={disabled}
         rows={rows}
+        className="professor-profile-textarea"
         style={{
           ...styles.textarea,
           ...(disabled
@@ -673,7 +675,7 @@ export default function ProfessorProfile() {
 
   if (loading) {
     return (
-      <div style={styles.page}>
+      <div className="professor-profile-responsive" style={styles.page}>
         <div style={styles.centerState}>
           <div style={styles.loaderCircle}>
             <Loader2
@@ -700,7 +702,8 @@ export default function ProfessorProfile() {
   ========================================================== */
 
   return (
-    <div style={styles.page}>
+      <div className="professor-profile-responsive" style={styles.page}>
+        <style>{professorProfileResponsiveStyles}</style>
       <div
         style={styles.backgroundGlowOne}
       />
@@ -709,13 +712,13 @@ export default function ProfessorProfile() {
         style={styles.backgroundGlowTwo}
       />
 
-      <main style={styles.container}>
+      <main className="professor-profile-main" style={styles.container}>
 
         {/* ======================================================
             HEADER
         ====================================================== */}
 
-        <header style={styles.header}>
+        <header className="professor-profile-header" style={styles.header}>
 
           <button
             type="button"
@@ -726,12 +729,13 @@ export default function ProfessorProfile() {
             Back
           </button>
 
-          <div style={styles.headerText}>
-            <div style={styles.titleRow}>
+          <div className="professor-profile-header-text" style={styles.headerText}>
+            <div className="professor-profile-title-row" style={styles.titleRow}>
 
               {/* EDUSPHERE LOGO */}
 
               <div
+                className="professor-profile-logo-container"
                 style={styles.logoContainer}
               >
                 <img
@@ -742,11 +746,11 @@ export default function ProfessorProfile() {
               </div>
 
               <div>
-                <h1 style={styles.title}>
+                <h1 className="professor-profile-title" style={styles.title}>
                   Professor Profile
                 </h1>
 
-                <p style={styles.subtitle}>
+                <p className="professor-profile-subtitle" style={styles.subtitle}>
                   Manage your academic and
                   professional information
                 </p>
@@ -817,12 +821,14 @@ export default function ProfessorProfile() {
               ACCOUNT INFORMATION
           ================================================== */}
 
-          <section style={styles.card}>
+          <section className="professor-profile-card" style={styles.card}>
 
             <div
+              className="professor-profile-section-header"
               style={styles.sectionHeader}
             >
               <div
+                className="professor-profile-section-icon"
                 style={styles.sectionIcon}
               >
                 <UserRound size={19} />
@@ -830,6 +836,7 @@ export default function ProfessorProfile() {
 
               <div>
                 <h2
+                  className="professor-profile-section-title"
                   style={
                     styles.sectionTitle
                   }
@@ -838,6 +845,7 @@ export default function ProfessorProfile() {
                 </h2>
 
                 <p
+                  className="professor-profile-section-description"
                   style={
                     styles.sectionDescription
                   }
@@ -853,7 +861,7 @@ export default function ProfessorProfile() {
                 styles.profileIdentity
               }
             >
-              <div style={styles.avatar}>
+              <div className="professor-profile-avatar" style={styles.avatar}>
                 {fullName
                   .split(" ")
                   .map(
@@ -867,11 +875,12 @@ export default function ProfessorProfile() {
               <div
                 style={styles.identityText}
               >
-                <h3 style={styles.identityName}>
+                <h3 className="professor-profile-identity-name" style={styles.identityName}>
                   {fullName}
                 </h3>
 
                 <div
+                  className="professor-profile-identity-email"
                   style={
                     styles.identityEmail
                   }
@@ -882,7 +891,7 @@ export default function ProfessorProfile() {
               </div>
             </div>
 
-            <div style={styles.grid}>
+            <div className="professor-profile-grid" style={styles.grid}>
 
               <div
                 style={styles.readonlyBox}
@@ -957,7 +966,7 @@ export default function ProfessorProfile() {
               </div>
             </div>
 
-            <div style={styles.grid}>
+            <div className="professor-profile-grid" style={styles.grid}>
 
               <Field
                 label="Phone Number"
@@ -1255,6 +1264,7 @@ export default function ProfessorProfile() {
               />
 
               <p
+                className="professor-profile-verification-text"
                 style={
                   styles.verificationText
                 }
@@ -1288,7 +1298,7 @@ export default function ProfessorProfile() {
               {sellerPayout.enabled && <button type="button" onClick={() => { window.location.href = "/app/marketplace/seller/easy-split-onboarding"; }} style={{ marginTop: 10, minHeight: 38, padding: "0 14px", border: "1px solid rgba(117,100,255,.35)", borderRadius: 10, color: "#c4b5fd", background: "rgba(117,100,255,.08)", fontWeight: 800, cursor: "pointer" }}>Complete Cashfree Easy Split onboarding</button>}
           </section>
 
-          <div style={styles.actions}>
+          <div className="professor-profile-actions" style={styles.actions}>
 
             <button
               type="button"
@@ -1350,6 +1360,60 @@ export default function ProfessorProfile() {
    STYLES
 ============================================================== */
 
+
+const professorProfileResponsiveStyles = `
+  .professor-profile-responsive {
+    overflow-x: hidden;
+  }
+  .professor-profile-responsive .professor-profile-main {
+    min-width: 0;
+  }
+  .professor-profile-responsive .professor-profile-form {
+    min-width: 0;
+  }
+  @media (max-width: 1024px) {
+    .professor-profile-responsive { padding: 22px 16px 44px !important; }
+    .professor-profile-responsive .professor-profile-main { max-width: 900px !important; }
+    .professor-profile-responsive .professor-profile-header { gap: 14px !important; }
+    .professor-profile-responsive .professor-profile-header-text { min-width: 0 !important; }
+    .professor-profile-responsive .professor-profile-title-row { flex-wrap: wrap !important; }
+    .professor-profile-responsive .professor-profile-card { padding: 20px !important; }
+    .professor-profile-responsive .professor-profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 14px !important; }
+    .professor-profile-responsive .professor-profile-form > section:last-of-type > div:nth-child(2) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  }
+  @media (max-width: 680px) {
+    .professor-profile-responsive { padding: 16px 10px 34px !important; }
+    .professor-profile-responsive .professor-profile-main { width: 100% !important; }
+    .professor-profile-responsive .professor-profile-header { flex-direction: column !important; align-items: stretch !important; gap: 12px !important; margin-bottom: 18px !important; }
+    .professor-profile-responsive .professor-profile-header-text { flex: none !important; width: 100% !important; }
+    .professor-profile-responsive .professor-profile-title-row { gap: 10px !important; }
+    .professor-profile-responsive .professor-profile-logo-container { width: 44px !important; height: 44px !important; }
+    .professor-profile-responsive .professor-profile-title { font-size: 21px !important; }
+    .professor-profile-responsive .professor-profile-subtitle { font-size: 12px !important; line-height: 1.45 !important; }
+    .professor-profile-responsive .professor-profile-card { padding: 16px !important; border-radius: 15px !important; margin-bottom: 12px !important; }
+    .professor-profile-responsive .professor-profile-section-header { gap: 9px !important; margin-bottom: 16px !important; }
+    .professor-profile-responsive .professor-profile-section-icon { width: 34px !important; height: 34px !important; }
+    .professor-profile-responsive .professor-profile-section-title { font-size: 15px !important; }
+    .professor-profile-responsive .professor-profile-section-description { font-size: 11px !important; line-height: 1.45 !important; }
+    .professor-profile-responsive .professor-profile-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+    .professor-profile-responsive .professor-profile-form > section:last-of-type > div:nth-child(2) { grid-template-columns: 1fr !important; gap: 12px !important; }
+    .professor-profile-responsive .professor-profile-identity { padding: 12px !important; gap: 10px !important; }
+    .professor-profile-responsive .professor-profile-avatar { width: 46px !important; height: 46px !important; font-size: 15px !important; }
+    .professor-profile-responsive .professor-profile-identity-name { font-size: 15px !important; }
+    .professor-profile-responsive .professor-profile-identity-email { font-size: 11px !important; overflow-wrap: anywhere !important; }
+    .professor-profile-responsive .professor-profile-field-label { font-size: 11px !important; }
+    .professor-profile-responsive .professor-profile-input,
+    .professor-profile-responsive .professor-profile-textarea { font-size: 13px !important; }
+    .professor-profile-responsive .professor-profile-actions { flex-direction: column-reverse !important; align-items: stretch !important; }
+    .professor-profile-responsive .professor-profile-actions button { width: 100% !important; }
+    .professor-profile-responsive .professor-profile-verification-text { font-size: 11px !important; }
+  }
+  @media (max-width: 380px) {
+    .professor-profile-responsive { padding-left: 7px !important; padding-right: 7px !important; }
+    .professor-profile-responsive .professor-profile-card { padding: 14px !important; }
+    .professor-profile-responsive .professor-profile-title { font-size: 19px !important; }
+  }
+`;
 const styles: Record<
   string,
   React.CSSProperties
