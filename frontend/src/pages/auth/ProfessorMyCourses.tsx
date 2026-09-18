@@ -306,7 +306,7 @@ export default function MyCourses() {
 
   if (loading) {
     return (
-      <div style={styles.page}>
+      <div className="professor-courses-page" style={styles.page}>
         <div style={styles.centerState}>
           <div style={styles.loadingIcon}>
             <Loader2 size={27} style={styles.spinner} />
@@ -324,7 +324,7 @@ export default function MyCourses() {
 
   if (error) {
     return (
-      <div style={styles.page}>
+      <div className="professor-courses-page" style={styles.page}>
         <div style={styles.centerState}>
           <div style={styles.errorIcon}>
             <X size={27} />
@@ -365,12 +365,12 @@ export default function MyCourses() {
   const professor = dashboard?.professor;
 
   return (
-    <div style={styles.page}>
+    <div className="professor-courses-page" style={styles.page}>
       <div style={styles.backgroundGlowOne} />
       <div style={styles.backgroundGlowTwo} />
 
-      <main style={styles.container}>
-        <header style={styles.header}>
+      <main className="professor-courses-container" style={styles.container}>
+        <header className="professor-courses-header" style={styles.header}>
           <button
             type="button"
             style={styles.backButton}
@@ -400,7 +400,7 @@ export default function MyCourses() {
           />
         </header>
 
-        <section style={styles.hero}>
+        <section className="professor-courses-hero" style={styles.hero}>
           <div>
             <span style={styles.eyebrow}>ACADEMIC CATALOG</span>
 
@@ -439,7 +439,7 @@ export default function MyCourses() {
           </div>
         </section>
 
-        <section style={styles.statsGrid}>
+        <section className="professor-courses-stats" style={styles.statsGrid}>
           <div style={styles.statCard}>
             <div style={styles.statIcon}>
               <BookOpen size={20} />
@@ -480,7 +480,7 @@ export default function MyCourses() {
           </div>
         </section>
 
-        <section style={styles.toolbar}>
+        <section className="professor-courses-toolbar" style={styles.toolbar}>
           <div style={styles.searchBox}>
             <Search size={17} />
             <input
@@ -541,7 +541,7 @@ export default function MyCourses() {
             </p>
           </section>
         ) : (
-          <section style={styles.courseGrid}>
+          <section className="professor-courses-grid" style={styles.courseGrid}>
             {filteredCourses.map((course, index) => {
               const id = course.course_id ?? course.id ?? index;
               const name = getCourseName(course);
@@ -1357,6 +1357,65 @@ if (typeof document !== "undefined" && !document.getElementById(styleId)) {
     @media (max-width: 800px) {
       .edusphere-my-courses-placeholder {}
     }
+
+/* ======================================================
+   PROFESSOR COURSES — TABLET + MOBILE
+====================================================== */
+.professor-courses-page{box-sizing:border-box;width:100%;min-height:100dvh;overflow-x:hidden}
+.professor-courses-page *{box-sizing:border-box;min-width:0}
+@media (max-width:1100px){
+ .professor-courses-container{width:min(100% - 36px,980px)!important;padding:22px 0 42px!important}
+ .professor-courses-header{grid-template-columns:auto 1fr auto!important;gap:12px!important;margin-bottom:34px!important}
+ .professor-courses-hero{gap:20px!important;margin-bottom:22px!important}
+ .professor-courses-hero h1{font-size:clamp(38px,6vw,50px)!important}
+ .professor-courses-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ .professor-courses-toolbar{gap:9px!important}
+}
+@media (max-width:800px){
+ .professor-courses-container{width:100%!important;padding:18px 16px 38px!important}
+ .professor-courses-header{grid-template-columns:auto 1fr auto!important;align-items:center!important;gap:9px!important;margin-bottom:30px!important}
+ .professor-courses-header button{padding:9px 11px!important;font-size:11px!important;white-space:nowrap}
+ .professor-courses-header > div:nth-child(2){justify-self:center;min-width:0!important}
+ .professor-courses-header > div:nth-child(2) > div:first-child{font-size:11px!important}
+ .professor-courses-header > div:nth-child(2) > div:last-child{font-size:8px!important}
+ .professor-courses-header > div:nth-child(2) img{width:36px!important;height:36px!important}
+ .professor-courses-header > span{font-size:9px!important;padding:6px 8px!important}
+ .professor-courses-hero{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:15px!important;margin-bottom:18px!important}
+ .professor-courses-hero h1{font-size:clamp(40px,10vw,52px)!important;line-height:.98!important}
+ .professor-courses-hero p{font-size:13px!important;line-height:1.55!important;margin-top:12px!important;max-width:560px!important}
+ .professor-courses-hero > div:last-child{align-self:flex-start!important;width:100%!important;min-width:0!important}
+ .professor-courses-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important;margin-bottom:14px!important}
+ .professor-courses-stats > div{padding:12px!important;border-radius:13px!important;gap:9px!important;min-width:0!important}
+ .professor-courses-stats > div:nth-child(3){grid-column:1/-1}
+ .professor-courses-stats svg{width:18px!important;height:18px!important}
+ .professor-courses-toolbar{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:8px!important;margin:16px 0 14px!important}
+ .professor-courses-toolbar > div:first-child{min-width:0!important}
+ .professor-courses-toolbar input{font-size:11px!important}
+ .professor-courses-toolbar > div:nth-child(2){padding:8px!important}
+ .professor-courses-toolbar button{padding:9px 11px!important}
+ .professor-courses-grid{grid-template-columns:1fr!important;gap:11px!important}
+ .professor-courses-grid > div{padding:15px!important;border-radius:15px!important}
+ .professor-courses-grid h3{font-size:18px!important;line-height:1.2!important;margin:14px 0 13px!important}
+ .professor-courses-grid .courseMeta{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media (max-width:520px){
+ .professor-courses-container{padding:15px 12px 32px!important}
+ .professor-courses-header{grid-template-columns:auto 1fr auto!important;margin-bottom:24px!important}
+ .professor-courses-header > div:nth-child(2){gap:7px!important}
+ .professor-courses-header > div:nth-child(2) > div:first-child{font-size:10px!important}
+ .professor-courses-header > div:nth-child(2) > div:last-child{font-size:7px!important}
+ .professor-courses-header > div:nth-child(2) img{width:32px!important;height:32px!important}
+ .professor-courses-header > span{font-size:8px!important}
+ .professor-courses-hero h1{font-size:40px!important}
+ .professor-courses-hero p{font-size:12px!important}
+ .professor-courses-stats{gap:8px!important}
+ .professor-courses-stats > div{padding:11px!important}
+ .professor-courses-toolbar{grid-template-columns:1fr!important}
+ .professor-courses-toolbar > div:nth-child(2){justify-self:start}
+ .professor-courses-toolbar button{width:100%!important}
+ .professor-courses-grid h3{font-size:17px!important}
+}
+
   `;
   document.head.appendChild(style);
 }

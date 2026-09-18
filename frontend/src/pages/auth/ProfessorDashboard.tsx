@@ -780,7 +780,52 @@ export default function ProfessorDashboard() {
         @media (prefers-reduced-motion: reduce) {
           .edu-3d-orb,.edu-3d-ring,.edu-3d-dot { animation:none !important; }
         }
-`}</style>
+        /* FINAL TABLET / MOBILE SPACING PASS */
+        @media (max-width: 1100px) {
+          .professor-content{padding:24px 22px 44px!important}
+          .professor-welcome-card{padding:24px!important}
+          .professor-welcome-card h2{font-size:25px!important}
+          .professor-welcome-card p{font-size:12px!important}
+          .professor-stats-grid > div{min-width:0!important}
+        }
+        @media (max-width: 900px) {
+          .professor-content{padding:20px 16px 40px!important}
+          .professor-topbar{padding:10px 16px!important;min-height:66px!important}
+          .professor-welcome-card{padding:20px!important;gap:14px!important;border-radius:17px!important}
+          .professor-welcome-card h2{font-size:24px!important;line-height:1.12!important}
+          .professor-welcome-card p{font-size:12px!important;line-height:1.5!important}
+          .professor-welcome-card > div:last-child{width:105px!important;height:105px!important}
+          .professor-stats-grid{gap:9px!important}
+          .professor-main-grid{gap:12px!important}
+          .professor-main-grid > section{padding:16px!important}
+          .professor-quick-actions{gap:8px!important}
+          .professor-quick-actions button{min-height:56px!important;padding:9px!important;font-size:10px!important}
+          footer{padding:0 16px 20px!important}
+        }
+        @media (max-width: 600px) {
+          .professor-content{padding:14px 11px 34px!important}
+          .professor-topbar{padding:9px 11px!important;min-height:62px!important;gap:8px!important}
+          .professor-topbar .page-eyebrow{font-size:7px!important}
+          .professor-topbar .page-title{font-size:18px!important}
+          .professor-topbarRight{gap:5px!important}
+          .professor-welcome-card{padding:17px!important;gap:12px!important;margin-bottom:12px!important}
+          .professor-welcome-card h2{font-size:22px!important}
+          .professor-welcome-card p{font-size:11px!important;margin:7px 0 11px!important}
+          .professor-welcome-card > div:last-child{width:88px!important;height:88px!important}
+          .professor-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;margin-bottom:12px!important}
+          .professor-stats-grid > div{padding:11px!important;gap:8px!important;min-height:78px!important}
+          .professor-stats-grid > div strong{font-size:12px!important;line-height:1.2!important}
+          .professor-stats-grid > div span{font-size:8px!important}
+          .professor-main-grid{grid-template-columns:1fr!important;gap:10px!important}
+          .professor-main-grid > section{padding:14px!important;border-radius:14px!important}
+          .professor-main-grid > section h3{font-size:15px!important}
+          .professor-quick-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}
+          .professor-quick-actions button{min-height:52px!important;font-size:9px!important}
+          footer{padding:0 11px 17px!important;font-size:8px!important}
+        }
+
+`}
+</style>
 
       {/* Background decoration */}
 

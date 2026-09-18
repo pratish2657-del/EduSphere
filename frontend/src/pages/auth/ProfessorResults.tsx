@@ -292,8 +292,8 @@ export default function ResultsManagementView() {
   };
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <div style={hero3d}>
+    <section className="professor-results-page" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div className="professor-results-hero" style={hero3d}>
         <div className="results-3d-scene" aria-hidden="true">
           <div className="results-3d-orb">
             <div className="results-3d-ring results-3d-ring-a" />
@@ -350,6 +350,41 @@ export default function ResultsManagementView() {
         @keyframes resultsRingB{to{transform:rotateY(68deg) rotateZ(-360deg)}}
         @media(max-width:700px){.results-3d-scene{display:none}}
         @media(prefers-reduced-motion:reduce){.results-3d-orb,.results-3d-ring{animation:none!important}}
+
+/* ======================================================
+   PROFESSOR RESULTS — TABLET + MOBILE
+====================================================== */
+.professor-results-page{width:100%;max-width:100%;min-width:0;overflow-x:hidden}
+.professor-results-page *{box-sizing:border-box;min-width:0}
+.professor-results-page input,.professor-results-page select,.professor-results-page button{max-width:100%}
+@media(max-width:900px){
+ .professor-results-page{gap:14px!important}
+ .professor-results-hero{padding:15px 16px!important;gap:12px!important}
+ .professor-results-hero h1{font-size:21px!important}
+ .professor-results-hero p{font-size:11px!important;line-height:1.5!important}
+ .professor-results-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+ .professor-results-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}
+ .professor-results-page > form,.professor-results-page > section{padding:15px!important;border-radius:15px!important}
+}
+@media(max-width:600px){
+ .professor-results-page{gap:12px!important}
+ .professor-results-hero{display:flex!important;align-items:center!important;padding:14px!important;border-radius:15px!important;min-height:90px!important}
+ .professor-results-hero h1{font-size:19px!important;line-height:1.15!important}
+ .professor-results-hero p{font-size:10px!important;line-height:1.45!important;margin-top:4px!important}
+ .professor-results-page > div:nth-child(2){gap:10px!important}
+ .professor-results-page > div:nth-child(2) h2{font-size:20px!important;line-height:1.15!important}
+ .professor-results-page > div:nth-child(2) p{font-size:11px!important;line-height:1.5!important}
+ .professor-results-form-grid{grid-template-columns:1fr!important;gap:9px!important}
+ .professor-results-filter-grid{grid-template-columns:1fr!important;gap:8px!important}
+ .professor-results-page > form,.professor-results-page > section{padding:13px!important;border-radius:14px!important}
+ .professor-results-page label{font-size:9px!important;margin-bottom:5px!important}
+ .professor-results-page input,.professor-results-page select{height:40px!important;padding:9px 10px!important;font-size:11px!important}
+ .professor-results-page button{font-size:10px!important;padding:9px 11px!important}
+ .professor-results-page .panelTitle{font-size:14px!important}
+ .professor-results-page .recordRow{flex-wrap:wrap!important;gap:9px!important}
+ .professor-results-page .recordMetric{min-width:65px!important}
+}
+
       `}</style>
 
       {(error || notice) && (
@@ -386,7 +421,7 @@ export default function ResultsManagementView() {
           <GraduationCap size={21} color="#a5b4fc" />
         </div>
 
-        <div style={formGrid}>
+        <div className="professor-results-form-grid" style={formGrid}>
           <div>
             <label style={labelStyle()}>Enrollment Number *</label>
             <input
@@ -589,7 +624,7 @@ export default function ResultsManagementView() {
           </button>
         </div>
 
-        <div style={filterGrid}>
+        <div className="professor-results-filter-grid" style={filterGrid}>
           <div>
             <label style={labelStyle()}>Enrollment</label>
             <input
