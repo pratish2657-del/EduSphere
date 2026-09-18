@@ -9,7 +9,6 @@ from app.services.cashfree_easy_split_service import (
     get_split_reconciliation,
 )
 
-
 CASHFREE_NO_SPLIT_REASON = (
     "Cashfree payment is processed, but no vendor split "
     "is confirmed by Cashfree reconciliation"

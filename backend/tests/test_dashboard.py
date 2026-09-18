@@ -7,8 +7,6 @@ from app.database import get_connection
 from app.main import app
 from app.routes import dashboard as dashboard_route
 from app.routes import professor_dashboard as professor_dashboard_route
-from app.routes import student
-
 
 client = TestClient(app)
 

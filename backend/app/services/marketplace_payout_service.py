@@ -8,7 +8,6 @@ from app.services.cashfree_easy_split_service import (
     get_split_reconciliation,
 )
 
-
 CASHFREE_RECON_HOLD_REASON = (
     "Cashfree payment is processed, but no vendor split is confirmed "
     "by Cashfree reconciliation"
@@ -335,7 +334,7 @@ def attempt_cashfree_split(order_id: int) -> dict[str, Any]:
             ),
         }
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         connection.rollback()
         return {
             "success": False,

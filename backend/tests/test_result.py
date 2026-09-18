@@ -7,8 +7,6 @@ from fastapi.testclient import TestClient
 from app.database import get_connection
 from app.main import app
 from app.routes import result as result_route
-from tests.test_users import delete_test_user
-
 
 client = TestClient(app)
 
