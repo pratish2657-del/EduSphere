@@ -398,6 +398,88 @@ export default function AdminDashboard() {
         }
 
         .admin-quick:hover { transform: translateY(-2px); border-color: rgba(96,165,250,.35) !important; }
+
+        /* FINAL RESPONSIVE OVERFLOW FIX */
+        .admin-main,
+        .admin-main-content,
+        .admin-main-content > *,
+        .admin-main-content section,
+        .admin-hero,
+        .admin-hero * {
+          min-width: 0 !important;
+          max-width: 100% !important;
+          box-sizing: border-box;
+        }
+
+        .admin-hero h2,
+        .admin-hero p,
+        .admin-hero span {
+          overflow-wrap: anywhere;
+          word-break: normal;
+        }
+
+        @media (max-width: 980px) {
+          .admin-main-content {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding-left: 20px !important;
+            padding-right: 20px !important;
+            overflow-x: hidden !important;
+          }
+
+          .admin-hero {
+            width: 100% !important;
+            min-height: 0 !important;
+            padding: 24px !important;
+          }
+
+          .admin-grid-4 {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          .admin-grid-2 {
+            grid-template-columns: 1fr !important;
+          }
+        }
+
+        @media (max-width: 600px) {
+          .admin-main-content {
+            padding: 16px !important;
+          }
+
+          .admin-hero {
+            display: block !important;
+            width: 100% !important;
+            padding: 20px !important;
+            border-radius: 18px !important;
+          }
+
+          .admin-hero .admin-3d-scene {
+            display: none !important;
+          }
+
+          .admin-hero h2 {
+            font-size: 30px !important;
+            line-height: 1.12 !important;
+            margin: 9px 0 10px !important;
+          }
+
+          .admin-hero p {
+            font-size: 13px !important;
+            line-height: 1.6 !important;
+          }
+
+          .admin-grid-4 {
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+
+          .admin-grid-2 {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+        }
+
         .admin-mobile-nav { display: none; }
 
         .admin-main,
@@ -1321,11 +1403,16 @@ const styles: Record<string, React.CSSProperties> = {
     flex: "0 0 auto",
   },
   statBody: {
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
     display: "flex",
     flexDirection: "column",
     minWidth: 0,
   },
   statLabel: {
+    overflowWrap: "anywhere",
+    wordBreak: "normal",
     color: "#64748b",
     fontSize: 9,
     letterSpacing: ".7px",
@@ -1337,6 +1424,8 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "-.5px",
   },
   statDescription: {
+    overflowWrap: "anywhere",
+    wordBreak: "normal",
     color: "#64748b",
     fontSize: 9,
     lineHeight: 1.45,

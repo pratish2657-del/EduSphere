@@ -5,10 +5,10 @@
 .admin-users-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}
 .admin-users-header>*{min-width:0}
 .admin-users-header h1{overflow-wrap:anywhere}
-.admin-users-stats{width:100%;max-width:100%;min-width:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;overflow:visible!important}
+.admin-users-stats{width:100%;max-width:100%;min-width:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) !important;gap:14px;overflow:visible!important}
 .admin-users-stat{min-width:0!important;width:100%;max-width:100%;overflow:hidden}
 .admin-users-stat>div:last-child{min-width:0;max-width:100%;overflow:hidden}
-.admin-users-stat strong,.admin-users-stat span:not(.admin-users-stat-icon){overflow-wrap:anywhere;word-break:break-word}
+.admin-users-stat strong,.admin-users-stat span:not(.admin-users-stat-icon){display:block;min-width:0;overflow-wrap:anywhere;word-break:normal}
 .admin-users-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 150px 150px auto;gap:10px;min-width:0}
 .admin-users-search{min-width:0;width:100%;display:flex;align-items:center;gap:8px}
 .admin-users-search input{min-width:0;width:100%;max-width:100%}
@@ -21,4 +21,49 @@
 .admin-users-user strong,.admin-users-user span{overflow-wrap:anywhere;word-break:break-word}
 .admin-users-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 @media (min-width:561px) and (max-width:900px){.admin-users-page{padding:18px}.admin-users-header{flex-direction:column}.admin-users-header>button{width:100%}.admin-users-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-users-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-users-search{grid-column:1/-1}.admin-users-reset{width:100%}}
-@media (max-width:560px){.admin-users-page{padding:12px}.admin-users-header{gap:12px;margin-bottom:16px}.admin-users-header h1{font-size:22px}.admin-users-header p{font-size:12px;line-height:1.5}.admin-users-header>button{width:100%}.admin-users-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.admin-users-stat{padding:12px!important}.admin-users-stat-icon{width:32px!important;height:32px!important}.admin-users-stat strong{font-size:20px!important}.admin-users-stat span:not(.admin-users-stat-icon){font-size:10px!important;line-height:1.25}.admin-users-toolbar{grid-template-columns:1fr;gap:8px}.admin-users-search{grid-column:auto}.admin-users-reset{width:100%}.admin-users-pagination{align-items:stretch;flex-direction:column}.admin-users-pagination>div{align-self:center}}
+@media (max-width:560px){.admin-users-page{padding:12px !important}.admin-users-header{gap:12px;margin-bottom:16px}.admin-users-header h1{font-size:22px}.admin-users-header p{font-size:12px;line-height:1.5}.admin-users-header>button{width:100%}.admin-users-stats{grid-template-columns:1fr !important;gap:10px}.admin-users-stat{padding:12px!important}.admin-users-stat-icon{width:32px!important;height:32px!important}.admin-users-stat strong{font-size:20px!important}.admin-users-stat span:not(.admin-users-stat-icon){font-size:10px!important;line-height:1.25}.admin-users-toolbar{grid-template-columns:1fr;gap:8px}.admin-users-search{grid-column:auto}.admin-users-reset{width:100%}.admin-users-pagination{align-items:stretch;flex-direction:column}.admin-users-pagination>div{align-self:center}}
+
+/* Final mobile overflow corrections */
+.admin-users-page,
+.admin-users-shell,
+.admin-users-panel,
+.admin-users-header,
+.admin-users-stat,
+.admin-users-stat > div,
+.admin-users-toolbar,
+.admin-users-search {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 560px) {
+  .admin-users-stat {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 74px;
+    padding: 12px !important;
+  }
+
+  .admin-users-stat-icon {
+    flex: 0 0 34px;
+    width: 34px !important;
+    height: 34px !important;
+  }
+
+  .admin-users-stat strong {
+    font-size: 20px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap;
+  }
+
+  .admin-users-stat span:not(.admin-users-stat-icon) {
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+    white-space: normal;
+  }
+
+  .admin-users-table-wrap {
+    overflow-x: auto !important;
+  }
+}

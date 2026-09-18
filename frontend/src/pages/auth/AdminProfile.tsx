@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ChangeEvent, FormEvent, ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
 import {
   ArrowLeft,
   Building2,
@@ -13,7 +13,6 @@ import {
   Phone,
   ShieldCheck,
   Sparkles,
-  Upload,
   UserRound,
   XCircle,
   WalletCards,
@@ -38,7 +37,6 @@ type AdminProfileData = {
   designation: string;
   office_information: string;
   responsibilities: string;
-  profile_photo_url: string;
   role?: string | null;
   verification_status?: string | null;
   verification_remarks?: string | null;
@@ -52,7 +50,6 @@ const emptyProfile: AdminProfileData = {
   designation: "",
   office_information: "",
   responsibilities: "",
-  profile_photo_url: "",
 };
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -109,11 +106,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
-const imageUrl = (value: string) => {
-  if (!value) return "";
-  if (/^https?:|^blob:/.test(value)) return value;
-  return `${API}${value.startsWith("/") ? "" : "/"}${value}`;
-};
 
 function StatusBanner({ status }: { status: string }) {
   if (status === "VERIFIED") {
@@ -206,8 +198,6 @@ export default function AdminProfile() {
   const [exists, setExists] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [preview, setPreview] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [sellerPayout, setSellerPayout] = useState<SellerPayout>({ enabled: false, preferred_upi_app: "", upi_id: "", account_holder_name: "" });
@@ -258,7 +248,6 @@ export default function AdminProfile() {
         const next = { ...emptyProfile, ...data };
         setProfile(next);
         setExists(Boolean(data.id));
-        setPreview(data.profile_photo_url || "");
       })
       .catch((requestError: unknown) => {
         if (mounted) {
@@ -280,68 +269,6 @@ export default function AdminProfile() {
     setSuccess("");
   };
 
-  const choosePhoto = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setError("Only JPG, PNG and WEBP images are allowed.");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Profile photo must be 5 MB or less.");
-      return;
-    }
-
-    setPhoto(file);
-    setPreview(URL.createObjectURL(file));
-    setError("");
-  };
-
-  const uploadPhoto = async () => {
-    if (!photo) return profile.profile_photo_url || null;
-
-    const formData = new FormData();
-    formData.append("file", photo);
-
-    const response = await fetch(`${API}/profile/admin/photo`, {
-      method: "POST",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-      body: formData,
-    });
-
-    const data = await response.json().catch(() => null);
-    if (!response.ok) {
-      let message = "Profile photo upload failed.";
-
-      if (typeof data?.detail === "string") {
-        message = data.detail;
-      } else if (Array.isArray(data?.detail)) {
-        message = data.detail
-          .map((item: unknown) => {
-            if (typeof item === "string") return item;
-
-            if (
-              typeof item === "object" &&
-              item !== null &&
-              "msg" in item &&
-              typeof (item as { msg?: unknown }).msg === "string"
-            ) {
-              return (item as { msg: string }).msg;
-            }
-
-            return JSON.stringify(item);
-          })
-          .join(" • ");
-      }
-
-      throw new Error(message);
-    }
-
-    return data.profile_photo_url as string;
-  };
 
   const saveSellerPayout = async () => {
     setSellerSaving(true); setSellerMessage(""); setError("");
@@ -362,7 +289,6 @@ export default function AdminProfile() {
     }
 
     const required = [
-      profile.phone,
       profile.institution_code,
       profile.admin_id,
       profile.department,
@@ -379,7 +305,6 @@ export default function AdminProfile() {
     setSuccess("");
 
     try {
-      const photoUrl = await uploadPhoto();
       const data = await request<AdminProfileData>("/profile/admin", {
         method: exists ? "PUT" : "POST",
         body: JSON.stringify({
@@ -391,14 +316,11 @@ export default function AdminProfile() {
           designation: profile.designation.trim(),
           office_information: profile.office_information.trim(),
           responsibilities: profile.responsibilities.trim(),
-          profile_photo_url: photoUrl,
         }),
       });
 
       setProfile({ ...emptyProfile, ...data });
       setExists(true);
-      setPhoto(null);
-      setPreview(data.profile_photo_url || "");
       await refreshUser();
       setSuccess(
         data.verification_status === "VERIFIED"
@@ -448,11 +370,7 @@ export default function AdminProfile() {
             <div className="admin-profile-sidebar-glow" />
 
             <div className="admin-profile-avatar">
-              {preview ? (
-                <img src={imageUrl(preview)} alt="Profile" />
-              ) : (
-                <span>{initials || <UserRound size={35} />}</span>
-              )}
+              <span>{initials || <UserRound size={35} />}</span>
               <div className="admin-profile-avatar-badge"><ShieldCheck size={14} /></div>
             </div>
 
@@ -561,31 +479,6 @@ export default function AdminProfile() {
               <section className="admin-profile-section">
                 <div className="admin-profile-section-heading">
                   <div className="admin-profile-section-number">03</div>
-                  <div><h3>Profile Photo</h3><p>Use a clear professional photo for your administrator profile.</p></div>
-                </div>
-
-                <div className="admin-profile-photo-card">
-                  <div className="admin-profile-photo-preview">
-                    {preview ? <img src={imageUrl(preview)} alt="Preview" /> : <UserRound size={28} />}
-                  </div>
-                  <div className="admin-profile-photo-copy">
-                    <strong>{photo ? photo.name : "Upload profile photo"}</strong>
-                    <span>JPG, PNG or WEBP · Maximum 5 MB</span>
-                  </div>
-                  {!locked && (
-                    <label className="admin-profile-upload-button">
-                      <Upload size={16} />
-                      Choose image
-                      <input hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto} />
-                    </label>
-                  )}
-                  {locked && <span className="admin-profile-photo-locked">Locked during review</span>}
-                </div>
-              </section>
-
-              <section className="admin-profile-section">
-                <div className="admin-profile-section-heading">
-                  <div className="admin-profile-section-number">04</div>
                   <div><h3><WalletCards size={17} style={{ verticalAlign: "-3px", marginRight: 7 }} />Marketplace Seller &amp; Payout</h3><p>Optional payout preferences for selling on the shared EduSphere Marketplace.</p></div>
                 </div>
                 <div className="admin-profile-fields">
