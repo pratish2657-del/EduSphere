@@ -348,11 +348,6 @@ export default function ProfessorDashboard() {
       onClick: () => navigate("/app/professor/courses"),
     },
     {
-      label: "Events",
-      icon: CalendarDays,
-      onClick: () => navigate("/app/professor/events"),
-    },
-    {
       label: "Students",
       icon: Users,
       active: false,
@@ -980,6 +975,153 @@ export default function ProfessorDashboard() {
           }
         }
 
+        /* ============================================================
+           FINAL MOBILE HEADER + QUICK ACTION ALIGNMENT
+        ============================================================ */
+
+        .professor-topbarRight {
+          min-width: 0 !important;
+          flex: 0 1 auto !important;
+        }
+
+        .professor-profile-button {
+          min-width: 0 !important;
+          max-width: 220px !important;
+        }
+
+        .professor-profile-button > span {
+          min-width: 0 !important;
+          max-width: 145px !important;
+          overflow-wrap: anywhere !important;
+          word-break: normal !important;
+          white-space: normal !important;
+          line-height: 1.2 !important;
+        }
+
+        .professor-quick-actions {
+          width: 100% !important;
+          display: grid !important;
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 10px !important;
+        }
+
+        .professor-quick-actions > button {
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          min-height: 64px !important;
+          padding: 10px 11px !important;
+          display: grid !important;
+          grid-template-columns: 20px minmax(0, 1fr) 16px !important;
+          align-items: center !important;
+          column-gap: 7px !important;
+          overflow: hidden !important;
+          text-align: left !important;
+        }
+
+        .professor-quick-actions > button > svg {
+          flex-shrink: 0 !important;
+          min-width: 0 !important;
+        }
+
+        .professor-quick-actions > button > span {
+          min-width: 0 !important;
+          max-width: 100% !important;
+          overflow-wrap: normal !important;
+          word-break: normal !important;
+          white-space: normal !important;
+          line-height: 1.25 !important;
+        }
+
+        .professor-quick-actions > button > svg:last-child {
+          justify-self: end !important;
+        }
+
+        @media (max-width: 600px) {
+          .professor-topbar {
+            padding: 9px 10px !important;
+            gap: 7px !important;
+          }
+
+          .professor-topbar > div:nth-child(2) {
+            min-width: 0 !important;
+            flex: 1 1 auto !important;
+          }
+
+          .professor-topbarRight {
+            flex: 0 0 auto !important;
+            gap: 5px !important;
+          }
+
+          .professor-profile-button {
+            max-width: 108px !important;
+            gap: 6px !important;
+          }
+
+          .professor-profile-button > div {
+            width: 34px !important;
+            height: 34px !important;
+            flex: 0 0 34px !important;
+          }
+
+          .professor-profile-button > span {
+            display: block !important;
+            max-width: 68px !important;
+            font-size: 10px !important;
+            line-height: 1.12 !important;
+          }
+
+          .professor-topbarRight > span {
+            padding: 5px 7px !important;
+            gap: 4px !important;
+            font-size: 9px !important;
+          }
+
+          .professor-quick-actions {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+          }
+
+          .professor-quick-actions > button {
+            min-height: 58px !important;
+            padding: 9px 9px !important;
+            grid-template-columns: 18px minmax(0, 1fr) 14px !important;
+            column-gap: 6px !important;
+            font-size: 10px !important;
+          }
+
+          .professor-quick-actions > button > svg:first-child {
+            width: 16px !important;
+            height: 16px !important;
+          }
+
+          .professor-quick-actions > button > svg:last-child {
+            width: 13px !important;
+            height: 13px !important;
+          }
+        }
+
+        @media (max-width: 380px) {
+          .professor-topbar {
+            padding-left: 8px !important;
+            padding-right: 8px !important;
+          }
+
+          .professor-profile-button > span {
+            max-width: 58px !important;
+            font-size: 9px !important;
+          }
+
+          .professor-topbarRight > span {
+            font-size: 8px !important;
+            padding: 4px 6px !important;
+          }
+
+          .professor-quick-actions {
+            grid-template-columns: 1fr !important;
+          }
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .edu-3d-orb,.edu-3d-ring,.edu-3d-dot { animation:none !important; }
         }
@@ -1144,7 +1286,7 @@ export default function ProfessorDashboard() {
             </h1>
           </div>
 
-          <div style={styles.topbarRight}>
+          <div className="professor-topbarRight" style={styles.topbarRight}>
             <VerificationBadge
               status={
                 professor?.verification_status
@@ -1153,6 +1295,7 @@ export default function ProfessorDashboard() {
 
             <button
               type="button"
+              className="professor-profile-button"
               style={styles.profileButton}
               onClick={() =>
                 navigate(
@@ -1886,6 +2029,7 @@ export default function ProfessorDashboard() {
             </div>
 
             <div
+              className="professor-quick-actions"
               style={
                 styles.quickActions
               }
