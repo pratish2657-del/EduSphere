@@ -273,15 +273,62 @@ function Scene() {
 
         <EnergyParticles />
 
+        {/* EduSphere brand text: white "Edu" + cyan/blue/purple "Sphere" */}
         <Text
-          position={[0, 0.5, 2.5]}
+          position={[-0.72, 0.5, 2.5]}
           fontSize={0.42}
           color="#ffffff"
           anchorX="center"
           anchorY="middle"
           fontWeight={700}
         >
-          EduSphere
+          Edu
+        </Text>
+
+        <Text
+          position={[0.68, 0.5, 2.5]}
+          fontSize={0.42}
+          anchorX="center"
+          anchorY="middle"
+          fontWeight={700}
+        >
+          <shaderMaterial
+            transparent
+            depthWrite={false}
+            uniforms={{
+              uColorStart: { value: new THREE.Color("#24c7ff") },
+              uColorMiddle: { value: new THREE.Color("#3f8cff") },
+              uColorEnd: { value: new THREE.Color("#a855f7") },
+            }}
+            vertexShader={`
+              varying vec2 vUv;
+
+              void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              }
+            `}
+            fragmentShader={`
+              uniform vec3 uColorStart;
+              uniform vec3 uColorMiddle;
+              uniform vec3 uColorEnd;
+
+              varying vec2 vUv;
+
+              void main() {
+                vec3 color;
+
+                if (vUv.x < 0.5) {
+                  color = mix(uColorStart, uColorMiddle, vUv.x * 2.0);
+                } else {
+                  color = mix(uColorMiddle, uColorEnd, (vUv.x - 0.5) * 2.0);
+                }
+
+                gl_FragColor = vec4(color, 1.0);
+              }
+            `}
+          />
+          Sphere
         </Text>
       </Float>
 
