@@ -153,9 +153,31 @@ function money(value: number | string) {
 }
 
 function dateTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, {
+  if (!value) return value;
+
+  /*
+   * Marketplace backend timestamps are normalized to UTC when no timezone
+   * suffix is present, then explicitly displayed in IST.
+   */
+  const raw = String(value).trim();
+
+  const hasTimezone =
+    /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(raw);
+
+  const normalized =
+    !hasTimezone &&
+    /^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}/.test(raw)
+      ? `${raw.replace(" ", "T")}Z`
+      : raw;
+
+  const date = new Date(normalized);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
     dateStyle: "medium",
     timeStyle: "short",
   });

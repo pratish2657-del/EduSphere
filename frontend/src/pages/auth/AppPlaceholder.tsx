@@ -3564,10 +3564,36 @@ function MarketplaceProductForm({
 }
 
 function formatMarketplaceDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+  if (!value) return value;
 
-  return date.toLocaleString(undefined, {
+  /*
+   * Marketplace timestamps from the backend/database can arrive without
+   * a timezone suffix, for example:
+   *   2026-09-18 13:59:00
+   *
+   * These timestamps are stored/returned as UTC by the marketplace backend.
+   * Normalize timezone-naive timestamps to UTC first, then always display
+   * them explicitly in Indian Standard Time (Asia/Kolkata).
+   */
+  const raw = String(value).trim();
+
+  const hasTimezone =
+    /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(raw);
+
+  const normalized =
+    !hasTimezone &&
+    /^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}/.test(raw)
+      ? `${raw.replace(" ", "T")}Z`
+      : raw;
+
+  const date = new Date(normalized);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
     dateStyle: "medium",
     timeStyle: "short",
   });

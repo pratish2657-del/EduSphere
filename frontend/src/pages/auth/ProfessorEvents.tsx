@@ -154,38 +154,70 @@ async function api<T>(
  * Example:
  * 12:00 PM in India -> 06:30 UTC -> backend stores 12:00 IST.
  */
+/*
+ * Event times are entered and stored as IST wall-clock values.
+ *
+ * IMPORTANT:
+ * Do NOT use toISOString() here. A value such as:
+ *   2026-09-18T00:00
+ * is 12:00 AM IST. Calling toISOString() converts it to
+ * 2026-09-17T18:30:00.000Z. If the backend then treats that value
+ * as an IST wall-clock value, it becomes 6:30 PM on the previous day.
+ *
+ * The events API expects the event datetime as the same IST wall-clock
+ * value, so send it without converting the clock time.
+ */
 function toApiDateTime(value: string) {
-  return value ? new Date(value).toISOString() : value;
+  if (!value) return value;
+
+  return `${value.replace("T", " ")}:00`;
 }
 
-function toInputDateTime(value?: string | null) {
-  if (!value) return "";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value.slice(0, 16);
-  }
-
-  const offset = date.getTimezoneOffset();
-
-  return new Date(date.getTime() - offset * 60000)
-    .toISOString()
-    .slice(0, 16);
+function hasTimezone(value: string) {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value.trim());
 }
 
 function parseDate(value?: string | null) {
   if (!value) return null;
 
-  const date = new Date(value);
+  const raw = String(value).trim();
 
-  if (!Number.isNaN(date.getTime())) {
-    return date;
+  /*
+   * Backend event timestamps without an offset are IST.
+   * Explicitly attach +05:30 so the browser never interprets them
+   * using another local timezone.
+   */
+  const normalized =
+    !hasTimezone(raw) &&
+    /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(raw)
+      ? `${raw.replace(" ", "T")}+05:30`
+      : raw;
+
+  const date = new Date(normalized);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toInputDateTime(value?: string | null) {
+  if (!value) return "";
+
+  const date = parseDate(value);
+
+  if (!date) {
+    return value.replace(" ", "T").slice(0, 16);
   }
 
-  const fallback = new Date(value.replace(" ", "T"));
-
-  return Number.isNaN(fallback.getTime()) ? null : fallback;
+  return date
+    .toLocaleString("sv-SE", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+    .replace(" ", "T");
 }
 
 function formatDate(value?: string | null) {
@@ -194,6 +226,7 @@ function formatDate(value?: string | null) {
   if (!date) return "—";
 
   return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
     day: "2-digit",
     month: "short",
     year: "numeric",
