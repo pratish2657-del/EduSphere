@@ -31,9 +31,6 @@ chown -R coder:coder \
 # Remove stale nginx pid if present
 rm -f /run/nginx.pid
 
-# Make absolutely sure no old code-server process exists
-# inside this container before Supervisor starts it.
-pkill -f "/usr/bin/code-server" 2>/dev/null || true
 
 # Generate nginx configuration using Render's public port.
 envsubst '${PORT}' \
