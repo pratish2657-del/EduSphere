@@ -72,7 +72,7 @@ export default function SuperAdminMarketplacePayouts() {
 
 
   // ============================================================
-  // LOAD PAYOUTS + FINANCE
+  // LOAD
   // ============================================================
 
   const load = async () => {
@@ -80,60 +80,71 @@ export default function SuperAdminMarketplacePayouts() {
     setMessage("");
 
     try {
-      const [p, f] = await Promise.all([
-        fetch(
-          `${API}/marketplace/easy-split/payouts`,
-          {
-            credentials: "include",
-            headers: {
-              Accept: "application/json",
-            },
-          }
-        ),
+      const [payoutResponse, financeResponse] =
+        await Promise.all([
+          fetch(
+            `${API}/marketplace/easy-split/payouts`,
+            {
+              credentials: "include",
+              headers: {
+                Accept:
+                  "application/json",
+              },
+            }
+          ),
 
-        fetch(
-          `${API}/marketplace/easy-split/finance-summary`,
-          {
-            credentials: "include",
-            headers: {
-              Accept: "application/json",
-            },
-          }
-        ),
-      ]);
+          fetch(
+            `${API}/marketplace/easy-split/finance-summary`,
+            {
+              credentials: "include",
+              headers: {
+                Accept:
+                  "application/json",
+              },
+            }
+          ),
+        ]);
 
-      const pd =
-        await p.json().catch(
-          () => ({})
-        );
+      const payoutData =
+        await payoutResponse
+          .json()
+          .catch(
+            () => ({})
+          );
 
-      const fd =
-        await f.json().catch(
-          () => ({})
-        );
+      const financeData =
+        await financeResponse
+          .json()
+          .catch(
+            () => ({})
+          );
 
-      if (!p.ok) {
+      if (!payoutResponse.ok) {
         throw new Error(
-          pd?.detail ||
-            pd?.message ||
+          payoutData?.detail ||
+            payoutData?.message ||
             "Unable to load payouts"
         );
       }
 
       setItems(
-        Array.isArray(pd?.items)
-          ? pd.items
+        Array.isArray(
+          payoutData?.items
+        )
+          ? payoutData.items
           : []
       );
 
-      if (f.ok) {
-        setFinance(fd);
+      if (financeResponse.ok) {
+        setFinance(
+          financeData
+        );
       }
 
-    } catch (e) {
+    } catch (error) {
       setMessage(
-        e instanceof Error
-          ? e.message
+        error instanceof Error
+          ? error.message
           : "Backend unavailable"
       );
 
@@ -149,7 +160,7 @@ export default function SuperAdminMarketplacePayouts() {
 
 
   // ============================================================
-  // RETRY PAYOUT
+  // RETRY
   // ============================================================
 
   const retry = async (
@@ -159,113 +170,108 @@ export default function SuperAdminMarketplacePayouts() {
     setMessage("");
 
     try {
-      const r = await fetch(
-        `${API}/marketplace/easy-split/payouts/${id}/retry`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-          },
-        }
-      );
-
-      const d =
-        await r.json().catch(
-          () => ({})
+      const response =
+        await fetch(
+          `${API}/marketplace/easy-split/payouts/${id}/retry`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              Accept:
+                "application/json",
+            },
+          }
         );
+
+      const data =
+        await response
+          .json()
+          .catch(
+            () => ({})
+          );
 
       await load();
 
-      // --------------------------------------------------------
-      // HTTP ERROR
-      // --------------------------------------------------------
-
-      if (!r.ok) {
-        const detail =
-          d?.detail ||
-          d?.message ||
-          d?.error ||
-          "Payout retry failed.";
-
+      if (!response.ok) {
         setMessage(
-          `❌ ${detail}`
+          `❌ ${
+            data?.detail ||
+            data?.message ||
+            data?.error ||
+            "Payout retry failed."
+          }`
+        );
+
+        return;
+      }
+
+      const result =
+        data?.result || {};
+
+      // --------------------------------------------------------
+      // Already processed but no vendor split
+      // --------------------------------------------------------
+
+      if (
+        result?.already_processed &&
+        result?.cashfree_split_confirmed ===
+          false
+      ) {
+        setMessage(
+          result?.cashfree_order_id
+            ? `⚠️ Cashfree reports ${result.cashfree_order_id} as already processed, but no vendor split was confirmed. The payout remains on hold.`
+            : "⚠️ Cashfree reports this transaction as already processed, but no vendor split was confirmed. The payout remains on hold."
         );
 
         return;
       }
 
       // --------------------------------------------------------
-      // BACKEND SUCCESS = FALSE
+      // Backend failure
       // --------------------------------------------------------
 
-      if (d?.success === false) {
-        const result =
-          d?.result || {};
-
-        const error =
-          result?.error ||
-          result?.message ||
-          result?.reason ||
-          d?.error ||
-          d?.message ||
-          "Cashfree Easy Split rejected the payout.";
-
-        // ------------------------------------------------------
-        // Already processed but NOT reconciled
-        // ------------------------------------------------------
-
-        if (
-          result?.already_processed &&
-          result?.cashfree_split_confirmed ===
-            false
-        ) {
-          setMessage(
-            result?.cashfree_order_id
-              ? `⚠️ Cashfree reports ${result.cashfree_order_id} as already processed, but no vendor split was confirmed. The payout remains on hold.`
-              : "⚠️ Cashfree reports this transaction as already processed, but no vendor split was confirmed. The payout remains on hold."
-          );
-
-          return;
-        }
-
+      if (
+        data?.success === false
+      ) {
         setMessage(
-          `❌ Easy Split failed: ${error}`
+          `❌ ${
+            result?.error ||
+            result?.message ||
+            result?.reason ||
+            data?.error ||
+            data?.message ||
+            "Cashfree Easy Split rejected the payout."
+          }`
         );
 
         return;
       }
 
       // --------------------------------------------------------
-      // SUCCESS
+      // Already processed + confirmed
       // --------------------------------------------------------
 
-      if (d?.success === true) {
-        const result =
-          d?.result || {};
+      if (
+        result?.already_processed &&
+        result?.cashfree_split_confirmed ===
+          true
+      ) {
+        setMessage(
+          result?.cashfree_order_id
+            ? `✅ Cashfree already processed ${result.cashfree_order_id} and the vendor split was confirmed.`
+            : "✅ Cashfree already processed the transaction and the vendor split was confirmed."
+        );
 
-        // ------------------------------------------------------
-        // Already processed + confirmed
-        // ------------------------------------------------------
+        return;
+      }
 
-        if (
-          result?.already_processed &&
-          result?.cashfree_split_confirmed ===
-            true
-        ) {
-          setMessage(
-            result?.cashfree_order_id
-              ? `✅ Cashfree already processed ${result.cashfree_order_id} and the vendor split was confirmed.`
-              : "✅ Cashfree already processed the transaction and the vendor split was confirmed."
-          );
+      // --------------------------------------------------------
+      // Normal successful split
+      // --------------------------------------------------------
 
-          return;
-        }
-
-        // ------------------------------------------------------
-        // Normal successful split
-        // ------------------------------------------------------
-
+      if (
+        data?.success === true
+      ) {
         setMessage(
           result?.cashfree_order_id
             ? `✅ Easy Split created for ${result.cashfree_order_id}.`
@@ -275,21 +281,17 @@ export default function SuperAdminMarketplacePayouts() {
         return;
       }
 
-      // --------------------------------------------------------
-      // UNEXPECTED RESPONSE
-      // --------------------------------------------------------
-
       setMessage(
         `⚠️ Unexpected payout response: ${JSON.stringify(
-          d
+          data
         )}`
       );
 
-    } catch (e) {
+    } catch (error) {
       setMessage(
         `❌ ${
-          e instanceof Error
-            ? e.message
+          error instanceof Error
+            ? error.message
             : "Backend unavailable"
         }`
       );
@@ -301,7 +303,7 @@ export default function SuperAdminMarketplacePayouts() {
 
 
   // ============================================================
-  // VERIFY CASHFREE SPLIT
+  // VERIFY CASHFREE
   // ============================================================
 
   const verifyCashfree = async (
@@ -311,32 +313,32 @@ export default function SuperAdminMarketplacePayouts() {
     setMessage("");
 
     try {
-      const r = await fetch(
-        `${API}/marketplace/easy-split/payouts/${id}/verify`,
-        {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-          },
-        }
-      );
-
-      const d =
-        await r.json().catch(
-          () => ({})
+      const response =
+        await fetch(
+          `${API}/marketplace/easy-split/payouts/${id}/verify`,
+          {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              Accept:
+                "application/json",
+            },
+          }
         );
 
-      // --------------------------------------------------------
-      // HTTP ERROR
-      // --------------------------------------------------------
+      const data =
+        await response
+          .json()
+          .catch(
+            () => ({})
+          );
 
-      if (!r.ok) {
+      if (!response.ok) {
         setMessage(
           `❌ ${
-            d?.detail ||
-            d?.message ||
-            d?.error ||
+            data?.detail ||
+            data?.message ||
+            data?.error ||
             "Cashfree verification failed"
           }`
         );
@@ -344,15 +346,11 @@ export default function SuperAdminMarketplacePayouts() {
         return;
       }
 
-      // --------------------------------------------------------
-      // LOCAL DATA
-      // --------------------------------------------------------
-
       const local =
-        d?.local || {};
+        data?.local || {};
 
       const cashfreeOrderId =
-        d?.cashfree_order_id ||
+        data?.cashfree_order_id ||
         "order";
 
       const sellerAmount =
@@ -360,27 +358,23 @@ export default function SuperAdminMarketplacePayouts() {
           local?.seller_amount || 0
         );
 
-      // --------------------------------------------------------
-      // AUTHORITATIVE CASHFREE RESULT
-      // --------------------------------------------------------
-
       const confirmed =
-        d?.cashfree_split_confirmed ===
+        data?.cashfree_split_confirmed ===
         true;
 
-      const recon =
-        d?.cashfree?.reconciliation ||
+      const reconciliation =
+        data?.cashfree?.reconciliation ||
         {};
 
-      const reconData =
+      const reconciliationData =
         Array.isArray(
-          recon?.data
+          reconciliation?.data
         )
-          ? recon.data
+          ? reconciliation.data
           : [];
 
       const settlement =
-        d?.cashfree?.settlement ||
+        data?.cashfree?.settlement ||
         {};
 
       const settlementBody =
@@ -400,7 +394,7 @@ export default function SuperAdminMarketplacePayouts() {
 
       if (confirmed) {
         const utr =
-          d?.cashfree?.transfer_utr ||
+          data?.cashfree?.transfer_utr ||
           settlementBody?.transfer_utr ||
           null;
 
@@ -418,40 +412,42 @@ export default function SuperAdminMarketplacePayouts() {
           );
         }
 
+      } else if (
+        reconciliationData.length === 0 &&
+        vendors.length === 0
+      ) {
+
+        // ------------------------------------------------------
+        // NO VENDOR SPLIT
+        // ------------------------------------------------------
+
+        setMessage(
+          `⚠️ Cashfree payment verified for ${cashfreeOrderId}, but no vendor split is present in Cashfree reconciliation. The local payout has been placed on hold.`
+        );
+
       } else {
 
-        // ------------------------------------------------------
-        // PAYMENT/SETTLEMENT MAY EXIST BUT VENDOR SPLIT DOES NOT
-        // ------------------------------------------------------
-
-        if (
-          reconData.length === 0 &&
-          vendors.length === 0
-        ) {
-          setMessage(
-            `⚠️ Cashfree payment verified for ${cashfreeOrderId}, but no vendor split is present in Cashfree reconciliation yet.`
-          );
-        } else {
-          setMessage(
-            `⚠️ Cashfree returned transaction data for ${cashfreeOrderId}, but the configured vendor split could not be confirmed.`
-          );
-        }
+        setMessage(
+          `⚠️ Cashfree returned transaction data for ${cashfreeOrderId}, but the configured vendor split could not be confirmed. The local payout has been placed on hold.`
+        );
       }
-
-      // --------------------------------------------------------
-      // DEBUG
-      // --------------------------------------------------------
 
       console.log(
         "Cashfree Easy Split verification:",
-        d
+        data
       );
 
-    } catch (e) {
+      // --------------------------------------------------------
+      // Refresh database state immediately
+      // --------------------------------------------------------
+
+      await load();
+
+    } catch (error) {
       setMessage(
         `❌ ${
-          e instanceof Error
-            ? e.message
+          error instanceof Error
+            ? error.message
             : "Backend unavailable"
         }`
       );
@@ -463,7 +459,7 @@ export default function SuperAdminMarketplacePayouts() {
 
 
   // ============================================================
-  // REVERSE PAYOUT
+  // REVERSE
   // ============================================================
 
   const reverse = async (
@@ -503,38 +499,39 @@ export default function SuperAdminMarketplacePayouts() {
     setMessage("");
 
     try {
-      const r = await fetch(
-        `${API}/marketplace/easy-split/payouts/${item.id}/reverse`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type":
-              "application/json",
-
-            Accept:
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            amount,
-            reason:
-              "Super Admin marketplace reversal",
-          }),
-        }
-      );
-
-      const d =
-        await r.json().catch(
-          () => ({})
+      const response =
+        await fetch(
+          `${API}/marketplace/easy-split/payouts/${item.id}/reverse`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Accept:
+                "application/json",
+            },
+            body: JSON.stringify({
+              amount,
+              reason:
+                "Super Admin marketplace reversal",
+            }),
+          }
         );
 
-      if (!r.ok) {
+      const data =
+        await response
+          .json()
+          .catch(
+            () => ({})
+          );
+
+      if (!response.ok) {
         setMessage(
           `❌ ${
-            d?.detail ||
-            d?.message ||
-            d?.error ||
+            data?.detail ||
+            data?.message ||
+            data?.error ||
             "Reversal failed"
           }`
         );
@@ -544,11 +541,13 @@ export default function SuperAdminMarketplacePayouts() {
         return;
       }
 
-      if (d?.success === false) {
+      if (
+        data?.success === false
+      ) {
         setMessage(
           `❌ ${
-            d?.error ||
-            d?.message ||
+            data?.error ||
+            data?.message ||
             "Reversal failed"
           }`
         );
@@ -560,19 +559,19 @@ export default function SuperAdminMarketplacePayouts() {
 
       setMessage(
         `✅ Reversal created${
-          d?.reversal_id
-            ? `: ${d.reversal_id}`
+          data?.reversal_id
+            ? `: ${data.reversal_id}`
             : "."
         }`
       );
 
       await load();
 
-    } catch (e) {
+    } catch (error) {
       setMessage(
         `❌ ${
-          e instanceof Error
-            ? e.message
+          error instanceof Error
+            ? error.message
             : "Backend unavailable"
         }`
       );
@@ -584,19 +583,19 @@ export default function SuperAdminMarketplacePayouts() {
 
 
   // ============================================================
-  // ACTION BUTTON
+  // ACTION
   // ============================================================
 
   const action = (
-    x: Item
+    item: Item
   ) => {
 
     // ----------------------------------------------------------
-    // CASHFREE RECONCILIATION REQUIRED
+    // VERIFY ONLY
     // ----------------------------------------------------------
 
     if (
-      x.action ===
+      item.action ===
       "VERIFY"
     ) {
       return (
@@ -605,11 +604,11 @@ export default function SuperAdminMarketplacePayouts() {
           <button
             className="sa-action secondary"
             disabled={
-              busy === x.id
+              busy === item.id
             }
             onClick={() =>
               verifyCashfree(
-                x.id
+                item.id
               )
             }
             title="Verify the actual Cashfree vendor split"
@@ -618,7 +617,7 @@ export default function SuperAdminMarketplacePayouts() {
               size={14}
             />
 
-            {busy === x.id
+            {busy === item.id
               ? "Checking…"
               : "Verify Cashfree"}
           </button>
@@ -629,11 +628,11 @@ export default function SuperAdminMarketplacePayouts() {
 
 
     // ----------------------------------------------------------
-    // TRANSFER INITIATED / CREATED
+    // REVERSE
     // ----------------------------------------------------------
 
     if (
-      x.action ===
+      item.action ===
       "REVERSE"
     ) {
       return (
@@ -642,11 +641,11 @@ export default function SuperAdminMarketplacePayouts() {
           <button
             className="sa-action secondary"
             disabled={
-              busy === x.id
+              busy === item.id
             }
             onClick={() =>
               verifyCashfree(
-                x.id
+                item.id
               )
             }
             title="Check the actual Cashfree Easy Split state"
@@ -655,7 +654,7 @@ export default function SuperAdminMarketplacePayouts() {
               size={14}
             />
 
-            {busy === x.id
+            {busy === item.id
               ? "Checking…"
               : "Verify Cashfree"}
           </button>
@@ -663,17 +662,17 @@ export default function SuperAdminMarketplacePayouts() {
           <button
             className="sa-action danger"
             disabled={
-              busy === x.id
+              busy === item.id
             }
             onClick={() =>
-              reverse(x)
+              reverse(item)
             }
           >
             <RotateCcw
               size={14}
             />
 
-            {busy === x.id
+            {busy === item.id
               ? "Working…"
               : "Reverse"}
           </button>
@@ -684,11 +683,11 @@ export default function SuperAdminMarketplacePayouts() {
 
 
     // ----------------------------------------------------------
-    // NORMAL RETRY
+    // RETRY
     // ----------------------------------------------------------
 
     if (
-      x.action ===
+      item.action ===
       "RETRY"
     ) {
       return (
@@ -697,17 +696,17 @@ export default function SuperAdminMarketplacePayouts() {
           <button
             className="sa-action primary"
             disabled={
-              busy === x.id
+              busy === item.id
             }
             onClick={() =>
-              retry(x.id)
+              retry(item.id)
             }
           >
             <Play
               size={14}
             />
 
-            {busy === x.id
+            {busy === item.id
               ? "Working…"
               : "Retry"}
           </button>
@@ -715,11 +714,11 @@ export default function SuperAdminMarketplacePayouts() {
           <button
             className="sa-action secondary"
             disabled={
-              busy === x.id
+              busy === item.id
             }
             onClick={() =>
               verifyCashfree(
-                x.id
+                item.id
               )
             }
             title="Check the actual Cashfree Easy Split state"
@@ -728,7 +727,7 @@ export default function SuperAdminMarketplacePayouts() {
               size={14}
             />
 
-            {busy === x.id
+            {busy === item.id
               ? "Checking…"
               : "Verify"}
           </button>
@@ -742,12 +741,25 @@ export default function SuperAdminMarketplacePayouts() {
     // SELLER ONBOARDING REQUIRED
     // ----------------------------------------------------------
 
+    if (
+      item.action ===
+      "SELLER_ONBOARDING_REQUIRED"
+    ) {
+      return (
+        <span className="sa-muted">
+          Seller onboarding required
+        </span>
+      );
+    }
+
+
+    // ----------------------------------------------------------
+    // DEFAULT
+    // ----------------------------------------------------------
+
     return (
       <span className="sa-muted">
-        {x.action ===
-        "SELLER_ONBOARDING_REQUIRED"
-          ? "Seller onboarding required"
-          : "Waiting"}
+        Waiting
       </span>
     );
   };
@@ -895,7 +907,7 @@ export default function SuperAdminMarketplacePayouts() {
 
 
       {/* ======================================================
-          PAYOUT TABLE
+          TABLE
       ====================================================== */}
 
       <div className="sa-payout-table">
@@ -903,7 +915,9 @@ export default function SuperAdminMarketplacePayouts() {
         <table>
 
           <thead>
+
             <tr>
+
               <th>
                 Seller
               </th>
@@ -935,7 +949,9 @@ export default function SuperAdminMarketplacePayouts() {
               <th>
                 Action
               </th>
+
             </tr>
+
           </thead>
 
 
@@ -960,28 +976,34 @@ export default function SuperAdminMarketplacePayouts() {
             ) : (
 
               items.map(
-                (x) => (
+                (item) => (
                   <tr
-                    key={x.id}
+                    key={item.id}
                   >
 
                     {/* SELLER */}
 
                     <td>
+
                       <strong>
-                        {x.seller_name}
+                        {
+                          item.seller_name
+                        }
                       </strong>
 
                       <small>
-                        {x.seller_email}
+                        {
+                          item.seller_email
+                        }
                       </small>
+
                     </td>
 
 
                     {/* ORDER */}
 
                     <td>
-                      #{x.order_id}
+                      #{item.order_id}
                     </td>
 
 
@@ -989,16 +1011,16 @@ export default function SuperAdminMarketplacePayouts() {
 
                     <td>
                       {money(
-                        x.gross_amount
+                        item.gross_amount
                       )}
                     </td>
 
 
-                    {/* PLATFORM FEE */}
+                    {/* FEE */}
 
                     <td>
                       {money(
-                        x.platform_fee_amount
+                        item.platform_fee_amount
                       )}
                     </td>
 
@@ -1007,7 +1029,7 @@ export default function SuperAdminMarketplacePayouts() {
 
                     <td>
                       {money(
-                        x.seller_amount
+                        item.seller_amount
                       )}
                     </td>
 
@@ -1018,11 +1040,11 @@ export default function SuperAdminMarketplacePayouts() {
 
                       <span
                         className={`sa-pill ${String(
-                          x.status
+                          item.status
                         ).toLowerCase()}`}
                       >
                         {String(
-                          x.status
+                          item.status
                         ).replaceAll(
                           "_",
                           " "
@@ -1030,20 +1052,22 @@ export default function SuperAdminMarketplacePayouts() {
                       </span>
 
 
-                      {x.failure_reason && (
+                      {item.failure_reason && (
                         <small
                           className="sa-failure"
                         >
-                          {x.failure_reason}
+                          {
+                            item.failure_reason
+                          }
                         </small>
                       )}
 
 
-                      {x.cashfree_split_status && (
+                      {item.cashfree_split_status && (
                         <small>
                           Split:{" "}
                           {
-                            x.cashfree_split_status
+                            item.cashfree_split_status
                           }
                         </small>
                       )}
@@ -1051,44 +1075,44 @@ export default function SuperAdminMarketplacePayouts() {
                     </td>
 
 
-                    {/* CASHFREE VENDOR */}
+                    {/* CASHFREE */}
 
                     <td>
 
                       <small>
                         {
-                          x.cashfree_vendor_id ||
-                          x.razorpay_linked_account_id ||
+                          item.cashfree_vendor_id ||
+                          item.razorpay_linked_account_id ||
                           "Not connected"
                         }
                       </small>
 
 
-                      {x.cashfree_vendor_status && (
+                      {item.cashfree_vendor_status && (
                         <small>
                           Status:{" "}
                           {
-                            x.cashfree_vendor_status
+                            item.cashfree_vendor_status
                           }
                         </small>
                       )}
 
 
-                      {x.cashfree_transfer_id && (
+                      {item.cashfree_transfer_id && (
                         <small>
                           Transfer:{" "}
                           {
-                            x.cashfree_transfer_id
+                            item.cashfree_transfer_id
                           }
                         </small>
                       )}
 
 
-                      {x.cashfree_settlement_id && (
+                      {item.cashfree_settlement_id && (
                         <small>
                           Settlement:{" "}
                           {
-                            x.cashfree_settlement_id
+                            item.cashfree_settlement_id
                           }
                         </small>
                       )}
@@ -1099,7 +1123,7 @@ export default function SuperAdminMarketplacePayouts() {
                     {/* ACTION */}
 
                     <td>
-                      {action(x)}
+                      {action(item)}
                     </td>
 
                   </tr>

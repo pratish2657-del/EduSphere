@@ -10,6 +10,12 @@ from app.services.cashfree_easy_split_service import (
 )
 
 
+CASHFREE_NO_SPLIT_REASON = (
+    "Cashfree payment is processed, but no vendor split "
+    "is confirmed by Cashfree reconciliation"
+)
+
+
 def _extract_cashfree_vendor_ids(
     reconciliation: Any,
 ) -> set[str]:
@@ -41,11 +47,13 @@ def _extract_cashfree_vendor_ids(
             continue
 
         # --------------------------------------------------------
-        # Vendor commission record
+        # Direct vendor commission
         # --------------------------------------------------------
 
         entity_type = str(
-            item.get("entity_type")
+            item.get(
+                "entity_type"
+            )
             or ""
         ).strip().lower()
 
@@ -60,7 +68,24 @@ def _extract_cashfree_vendor_ids(
                 )
 
         # --------------------------------------------------------
-        # Order split records
+        # Direct vendor fields
+        # --------------------------------------------------------
+
+        for key in (
+            "merchant_vendor_id",
+            "vendor_id",
+        ):
+            vendor_id = item.get(
+                key
+            )
+
+            if vendor_id:
+                vendor_ids.add(
+                    str(vendor_id)
+                )
+
+        # --------------------------------------------------------
+        # Order splits
         # --------------------------------------------------------
 
         order_splits = item.get(
@@ -97,14 +122,18 @@ def _extract_cashfree_vendor_ids(
                 ):
                     continue
 
-                vendor_id = split_item.get(
-                    "merchant_vendor_id"
-                )
-
-                if vendor_id:
-                    vendor_ids.add(
-                        str(vendor_id)
+                for key in (
+                    "merchant_vendor_id",
+                    "vendor_id",
+                ):
+                    vendor_id = split_item.get(
+                        key
                     )
+
+                    if vendor_id:
+                        vendor_ids.add(
+                            str(vendor_id)
+                        )
 
     return vendor_ids
 
@@ -168,22 +197,26 @@ def _extract_settlement_vendor_ids(
 def verify_cashfree_split(
     payout_transaction_id: int,
 ) -> dict[str, Any]:
-    """Fetch and compare the local and Cashfree Easy Split state.
+    """Verify local payout state against Cashfree.
 
-    This function is READ-ONLY.
+    This endpoint is READ/RECONCILIATION only.
 
-    It does not create:
-        - payments
-        - splits
-        - transfers
-        - reversals
-        - refunds
+    It does not:
+        - create a payment
+        - create a split
+        - create a transfer
+        - reverse a transfer
+        - create a refund
     """
 
     connection = get_connection()
 
     try:
         cursor = connection.cursor()
+
+        # ========================================================
+        # 1. Local payout + successful Cashfree order
+        # ========================================================
 
         cursor.execute(
             """
@@ -239,7 +272,7 @@ def verify_cashfree_split(
             )
 
         # ========================================================
-        # Cashfree order-level split/settlement
+        # 2. Cashfree order-level information
         # ========================================================
 
         cashfree_settlement = (
@@ -249,7 +282,7 @@ def verify_cashfree_split(
         )
 
         # ========================================================
-        # Cashfree vendor reconciliation
+        # 3. Cashfree vendor reconciliation
         # ========================================================
 
         cashfree_reconciliation = (
@@ -259,7 +292,7 @@ def verify_cashfree_split(
         )
 
         # ========================================================
-        # Local vendor
+        # 4. Local vendor
         # ========================================================
 
         local_vendor_id = (
@@ -275,7 +308,7 @@ def verify_cashfree_split(
         )
 
         # ========================================================
-        # Cashfree vendor IDs
+        # 5. Cashfree vendor IDs
         # ========================================================
 
         reconciliation_vendor_ids = (
@@ -291,11 +324,7 @@ def verify_cashfree_split(
         )
 
         # ========================================================
-        # AUTHORITATIVE SPLIT CONFIRMATION
-        #
-        # A local CREATED flag is NOT sufficient.
-        #
-        # Cashfree must return the vendor.
+        # 6. Authoritative confirmation
         # ========================================================
 
         reconciliation_confirms_vendor = (
@@ -316,7 +345,7 @@ def verify_cashfree_split(
         )
 
         # ========================================================
-        # Settlement-level information
+        # 7. Settlement details
         # ========================================================
 
         settlement = {}
@@ -332,26 +361,124 @@ def verify_cashfree_split(
                 or {}
             )
 
-        transfer_utr = (
-            settlement.get(
-                "transfer_utr"
-            )
+        transfer_utr = settlement.get(
+            "transfer_utr"
         )
 
-        transfer_time = (
-            settlement.get(
-                "transfer_time"
-            )
+        transfer_time = settlement.get(
+            "transfer_time"
         )
 
-        cf_settlement_id = (
-            settlement.get(
-                "cf_settlement_id"
-            )
+        cf_settlement_id = settlement.get(
+            "cf_settlement_id"
         )
 
         # ========================================================
-        # Return
+        # 8. SYNCHRONIZE LOCAL DATABASE
+        #
+        # If Cashfree confirms vendor:
+        #     CREATED + TRANSFER_INITIATED
+        #
+        # If Cashfree does NOT confirm vendor:
+        #     PENDING + ON_HOLD
+        #
+        # This fixes stale local state such as Order #30.
+        # ========================================================
+
+        if cashfree_split_confirmed:
+
+            cursor.execute(
+                """
+                UPDATE
+                    marketplace_seller_payout_transactions
+
+                SET
+                    cashfree_split_status = 'CREATED',
+
+                    status = CASE
+                        WHEN status = 'ON_HOLD'
+                        THEN 'TRANSFER_INITIATED'
+                        ELSE status
+                    END,
+
+                    cashfree_settlement_id =
+                        COALESCE(
+                            %s,
+                            cashfree_settlement_id
+                        ),
+
+                    failure_reason = NULL
+
+                WHERE id = %s
+                """,
+                (
+                    cf_settlement_id,
+                    payout_transaction_id,
+                ),
+            )
+
+            connection.commit()
+
+            payout["cashfree_split_status"] = (
+                "CREATED"
+            )
+
+            if str(
+                payout.get(
+                    "status"
+                )
+                or ""
+            ).upper() == "ON_HOLD":
+                payout["status"] = (
+                    "TRANSFER_INITIATED"
+                )
+
+            payout["cashfree_settlement_id"] = (
+                cf_settlement_id
+                or payout.get(
+                    "cashfree_settlement_id"
+                )
+            )
+
+        else:
+
+            # ----------------------------------------------------
+            # No Cashfree vendor split.
+            #
+            # If the local database incorrectly says CREATED,
+            # correct it immediately.
+            # ----------------------------------------------------
+
+            cursor.execute(
+                """
+                UPDATE
+                    marketplace_seller_payout_transactions
+
+                SET
+                    cashfree_split_status = 'PENDING',
+                    status = 'ON_HOLD',
+                    failure_reason = %s
+
+                WHERE id = %s
+                """,
+                (
+                    CASHFREE_NO_SPLIT_REASON,
+                    payout_transaction_id,
+                ),
+            )
+
+            connection.commit()
+
+            payout["cashfree_split_status"] = (
+                "PENDING"
+            )
+
+            payout["status"] = (
+                "ON_HOLD"
+            )
+
+        # ========================================================
+        # 9. Return authoritative verification result
         # ========================================================
 
         return {
@@ -382,20 +509,28 @@ def verify_cashfree_split(
                     "status"
                 ),
 
-                "cashfree_vendor_id": payout.get(
-                    "cashfree_vendor_id"
+                "cashfree_vendor_id": (
+                    payout.get(
+                        "cashfree_vendor_id"
+                    )
                 ),
 
-                "cashfree_split_status": payout.get(
-                    "cashfree_split_status"
+                "cashfree_split_status": (
+                    payout.get(
+                        "cashfree_split_status"
+                    )
                 ),
 
-                "cashfree_settlement_id": payout.get(
-                    "cashfree_settlement_id"
+                "cashfree_settlement_id": (
+                    payout.get(
+                        "cashfree_settlement_id"
+                    )
                 ),
 
-                "cashfree_transfer_id": payout.get(
-                    "cashfree_transfer_id"
+                "cashfree_transfer_id": (
+                    payout.get(
+                        "cashfree_transfer_id"
+                    )
                 ),
 
                 "gross_amount": float(

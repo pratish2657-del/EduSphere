@@ -199,11 +199,7 @@ def split_after_payment(
 def get_split_and_settlement_details(
     order_id: str,
 ):
-    """Get Cashfree Easy Split details for an order.
-
-    Cashfree endpoint:
-        GET /easy-split/orders/{order_id}
-    """
+    """Get Cashfree Easy Split details for an order."""
 
     return _request(
         "GET",
@@ -221,13 +217,10 @@ def get_split_reconciliation(
 ):
     """Get Cashfree Easy Split vendor reconciliation.
 
-    This endpoint is READ-ONLY from EduSphere's point of view.
-
-    IMPORTANT:
-    A successful HTTP 200 response does not itself mean that
-    a vendor split exists. The returned `data` must contain
-    evidence of the vendor split before EduSphere marks its
-    local payout as CREATED.
+    A successful 200 response does not mean that a vendor
+    split exists. The returned data must contain vendor
+    information before EduSphere marks the local payout
+    as CREATED.
     """
 
     return _request(

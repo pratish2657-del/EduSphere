@@ -23,9 +23,18 @@ from app.services.marketplace_payout_service import (
 )
 
 
+# ============================================================
+# CASHFREE RECONCILIATION HOLD
+# ============================================================
+
 CASHFREE_RECON_HOLD_PREFIX = (
-    "Cashfree reports the transaction"
+    "Cashfree payment is processed"
 )
+
+
+# ============================================================
+# SELLER ONBOARDING
+# ============================================================
 
 
 def get_route_onboarding(
@@ -169,6 +178,7 @@ def refresh_route_status(
 
     except Exception as exc:
         connection.rollback()
+
         raise BadRequestError(
             str(exc)
         ) from exc
@@ -203,6 +213,10 @@ def submit_route_onboarding(
     try:
         cursor = connection.cursor()
 
+        # ========================================================
+        # USER
+        # ========================================================
+
         cursor.execute(
             """
             SELECT
@@ -224,6 +238,10 @@ def submit_route_onboarding(
             raise NotFoundError(
                 "Seller account not found"
             )
+
+        # ========================================================
+        # EXISTING PAYOUT PROFILE
+        # ========================================================
 
         cursor.execute(
             """
@@ -253,6 +271,10 @@ def submit_route_onboarding(
                 "already exists. Refresh verification "
                 "status instead."
             )
+
+        # ========================================================
+        # CASHFREE VENDOR
+        # ========================================================
 
         vendor_id = (
             f"edusphere_seller_{user_id}"
@@ -293,6 +315,10 @@ def submit_route_onboarding(
             else "PENDING_VERIFICATION"
         )
 
+        # ========================================================
+        # SAVE SELLER PAYOUT PROFILE
+        # ========================================================
+
         cursor.execute(
             """
             INSERT INTO marketplace_seller_payouts
@@ -329,19 +355,27 @@ def submit_route_onboarding(
 
             ON DUPLICATE KEY UPDATE
                 enabled = TRUE,
+
                 payout_status =
                     VALUES(payout_status),
+
                 cashfree_vendor_id =
                     VALUES(cashfree_vendor_id),
+
                 cashfree_vendor_status =
                     VALUES(cashfree_vendor_status),
+
                 cashfree_schedule_option =
                     VALUES(cashfree_schedule_option),
+
                 bank_account_last4 =
                     VALUES(bank_account_last4),
+
                 bank_ifsc =
                     VALUES(bank_ifsc),
+
                 cashfree_vendor_error = NULL,
+
                 updated_at =
                     CURRENT_TIMESTAMP
             """,
@@ -371,6 +405,11 @@ def submit_route_onboarding(
         connection.close()
 
 
+# ============================================================
+# RETRY PAYOUT
+# ============================================================
+
+
 def retry_payout(
     payout_transaction_id: int,
     actor_user_id: int,
@@ -387,6 +426,7 @@ def retry_payout(
             SELECT
                 order_id,
                 status,
+                cashfree_split_status,
                 failure_reason
 
             FROM marketplace_seller_payout_transactions
@@ -405,11 +445,16 @@ def retry_payout(
                 "Payout transaction not found"
             )
 
-        # --------------------------------------------------------
-        # Cashfree already-processed + no vendor split confirmed.
+        # ========================================================
+        # CASHFREE RECONCILIATION HOLD
         #
-        # Do not send another split request.
-        # --------------------------------------------------------
+        # IMPORTANT:
+        #
+        # Cashfree said the payment was already processed,
+        # but reconciliation did not confirm the vendor split.
+        #
+        # NEVER send another Easy Split POST automatically.
+        # ========================================================
 
         failure_reason = str(
             row.get(
@@ -423,22 +468,68 @@ def retry_payout(
         ):
             return {
                 "success": False,
+
                 "payout_transaction_id": (
                     payout_transaction_id
                 ),
+
                 "result": {
                     "already_processed": True,
+
                     "cashfree_split_confirmed": False,
+
                     "reconciled": False,
+
+                    "cashfree_order_id": None,
+
                     "reason": (
                         "This payout is on hold because "
-                        "Cashfree reported the transaction "
-                        "as already processed but did not "
-                        "confirm the vendor split. "
-                        "Use Verify Cashfree."
+                        "Cashfree reported the payment as "
+                        "already processed but did not confirm "
+                        "the vendor split. Use Verify Cashfree."
                     ),
                 },
             }
+
+        # ========================================================
+        # LOCAL CREATED STATE
+        #
+        # Do not retry an already confirmed split.
+        # ========================================================
+
+        if (
+            str(
+                row.get(
+                    "cashfree_split_status"
+                )
+                or ""
+            ).upper()
+            == "CREATED"
+        ):
+            return {
+                "success": True,
+
+                "payout_transaction_id": (
+                    payout_transaction_id
+                ),
+
+                "result": {
+                    "already_processed": True,
+
+                    "cashfree_split_confirmed": True,
+
+                    "reconciled": True,
+
+                    "reason": (
+                        "Cashfree Easy Split is already "
+                        "confirmed for this payout."
+                    ),
+                },
+            }
+
+        # ========================================================
+        # NORMAL CASHFREE SPLIT ATTEMPT
+        # ========================================================
 
         result = attempt_cashfree_split(
             row["order_id"]
@@ -446,16 +537,25 @@ def retry_payout(
 
         return {
             "success": bool(
-                result.get("success")
+                result.get(
+                    "success"
+                )
             ),
+
             "payout_transaction_id": (
                 payout_transaction_id
             ),
+
             "result": result,
         }
 
     finally:
         connection.close()
+
+
+# ============================================================
+# REFUNDS
+# ============================================================
 
 
 def list_refunds() -> list[dict[str, Any]]:
@@ -498,6 +598,11 @@ def list_refunds() -> list[dict[str, Any]]:
         connection.close()
 
 
+# ============================================================
+# PAYOUT LIST
+# ============================================================
+
+
 def list_payouts(
     actor_user_id: int,
 ) -> list[dict[str, Any]]:
@@ -527,6 +632,7 @@ def list_payouts(
                 pt.cashfree_split_status,
                 pt.cashfree_settlement_id,
                 pt.cashfree_transfer_id,
+
                 pt.failure_reason,
                 pt.created_at,
                 pt.settled_at,
@@ -536,47 +642,74 @@ def list_payouts(
 
                 CASE
 
-                    /* ------------------------------------------------
-                       Confirmed split:
-                       allow verification and reversal.
-                       ------------------------------------------------ */
+                    /* =================================================
+                       CONFIRMED CASHFREE SPLIT
+
+                       Reverse is allowed only when the local split
+                       is actually marked CREATED.
+
+                       This prevents an ON_HOLD / stale payout from
+                       showing a Reverse button.
+                       ================================================= */
 
                     WHEN pt.status IN (
                         'TRANSFER_INITIATED',
                         'SETTLED'
                     )
+
+                    AND pt.cashfree_split_status = 'CREATED'
+
                     THEN 'REVERSE'
 
-                    /* ------------------------------------------------
-                       Cashfree already processed but split not
-                       confirmed by reconciliation.
-                       ------------------------------------------------ */
+
+                    /* =================================================
+                       CASHFREE RECONCILIATION HOLD
+
+                       Cashfree payment is processed but no vendor
+                       split has been confirmed.
+
+                       Only verification is allowed.
+                       ================================================= */
 
                     WHEN pt.status = 'ON_HOLD'
+
                      AND pt.failure_reason LIKE
-                         'Cashfree reports the transaction%'
+                         'Cashfree payment is processed%'
+
                     THEN 'VERIFY'
 
-                    /* ------------------------------------------------
-                       Normal retry states.
-                       ------------------------------------------------ */
+
+                    /* =================================================
+                       NORMAL RETRY
+
+                       These payouts can attempt Easy Split.
+                       ================================================= */
 
                     WHEN sp.payout_status = 'VERIFIED'
+
                      AND pt.status IN (
                          'PENDING',
                          'READY',
-                         'FAILED',
-                         'ON_HOLD'
+                         'FAILED'
                      )
+
                     THEN 'RETRY'
 
-                    /* ------------------------------------------------
-                       Seller onboarding required.
-                       ------------------------------------------------ */
+
+                    /* =================================================
+                       SELLER ONBOARDING REQUIRED
+                       ================================================= */
 
                     WHEN sp.payout_status IS NULL
+
                       OR sp.payout_status <> 'VERIFIED'
+
                     THEN 'SELLER_ONBOARDING_REQUIRED'
+
+
+                    /* =================================================
+                       DEFAULT
+                       ================================================= */
 
                     ELSE 'WAITING'
 
@@ -600,6 +733,11 @@ def list_payouts(
 
     finally:
         connection.close()
+
+
+# ============================================================
+# REVERSE PAYOUT
+# ============================================================
 
 
 def reverse_payout(
@@ -643,6 +781,23 @@ def reverse_payout(
                 "Easy Split vendor"
             )
 
+        # ========================================================
+        # SAFETY CHECK
+        #
+        # Reverse only a payout whose Easy Split was confirmed.
+        # ========================================================
+
+        if (
+            payout.get(
+                "cashfree_split_status"
+            )
+            != "CREATED"
+        ):
+            raise BadRequestError(
+                "Cashfree Easy Split has not been "
+                "confirmed for this payout"
+            )
+
         if payout.get(
             "status"
         ) not in {
@@ -670,6 +825,10 @@ def reverse_payout(
                 "Reversal amount must be at least ₹1"
             )
 
+        # ========================================================
+        # CASHFREE VENDOR BALANCE TRANSFER
+        # ========================================================
+
         result = transfer_vendor_balance(
             vendor_id,
             requested,
@@ -692,6 +851,10 @@ def reverse_payout(
             )
             or uuid.uuid4()
         )
+
+        # ========================================================
+        # REVERSAL RECORD
+        # ========================================================
 
         cursor.execute(
             """
@@ -722,6 +885,10 @@ def reverse_payout(
                 created_by,
             ),
         )
+
+        # ========================================================
+        # UPDATE PAYOUT
+        # ========================================================
 
         cursor.execute(
             """
@@ -756,6 +923,11 @@ def reverse_payout(
         connection.close()
 
 
+# ============================================================
+# CANCEL MARKETPLACE ORDER
+# ============================================================
+
+
 def cancel_marketplace_order(
     order_id: int,
     admin_user_id: int,
@@ -773,6 +945,7 @@ def cancel_marketplace_order(
                 o.buyer_id,
                 o.institution_id,
                 o.status AS order_status,
+
                 mp.id AS payment_id,
                 mp.payment_method,
                 mp.status AS payment_status
@@ -795,6 +968,10 @@ def cancel_marketplace_order(
             raise NotFoundError(
                 "Marketplace order not found"
             )
+
+        # ========================================================
+        # ADMIN ROLE
+        # ========================================================
 
         cursor.execute(
             """
@@ -826,6 +1003,10 @@ def cancel_marketplace_order(
                 "Administrator access is required"
             )
 
+        # ========================================================
+        # INSTITUTION CHECK
+        # ========================================================
+
         if role == "ADMIN":
             cursor.execute(
                 """
@@ -850,6 +1031,10 @@ def cancel_marketplace_order(
                     "outside your institution"
                 )
 
+        # ========================================================
+        # ALREADY REFUNDED
+        # ========================================================
+
         if str(
             order["order_status"]
             or ""
@@ -857,6 +1042,10 @@ def cancel_marketplace_order(
             raise BadRequestError(
                 "A refunded order cannot be cancelled"
             )
+
+        # ========================================================
+        # PAID ORDERS MUST USE REFUND
+        # ========================================================
 
         if (
             order["payment_id"] is not None
@@ -872,10 +1061,18 @@ def cancel_marketplace_order(
                 "of cancellation."
             )
 
+        # ========================================================
+        # RESTORE INVENTORY
+        # ========================================================
+
         restore_order_inventory(
             order_id,
             cursor,
         )
+
+        # ========================================================
+        # CANCEL PAYMENT
+        # ========================================================
 
         if order["payment_id"] is not None:
             cursor.execute(
@@ -889,8 +1086,14 @@ def cancel_marketplace_order(
                 WHERE id = %s
                   AND status = 'PENDING'
                 """,
-                (order["payment_id"],),
+                (
+                    order["payment_id"],
+                ),
             )
+
+        # ========================================================
+        # CANCEL PAYOUT RECORDS
+        # ========================================================
 
         cursor.execute(
             """
@@ -916,6 +1119,10 @@ def cancel_marketplace_order(
             ),
         )
 
+        # ========================================================
+        # CANCEL ORDER
+        # ========================================================
+
         cursor.execute(
             """
             UPDATE marketplace_orders
@@ -931,7 +1138,9 @@ def cancel_marketplace_order(
                   'REFUNDED'
               )
             """,
-            (order_id,),
+            (
+                order_id,
+            ),
         )
 
         connection.commit()
@@ -940,8 +1149,11 @@ def cancel_marketplace_order(
             "message": (
                 "Marketplace order cancelled successfully"
             ),
+
             "order_id": order_id,
+
             "status": "CANCELLED",
+
             "payment_status": (
                 "CANCELLED"
                 if order["payment_id"] is not None
@@ -957,6 +1169,11 @@ def cancel_marketplace_order(
         connection.close()
 
 
+# ============================================================
+# REFUND PAYMENT
+# ============================================================
+
+
 def refund_payment(
     payment_db_id: int,
     created_by: int,
@@ -968,6 +1185,10 @@ def refund_payment(
 
     try:
         cursor = connection.cursor()
+
+        # ========================================================
+        # PAYMENT
+        # ========================================================
 
         cursor.execute(
             """
@@ -997,6 +1218,10 @@ def refund_payment(
                 "can be refunded"
             )
 
+        # ========================================================
+        # PAYMENT METHOD
+        # ========================================================
+
         is_cod = (
             str(
                 payment.get(
@@ -1018,11 +1243,17 @@ def refund_payment(
                 "Refund amount must be at least ₹1"
             )
 
+        # ========================================================
+        # COD FULL REFUND ONLY
+        # ========================================================
+
         if (
             is_cod
             and abs(
                 refund_amount
-                - float(payment["amount"])
+                - float(
+                    payment["amount"]
+                )
             )
             > 0.0001
         ):
@@ -1030,6 +1261,10 @@ def refund_payment(
                 "COD refunds must refund "
                 "the full collected amount"
             )
+
+        # ========================================================
+        # PREVIOUS REFUNDS
+        # ========================================================
 
         cursor.execute(
             """
@@ -1046,7 +1281,9 @@ def refund_payment(
 
             FOR UPDATE
             """,
-            (payment_db_id,),
+            (
+                payment_db_id,
+            ),
         )
 
         refunded = float(
@@ -1069,10 +1306,18 @@ def refund_payment(
                 "the remaining refundable amount"
             )
 
+        # ========================================================
+        # COD REFUND
+        # ========================================================
+
         if is_cod:
             cashfree_refund_id = None
             status = "PROCESSED"
             processed_at = "CURRENT_TIMESTAMP"
+
+        # ========================================================
+        # CASHFREE REFUND
+        # ========================================================
 
         else:
             refund_id = (
@@ -1136,6 +1381,10 @@ def refund_payment(
                 else "NULL"
             )
 
+        # ========================================================
+        # INSERT REFUND
+        # ========================================================
+
         cursor.execute(
             f"""
             INSERT INTO marketplace_refunds
@@ -1178,11 +1427,20 @@ def refund_payment(
 
         refund_db_id = cursor.lastrowid
 
+        # ========================================================
+        # FINALIZED REFUND
+        # ========================================================
+
         if status == "PROCESSED":
+
             restore_order_inventory(
                 payment["order_id"],
                 cursor,
             )
+
+            # ----------------------------------------------------
+            # PAYMENT
+            # ----------------------------------------------------
 
             cursor.execute(
                 """
@@ -1195,8 +1453,14 @@ def refund_payment(
                 WHERE id = %s
                   AND status = 'PAID'
                 """,
-                (payment_db_id,),
+                (
+                    payment_db_id,
+                ),
             )
+
+            # ----------------------------------------------------
+            # PAYOUT
+            # ----------------------------------------------------
 
             cursor.execute(
                 """
@@ -1221,6 +1485,10 @@ def refund_payment(
                 ),
             )
 
+            # ----------------------------------------------------
+            # ORDER
+            # ----------------------------------------------------
+
             cursor.execute(
                 """
                 UPDATE marketplace_orders
@@ -1236,22 +1504,38 @@ def refund_payment(
                       'REFUNDED'
                   )
                 """,
-                (payment["order_id"],),
+                (
+                    payment["order_id"],
+                ),
             )
 
         connection.commit()
 
         return {
             "success": True,
-            "refund_id": cashfree_refund_id,
-            "refund_db_id": refund_db_id,
-            "amount": refund_amount,
-            "reverse_all": reverse_all,
+
+            "refund_id": (
+                cashfree_refund_id
+            ),
+
+            "refund_db_id": (
+                refund_db_id
+            ),
+
+            "amount": (
+                refund_amount
+            ),
+
+            "reverse_all": (
+                reverse_all
+            ),
+
             "gateway": (
                 "COD"
                 if is_cod
                 else "CASHFREE"
             ),
+
             "refund_mode": (
                 "MANUAL_CASH"
                 if is_cod
