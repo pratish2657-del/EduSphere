@@ -379,6 +379,24 @@ export default function AdminDashboard() {
           border-radius: 999px;
         }
         .admin-nav:hover { background: rgba(255,255,255,.055) !important; }
+
+        .admin-sidebar nav::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .admin-sidebar nav::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .admin-sidebar nav::-webkit-scrollbar-thumb {
+          background: rgba(148,163,184,.24);
+          border-radius: 999px;
+        }
+
+        .admin-sidebar nav::-webkit-scrollbar-thumb:hover {
+          background: rgba(148,163,184,.42);
+        }
+
         .admin-quick:hover { transform: translateY(-2px); border-color: rgba(96,165,250,.35) !important; }
         .admin-mobile-nav { display: none; }
 
@@ -425,7 +443,14 @@ export default function AdminDashboard() {
             overflow-x: hidden !important;
           }
 
-          .admin-sidebar { transform: translateX(-105%); transition: transform .25s ease; }
+          .admin-sidebar {
+            transform: translateX(-105%);
+            transition: transform .25s ease;
+            height: 100vh;
+            max-height: 100vh;
+            overflow: hidden;
+          }
+
           .admin-sidebar.open { transform: translateX(0); }
           .admin-mobile-nav { display: flex; }
           .admin-main {
@@ -906,6 +931,7 @@ const styles: Record<string, React.CSSProperties> = {
     position: "fixed",
     inset: "0 auto 0 0",
     width: 270,
+    height: "100vh",
     padding: "22px 15px",
     background: "rgba(5,11,21,.86)",
     borderRight: "1px solid rgba(148,163,184,.12)",
@@ -913,6 +939,8 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 20,
     display: "flex",
     flexDirection: "column",
+    overflow: "hidden",
+    boxSizing: "border-box",
   },
   brand: {
     display: "flex",
@@ -980,6 +1008,12 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 4,
+    flex: "1 1 auto",
+    minHeight: 0,
+    overflowY: "auto",
+    overflowX: "hidden",
+    paddingRight: 3,
+    scrollbarWidth: "thin",
   },
   navCaption: {
     color: "#475569",
@@ -1021,6 +1055,8 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: "auto",
     paddingTop: 14,
     borderTop: "1px solid rgba(148,163,184,.10)",
+    flex: "0 0 auto",
+    background: "rgba(5,11,21,.96)",
   },
   accountCard: {
     display: "flex",
