@@ -6,10 +6,7 @@ import uuid
 
 import httpx
 
-from app.core.exceptions import (
-    BadRequestError,
-    ServiceUnavailableError,
-)
+from app.core.exceptions import BadRequestError, ServiceUnavailableError
 from app.services.payment_gateway_service import (
     get_cashfree_config,
     get_cashfree_headers,
@@ -31,54 +28,23 @@ def _request(
 
     headers["x-request-id"] = str(uuid.uuid4())
 
-    url = f"{config['base_url']}{path}"
-
-    print(
-        "========== CASHFREE EASY SPLIT REQUEST =========="
-    )
-    print("METHOD:", method)
-    print("URL:", url)
-    print("PAYLOAD:", json)
-    print("IDEMPOTENCY:", idempotency_key)
-    print("==================================================")
-
     try:
         response = httpx.request(
             method,
-            url,
+            f"{config['base_url']}{path}",
             headers=headers,
             json=json,
             timeout=30.0,
         )
     except httpx.RequestError as exc:
-        print(
-            "========== CASHFREE REQUEST ERROR =========="
-        )
-        print("ERROR:", repr(exc))
-        print("=============================================")
-
         raise ServiceUnavailableError(
             f"Cashfree Easy Split request failed: {exc}"
         ) from exc
 
-    print(
-        "========== CASHFREE EASY SPLIT RESPONSE =========="
-    )
-    print("STATUS:", response.status_code)
-    print("BODY:", response.text)
-    print("HEADERS:", dict(response.headers))
-    print("===================================================")
-
     try:
-        payload = (
-            response.json()
-            if response.content
-            else {}
-        )
+        payload = response.json() if response.content else {}
     except ValueError:
-        payload = {
-            "raw": response.text,
-        }
+        payload = {"raw": response.text}
 
     if not response.is_success:
         detail = (
@@ -87,18 +53,11 @@ def _request(
             or payload.get("code")
             or response.text[:1000]
         )
-
         raise BadRequestError(
-            "Cashfree Easy Split error "
-            f"({response.status_code}): {detail}"
+            f"Cashfree Easy Split error: {detail}"
         )
 
     return payload
-
-
-# ============================================================
-# VENDORS
-# ============================================================
 
 
 def create_vendor(
@@ -110,9 +69,6 @@ def create_vendor(
     bank_account_number: str,
     ifsc: str,
     account_holder: str,
-    pan: str | None = None,
-    business_type: str = "E-commerce",
-    account_type: str = "Individual",
     schedule_option: int = 1,
     verify_account: bool = True,
 ):
@@ -133,11 +89,6 @@ def create_vendor(
                 "account_holder": account_holder,
                 "ifsc": ifsc.upper().strip(),
             },
-            "kyc_details": {
-                "account_type": account_type,
-                "business_type": business_type,
-                "pan": pan,
-            },
         },
         idempotency_key=str(
             uuid.uuid5(
@@ -155,10 +106,7 @@ def get_vendor(vendor_id: str):
     )
 
 
-def update_vendor(
-    vendor_id: str,
-    payload: dict,
-):
+def update_vendor(vendor_id: str, payload: dict):
     return _request(
         "PATCH",
         f"/easy-split/vendors/{vendor_id}",
@@ -166,15 +114,13 @@ def update_vendor(
     )
 
 
-# ============================================================
-# PAYMENT SPLIT
-# ============================================================
+def split_after_payment(order_id: str, splits: list[dict]):
+    """Legacy split-after-payment API.
 
-
-def split_after_payment(
-    order_id: str,
-    splits: list[dict],
-):
+    New EduSphere checkouts do not use this endpoint. Splits are attached
+    to the Cashfree PG order during order creation. This function remains
+    available only for backward compatibility with old callers.
+    """
     return _request(
         "POST",
         f"/easy-split/orders/{order_id}/split",
@@ -191,38 +137,16 @@ def split_after_payment(
     )
 
 
-# ============================================================
-# SPLIT + SETTLEMENT DETAILS
-# ============================================================
-
-
-def get_split_and_settlement_details(
-    order_id: str,
-):
-    """Get Cashfree Easy Split details for an order."""
-
+def get_split_and_settlement_details(order_id: str):
+    # Cashfree's current endpoint is the order-level resource, not
+    # /easy-split/orders/{order_id}/split.
     return _request(
         "GET",
         f"/easy-split/orders/{order_id}",
     )
 
 
-# ============================================================
-# RECONCILIATION
-# ============================================================
-
-
-def get_split_reconciliation(
-    order_id: str,
-):
-    """Get Cashfree Easy Split vendor reconciliation.
-
-    A successful 200 response does not mean that a vendor
-    split exists. The returned data must contain vendor
-    information before EduSphere marks the local payout
-    as CREATED.
-    """
-
+def get_split_reconciliation(order_id: str):
     return _request(
         "POST",
         "/split/order/vendor/recon",
@@ -246,11 +170,6 @@ def get_split_reconciliation(
     )
 
 
-# ============================================================
-# REFUNDS
-# ============================================================
-
-
 def create_refund(
     order_id: str,
     refund_amount: float,
@@ -261,15 +180,9 @@ def create_refund(
         "POST",
         f"/orders/{order_id}/refunds",
         json={
-            "refund_amount": round(
-                float(refund_amount),
-                2,
-            ),
+            "refund_amount": round(float(refund_amount), 2),
             "refund_id": refund_id,
-            "refund_note": (
-                reason
-                or "EduSphere marketplace refund"
-            ),
+            "refund_note": reason or "EduSphere marketplace refund",
             "refund_speed": "STANDARD",
         },
         idempotency_key=str(
@@ -279,11 +192,6 @@ def create_refund(
             )
         ),
     )
-
-
-# ============================================================
-# VENDOR BALANCE TRANSFER
-# ============================================================
 
 
 def transfer_vendor_balance(
@@ -299,10 +207,7 @@ def transfer_vendor_balance(
         json={
             "transfer_from": transfer_from,
             "transfer_type": "ADJUSTMENT",
-            "transfer_amount": round(
-                float(amount),
-                2,
-            ),
+            "transfer_amount": round(float(amount), 2),
             "remark": remark,
         },
         idempotency_key=str(uuid.uuid4()),

@@ -2,162 +2,55 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.exceptions import BadRequestError
 from app.database import get_connection
 from app.services.cashfree_easy_split_service import (
+    get_split_and_settlement_details,
     get_split_reconciliation,
-    split_after_payment,
 )
 
 
 CASHFREE_RECON_HOLD_REASON = (
-    "Cashfree payment is processed, but no vendor split "
-    "is confirmed by Cashfree reconciliation"
+    "Cashfree payment is processed, but no vendor split is confirmed "
+    "by Cashfree reconciliation"
 )
 
 
-def _reconciliation_vendor_ids(
-    reconciliation: Any,
-) -> set[str]:
-    """Extract vendor IDs actually reported by Cashfree."""
-
-    if not isinstance(
-        reconciliation,
-        dict,
-    ):
-        return set()
-
-    data = reconciliation.get(
-        "data"
-    )
-
-    if not isinstance(
-        data,
-        list,
-    ):
-        return set()
-
+def _extract_vendor_ids(payload: Any) -> set[str]:
+    """Extract Cashfree vendor IDs from reconciliation/order responses."""
     vendor_ids: set[str] = set()
 
-    for item in data:
-        if not isinstance(
-            item,
-            dict,
-        ):
-            continue
-
-        # --------------------------------------------------------
-        # Vendor commission record
-        # --------------------------------------------------------
-
-        entity_type = str(
-            item.get("entity_type")
-            or ""
-        ).strip().lower()
-
-        if entity_type == "vendor_commission":
-            vendor_id = item.get(
-                "merchant_vendor_id"
-            )
-
-            if vendor_id:
-                vendor_ids.add(
-                    str(vendor_id)
-                )
-
-        # --------------------------------------------------------
-        # Direct vendor IDs
-        # --------------------------------------------------------
-
-        for key in (
-            "merchant_vendor_id",
-            "vendor_id",
-        ):
-            vendor_id = item.get(
-                key
-            )
-
-            if vendor_id:
-                vendor_ids.add(
-                    str(vendor_id)
-                )
-
-        # --------------------------------------------------------
-        # Order split records
-        # --------------------------------------------------------
-
-        order_splits = item.get(
-            "order_splits"
-        )
-
-        if not isinstance(
-            order_splits,
-            list,
-        ):
-            continue
-
-        for split_group in order_splits:
-            if not isinstance(
-                split_group,
-                dict,
+    def walk(value: Any) -> None:
+        if isinstance(value, dict):
+            for key in (
+                "vendor_id",
+                "merchant_vendor_id",
             ):
-                continue
+                candidate = value.get(key)
+                if candidate:
+                    vendor_ids.add(str(candidate))
 
-            split_items = split_group.get(
-                "split"
-            )
+            for child in value.values():
+                walk(child)
 
-            if not isinstance(
-                split_items,
-                list,
-            ):
-                continue
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
 
-            for split_item in split_items:
-                if not isinstance(
-                    split_item,
-                    dict,
-                ):
-                    continue
-
-                for key in (
-                    "merchant_vendor_id",
-                    "vendor_id",
-                ):
-                    vendor_id = split_item.get(
-                        key
-                    )
-
-                    if vendor_id:
-                        vendor_ids.add(
-                            str(vendor_id)
-                        )
-
+    walk(payload)
     return vendor_ids
 
 
-def _cashfree_reconciliation_confirms_vendor(
-    reconciliation: Any,
-    vendor_id: str,
-) -> bool:
-    return (
-        str(vendor_id)
-        in _reconciliation_vendor_ids(
-            reconciliation
-        )
-    )
-
-
-def attempt_cashfree_split(
-    order_id: int,
-) -> dict[str, Any]:
+def attempt_cashfree_split(order_id: int) -> dict[str, Any]:
     """
-    Create Cashfree Easy Split after successful payment.
+    Verify the Easy Split that was attached to the Cashfree order
+    BEFORE the customer payment.
 
-    `order_id` is the local EduSphere order ID.
-
-    Cashfree receives the actual gateway order ID from
-    marketplace_payments.gateway_order_id.
+    IMPORTANT:
+    This function deliberately does NOT call the split-after-payment API.
+    Cashfree can reject a split request once a transaction is already
+    processed. New EduSphere orders therefore carry `order_splits` during
+    Payment Gateway order creation, and this function only reconciles the
+    resulting Cashfree state after payment.
     """
 
     connection = get_connection()
@@ -165,9 +58,9 @@ def attempt_cashfree_split(
     try:
         cursor = connection.cursor()
 
-        # ========================================================
-        # 1. Successful Cashfree payment
-        # ========================================================
+        # ====================================================
+        # 1. Get the actual Cashfree order ID
+        # ====================================================
 
         cursor.execute(
             """
@@ -185,7 +78,6 @@ def attempt_cashfree_split(
               AND status = 'PAID'
 
             ORDER BY id DESC
-
             LIMIT 1
             """,
             (order_id,),
@@ -194,34 +86,26 @@ def attempt_cashfree_split(
         payment = cursor.fetchone()
 
         if not payment:
+            connection.commit()
             return {
                 "success": False,
                 "attempted": False,
-                "reason": (
-                    "No successful Cashfree payment "
-                    "found for this order"
-                ),
+                "reason": "No successful Cashfree payment found for this order",
             }
 
-        cashfree_order_id = (
-            payment.get(
-                "gateway_order_id"
-            )
-        )
+        cashfree_order_id = payment.get("gateway_order_id")
 
         if not cashfree_order_id:
+            connection.commit()
             return {
                 "success": False,
                 "attempted": False,
-                "reason": (
-                    "Cashfree gateway order ID "
-                    "is missing"
-                ),
+                "reason": "Cashfree gateway order ID is missing",
             }
 
-        # ========================================================
-        # 2. Get payout rows
-        # ========================================================
+        # ====================================================
+        # 2. Get seller payout rows
+        # ====================================================
 
         cursor.execute(
             """
@@ -230,9 +114,8 @@ def attempt_cashfree_split(
                 pt.seller_id,
                 pt.seller_amount,
                 pt.status,
-                pt.cashfree_vendor_id,
                 pt.cashfree_split_status,
-                pt.failure_reason,
+                pt.cashfree_vendor_id,
 
                 sp.cashfree_vendor_id AS configured_vendor_id,
                 sp.payout_status,
@@ -245,13 +128,6 @@ def attempt_cashfree_split(
 
             WHERE pt.order_id = %s
 
-              AND pt.status IN (
-                  'PENDING',
-                  'READY',
-                  'FAILED',
-                  'ON_HOLD'
-              )
-
             FOR UPDATE
             """,
             (order_id,),
@@ -260,120 +136,54 @@ def attempt_cashfree_split(
         rows = cursor.fetchall()
 
         if not rows:
+            connection.commit()
             return {
                 "success": True,
                 "attempted": False,
                 "reason": "No payout rows",
-                "cashfree_order_id": (
-                    cashfree_order_id
-                ),
+                "cashfree_order_id": cashfree_order_id,
             }
 
-        # ========================================================
-        # 3. Already confirmed
-        # ========================================================
+        # ====================================================
+        # 3. Already confirmed locally
+        # ====================================================
 
-        if any(
-            str(
-                row.get(
-                    "cashfree_split_status"
-                )
-                or ""
-            ).upper()
+        if all(
+            str(row.get("cashfree_split_status") or "").upper()
             == "CREATED"
             for row in rows
         ):
             connection.commit()
-
             return {
                 "success": True,
                 "attempted": False,
                 "already_processed": True,
                 "cashfree_split_confirmed": True,
-                "reconciled": True,
-                "cashfree_order_id": (
-                    cashfree_order_id
-                ),
-                "reason": (
-                    "Cashfree Easy Split is already "
-                    "confirmed locally"
-                ),
+                "cashfree_order_id": cashfree_order_id,
+                "reason": "Cashfree Easy Split was already confirmed",
             }
 
-        # ========================================================
-        # 4. Reconciliation hold
-        #
-        # Do NOT POST another split request.
-        # ========================================================
+        # ====================================================
+        # 4. Validate local vendor configuration
+        # ====================================================
 
-        if any(
-            str(
-                row.get(
-                    "failure_reason"
-                )
-                or ""
-            ).startswith(
-                "Cashfree payment is processed"
-            )
-            for row in rows
-        ):
-            connection.commit()
-
-            return {
-                "success": False,
-                "attempted": False,
-                "already_processed": True,
-                "cashfree_split_confirmed": False,
-                "reconciled": False,
-                "cashfree_order_id": (
-                    cashfree_order_id
-                ),
-                "reason": (
-                    "This payout is on hold because "
-                    "Cashfree processed the payment but "
-                    "has not confirmed the vendor split. "
-                    "Use Verify Cashfree."
-                ),
-            }
-
-        # ========================================================
-        # 5. Build splits
-        # ========================================================
-
-        splits: list[dict[str, Any]] = []
-
-        eligible_rows = []
+        expected_vendor_ids: set[str] = set()
 
         for row in rows:
             vendor_id = (
-                row.get(
-                    "cashfree_vendor_id"
-                )
-                or row.get(
-                    "configured_vendor_id"
-                )
+                row.get("cashfree_vendor_id")
+                or row.get("configured_vendor_id")
             )
-
-            seller_amount = float(
-                row.get(
-                    "seller_amount"
-                )
-                or 0
-            )
-
             payout_status = str(
-                row.get(
-                    "payout_status"
-                )
-                or ""
+                row.get("payout_status") or ""
             ).upper()
-
             vendor_status = str(
-                row.get(
-                    "cashfree_vendor_status"
-                )
-                or ""
+                row.get("cashfree_vendor_status") or ""
             ).upper()
+            seller_amount = float(row.get("seller_amount") or 0)
+
+            if seller_amount <= 0:
+                continue
 
             if (
                 not vendor_id
@@ -382,417 +192,156 @@ def attempt_cashfree_split(
             ):
                 cursor.execute(
                     """
-                    UPDATE
-                        marketplace_seller_payout_transactions
-
+                    UPDATE marketplace_seller_payout_transactions
                     SET
-                        cashfree_vendor_id = %s,
                         status = 'ON_HOLD',
-                        failure_reason = %s
-
+                        failure_reason = %s,
+                        cashfree_split_status = 'PENDING'
                     WHERE id = %s
                     """,
                     (
-                        vendor_id,
-                        (
-                            "Cashfree Easy Split vendor "
-                            "is not verified/ACTIVE"
-                        ),
+                        "Cashfree Easy Split vendor is not verified/ACTIVE",
                         row["id"],
                     ),
                 )
-
                 continue
 
-            if seller_amount <= 0:
-                continue
-
-            split = {
-                "vendor_id": vendor_id,
-                "amount": round(
-                    seller_amount,
-                    2,
-                ),
-            }
-
-            splits.append(
-                split
-            )
-
-            eligible_rows.append(
-                (
-                    row,
-                    vendor_id,
-                )
-            )
+            vendor_id = str(vendor_id)
+            expected_vendor_ids.add(vendor_id)
 
             cursor.execute(
                 """
-                UPDATE
-                    marketplace_seller_payout_transactions
-
+                UPDATE marketplace_seller_payout_transactions
                 SET
                     cashfree_vendor_id = %s,
-                    cashfree_split_status = 'PENDING',
-                    status = 'READY',
-                    failure_reason = NULL
-
+                    cashfree_split_status = 'PENDING'
                 WHERE id = %s
                 """,
-                (
-                    vendor_id,
-                    row["id"],
-                ),
+                (vendor_id, row["id"]),
             )
 
-        # ========================================================
-        # 6. No eligible vendors
-        # ========================================================
-
-        if not splits:
+        if not expected_vendor_ids:
             connection.commit()
-
             return {
                 "success": False,
                 "attempted": False,
                 "cashfree_split_confirmed": False,
-                "cashfree_order_id": (
-                    cashfree_order_id
-                ),
-                "reason": (
-                    "No verified/ACTIVE "
-                    "Cashfree vendors"
-                ),
+                "cashfree_order_id": cashfree_order_id,
+                "reason": "No verified/ACTIVE Cashfree vendors",
             }
 
-        # ========================================================
-        # 7. Create Cashfree Easy Split
-        # ========================================================
+        # ====================================================
+        # 5. Ask Cashfree for authoritative split state
+        # ====================================================
 
-        result = split_after_payment(
-            cashfree_order_id,
-            splits,
+        cashfree_settlement = get_split_and_settlement_details(
+            cashfree_order_id
+        )
+        cashfree_reconciliation = get_split_reconciliation(
+            cashfree_order_id
         )
 
-        # ========================================================
-        # 8. Cashfree accepted the split
-        #
-        # This is the only normal path that marks CREATED.
-        # ========================================================
+        observed_vendor_ids = (
+            _extract_vendor_ids(cashfree_settlement)
+            | _extract_vendor_ids(cashfree_reconciliation)
+        )
 
-        for row, vendor_id in eligible_rows:
-            cursor.execute(
-                """
-                UPDATE
-                    marketplace_seller_payout_transactions
+        confirmed_vendor_ids = (
+            expected_vendor_ids & observed_vendor_ids
+        )
 
-                SET
-                    cashfree_vendor_id = %s,
-                    cashfree_split_status = 'CREATED',
-                    status = 'TRANSFER_INITIATED',
-                    failure_reason = NULL
+        settlement = (
+            cashfree_settlement.get("settlement", {})
+            if isinstance(cashfree_settlement, dict)
+            else {}
+        )
+        settlement_id = settlement.get("cf_settlement_id")
+        transfer_utr = settlement.get("transfer_utr")
 
-                WHERE id = %s
-                """,
-                (
-                    vendor_id,
-                    row["id"],
-                ),
+        # ====================================================
+        # 6. Confirm each vendor only when Cashfree confirms it
+        # ====================================================
+
+        all_confirmed = bool(expected_vendor_ids) and (
+            confirmed_vendor_ids == expected_vendor_ids
+        )
+
+        for row in rows:
+            vendor_id = (
+                row.get("cashfree_vendor_id")
+                or row.get("configured_vendor_id")
             )
+
+            if not vendor_id:
+                continue
+
+            vendor_id = str(vendor_id)
+
+            if vendor_id in confirmed_vendor_ids:
+                cursor.execute(
+                    """
+                    UPDATE marketplace_seller_payout_transactions
+                    SET
+                        cashfree_vendor_id = %s,
+                        cashfree_split_status = 'CREATED',
+                        status = CASE
+                            WHEN status = 'SETTLED' THEN status
+                            ELSE 'TRANSFER_INITIATED'
+                        END,
+                        cashfree_settlement_id = %s,
+                        cashfree_transfer_id = COALESCE(%s, cashfree_transfer_id),
+                        failure_reason = NULL
+                    WHERE id = %s
+                    """,
+                    (
+                        vendor_id,
+                        settlement_id,
+                        transfer_utr,
+                        row["id"],
+                    ),
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE marketplace_seller_payout_transactions
+                    SET
+                        cashfree_split_status = 'PENDING',
+                        status = 'ON_HOLD',
+                        failure_reason = %s
+                    WHERE id = %s
+                      AND status <> 'SETTLED'
+                    """,
+                    (
+                        CASHFREE_RECON_HOLD_REASON,
+                        row["id"],
+                    ),
+                )
 
         connection.commit()
 
         return {
-            "success": True,
+            "success": all_confirmed,
             "attempted": True,
-            "cashfree_order_id": (
-                cashfree_order_id
+            "cashfree_split_confirmed": all_confirmed,
+            "cashfree_order_id": cashfree_order_id,
+            "expected_vendor_ids": sorted(expected_vendor_ids),
+            "confirmed_vendor_ids": sorted(confirmed_vendor_ids),
+            "cashfree_settlement": cashfree_settlement,
+            "cashfree_reconciliation": cashfree_reconciliation,
+            "reason": (
+                "Cashfree vendor split confirmed"
+                if all_confirmed
+                else CASHFREE_RECON_HOLD_REASON
             ),
-            "splits": splits,
-            "cashfree_split_confirmed": True,
-            "reconciled": True,
-            "result": result,
         }
 
-    except BadRequestError as exc:
-        error_text = str(exc)[:1000]
-
+    except Exception as exc:
         connection.rollback()
-
-        # ========================================================
-        # CASHFREE:
-        #
-        # Transaction already processed,
-        # not eligible for split
-        #
-        # IMPORTANT:
-        # This is NOT proof that our vendor split exists.
-        # ========================================================
-
-        if (
-            "Transaction already processed, "
-            "not eligible for split"
-            in error_text
-        ):
-            reconnection = get_connection()
-
-            try:
-                recursor = reconnection.cursor()
-
-                # ------------------------------------------------
-                # Recover payout rows after rollback
-                # ------------------------------------------------
-
-                recursor.execute(
-                    """
-                    SELECT
-                        pt.id,
-                        pt.seller_id,
-                        pt.seller_amount,
-                        pt.status,
-                        pt.cashfree_vendor_id,
-
-                        sp.cashfree_vendor_id
-                            AS configured_vendor_id
-
-                    FROM marketplace_seller_payout_transactions pt
-
-                    LEFT JOIN marketplace_seller_payouts sp
-                        ON sp.user_id = pt.seller_id
-
-                    WHERE pt.order_id = %s
-                    """,
-                    (order_id,),
-                )
-
-                payout_rows = (
-                    recursor.fetchall()
-                )
-
-                # ------------------------------------------------
-                # Ask Cashfree for authoritative reconciliation
-                # ------------------------------------------------
-
-                try:
-                    reconciliation = (
-                        get_split_reconciliation(
-                            cashfree_order_id
-                        )
-                    )
-
-                except Exception as recon_error:
-                    for payout_row in payout_rows:
-                        vendor_id = (
-                            payout_row.get(
-                                "cashfree_vendor_id"
-                            )
-                            or payout_row.get(
-                                "configured_vendor_id"
-                            )
-                        )
-
-                        recursor.execute(
-                            """
-                            UPDATE
-                                marketplace_seller_payout_transactions
-
-                            SET
-                                cashfree_vendor_id = %s,
-                                cashfree_split_status = 'PENDING',
-                                status = 'ON_HOLD',
-                                failure_reason = %s
-
-                            WHERE id = %s
-                            """,
-                            (
-                                vendor_id,
-                                (
-                                    CASHFREE_RECON_HOLD_REASON
-                                    + ". Reconciliation request "
-                                    "failed: "
-                                    + str(
-                                        recon_error
-                                    )[:500]
-                                ),
-                                payout_row["id"],
-                            ),
-                        )
-
-                    reconnection.commit()
-
-                    return {
-                        "success": False,
-                        "attempted": False,
-                        "already_processed": True,
-                        "cashfree_split_confirmed": False,
-                        "reconciled": False,
-                        "updated_rows": 0,
-                        "cashfree_order_id": (
-                            cashfree_order_id
-                        ),
-                        "reason": (
-                            CASHFREE_RECON_HOLD_REASON
-                        ),
-                    }
-
-                # ------------------------------------------------
-                # Check Cashfree vendor records
-                # ------------------------------------------------
-
-                cashfree_vendor_ids = (
-                    _reconciliation_vendor_ids(
-                        reconciliation
-                    )
-                )
-
-                updated = 0
-                confirmed_vendor_ids = []
-
-                # ------------------------------------------------
-                # Only mark CREATED when Cashfree confirms
-                # the exact vendor.
-                # ------------------------------------------------
-
-                for payout_row in payout_rows:
-                    vendor_id = (
-                        payout_row.get(
-                            "cashfree_vendor_id"
-                        )
-                        or payout_row.get(
-                            "configured_vendor_id"
-                        )
-                    )
-
-                    if not vendor_id:
-                        continue
-
-                    if (
-                        str(vendor_id)
-                        not in cashfree_vendor_ids
-                    ):
-                        continue
-
-                    recursor.execute(
-                        """
-                        UPDATE
-                            marketplace_seller_payout_transactions
-
-                        SET
-                            cashfree_vendor_id = %s,
-                            cashfree_split_status = 'CREATED',
-                            status = 'TRANSFER_INITIATED',
-                            failure_reason = NULL
-
-                        WHERE id = %s
-                        """,
-                        (
-                            vendor_id,
-                            payout_row["id"],
-                        ),
-                    )
-
-                    updated += (
-                        recursor.rowcount
-                    )
-
-                    confirmed_vendor_ids.append(
-                        str(vendor_id)
-                    )
-
-                # ------------------------------------------------
-                # No Cashfree vendor split found.
-                # ------------------------------------------------
-
-                if updated == 0:
-                    for payout_row in payout_rows:
-                        vendor_id = (
-                            payout_row.get(
-                                "cashfree_vendor_id"
-                            )
-                            or payout_row.get(
-                                "configured_vendor_id"
-                            )
-                        )
-
-                        recursor.execute(
-                            """
-                            UPDATE
-                                marketplace_seller_payout_transactions
-
-                            SET
-                                cashfree_vendor_id = %s,
-                                cashfree_split_status = 'PENDING',
-                                status = 'ON_HOLD',
-                                failure_reason = %s
-
-                            WHERE id = %s
-                            """,
-                            (
-                                vendor_id,
-                                CASHFREE_RECON_HOLD_REASON,
-                                payout_row["id"],
-                            ),
-                        )
-
-                reconnection.commit()
-
-                if updated > 0:
-                    return {
-                        "success": True,
-                        "attempted": False,
-                        "already_processed": True,
-                        "cashfree_split_confirmed": True,
-                        "reconciled": True,
-                        "updated_rows": updated,
-                        "confirmed_vendor_ids": (
-                            confirmed_vendor_ids
-                        ),
-                        "cashfree_order_id": (
-                            cashfree_order_id
-                        ),
-                        "cashfree_reconciliation": (
-                            reconciliation
-                        ),
-                        "reason": (
-                            "Cashfree reported the transaction "
-                            "as already processed and reconciliation "
-                            "confirmed the vendor split"
-                        ),
-                    }
-
-                return {
-                    "success": False,
-                    "attempted": False,
-                    "already_processed": True,
-                    "cashfree_split_confirmed": False,
-                    "reconciled": False,
-                    "updated_rows": 0,
-                    "cashfree_order_id": (
-                        cashfree_order_id
-                    ),
-                    "cashfree_reconciliation": (
-                        reconciliation
-                    ),
-                    "reason": (
-                        CASHFREE_RECON_HOLD_REASON
-                    ),
-                }
-
-            finally:
-                reconnection.close()
-
-        # ========================================================
-        # Other Cashfree errors
-        # ========================================================
-
         return {
             "success": False,
             "attempted": True,
             "cashfree_split_confirmed": False,
-            "error": error_text,
-            "cashfree_order_id": (
-                cashfree_order_id
-            ),
+            "error": str(exc)[:1000],
         }
 
     finally:
@@ -800,7 +349,7 @@ def attempt_cashfree_split(
 
 
 # ============================================================
-# BACKWARD COMPATIBILITY
+# Backward compatibility
 # ============================================================
 
 
@@ -808,6 +357,4 @@ def attempt_route_transfers(
     order_id: int,
     gateway_payment_id: str | None = None,
 ) -> dict[str, Any]:
-    return attempt_cashfree_split(
-        order_id
-    )
+    return attempt_cashfree_split(order_id)

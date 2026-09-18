@@ -74,6 +74,7 @@ def create_gateway_order(
     customer_details=None,
     return_url=None,
     notify_url=None,
+    order_splits=None,
     idempotency_key=None,
 ):
     """
@@ -165,6 +166,30 @@ def create_gateway_order(
 
     if notes:
         payload["order_note"] = str(notes)
+
+    # --------------------------------------------------------
+    # Easy Split order-level configuration
+    #
+    # Cashfree supports passing vendor splits while the
+    # Payment Gateway order is created. This is the important
+    # marketplace flow: the vendor split is attached to the
+    # order BEFORE the customer payment is processed.
+    #
+    # Example:
+    # [
+    #   {"vendor_id": "edusphere_seller_4628", "amount": 4.75}
+    # ]
+    # --------------------------------------------------------
+
+    if order_splits:
+        payload["order_splits"] = [
+            {
+                "vendor_id": str(split["vendor_id"]),
+                "amount": round(float(split["amount"]), 2),
+            }
+            for split in order_splits
+            if split.get("vendor_id") and float(split.get("amount") or 0) > 0
+        ]
 
     # --------------------------------------------------------
     # Create order

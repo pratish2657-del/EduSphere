@@ -9,10 +9,12 @@ from app.services.marketplace_inventory_service import (
     expire_pending_orders,
     finalize_order_inventory,
 )
+from app.services.marketplace_payout_service import attempt_cashfree_split
 from app.services.payment_gateway_service import (
     create_gateway_order,
     get_gateway_order,
 )
+
 
 # ============================================================
 # CREATE PAYMENT
@@ -264,6 +266,93 @@ def create_payment(user_id, order_id):
             payment_id = existing_payment["id"]
 
         # ----------------------------------------------------
+        # Prepare Cashfree Easy Split BEFORE payment
+        # ----------------------------------------------------
+        #
+        # Cashfree supports order-level Easy Split configuration
+        # when the Payment Gateway order is created. Do not wait
+        # until after the payment is captured and then call
+        # /easy-split/orders/{order_id}/split.
+        #
+        # If the seller is not already verified/ACTIVE, stop the
+        # checkout before taking the customer's money.
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            SELECT
+                pt.id,
+                pt.seller_id,
+                pt.seller_amount,
+                sp.cashfree_vendor_id,
+                sp.payout_status,
+                sp.cashfree_vendor_status
+
+            FROM marketplace_seller_payout_transactions pt
+
+            LEFT JOIN marketplace_seller_payouts sp
+                ON sp.user_id = pt.seller_id
+
+            WHERE pt.order_id = %s
+
+              AND pt.status IN (
+                  'PENDING',
+                  'READY',
+                  'ON_HOLD'
+              )
+
+            FOR UPDATE
+            """,
+            (order_id,),
+        )
+
+        payout_rows = cursor.fetchall()
+
+        if not payout_rows:
+            raise BadRequestError(
+                "Seller payout information is not available for this order"
+            )
+
+        order_splits = []
+
+        for payout in payout_rows:
+            vendor_id = payout.get("cashfree_vendor_id")
+            payout_status = str(
+                payout.get("payout_status") or ""
+            ).upper()
+            vendor_status = str(
+                payout.get("cashfree_vendor_status") or ""
+            ).upper()
+            seller_amount = float(
+                payout.get("seller_amount") or 0
+            )
+
+            if (
+                not vendor_id
+                or payout_status != "VERIFIED"
+                or vendor_status != "ACTIVE"
+            ):
+                raise BadRequestError(
+                    "Seller Cashfree Easy Split onboarding must be "
+                    "VERIFIED and ACTIVE before payment"
+                )
+
+            if seller_amount <= 0:
+                continue
+
+            order_splits.append(
+                {
+                    "vendor_id": str(vendor_id),
+                    "amount": round(seller_amount, 2),
+                }
+            )
+
+        if not order_splits:
+            raise BadRequestError(
+                "No valid seller amount is available for Easy Split"
+            )
+
+        # ----------------------------------------------------
         # Create Cashfree Sandbox order
         # ----------------------------------------------------
 
@@ -294,6 +383,8 @@ def create_payment(user_id, order_id):
                 "https://edusphere-fovh.onrender.com/"
                 "marketplace/payments/webhook"
             ),
+
+            order_splits=order_splits,
 
             notes={
                 "edusphere_order_id": str(order_id),
@@ -577,11 +668,14 @@ def verify_payment(
             # can be recovered without another customer payment.
             connection.commit()
 
+            split_result = attempt_cashfree_split(order_id)
+
             return {
                 "message": "Payment already verified; Easy Split checked",
                 "payment_id": payment["id"],
                 "order_id": order_id,
                 "status": "PAID",
+                "easy_split": split_result,
             }
 
         # ----------------------------------------------------
@@ -749,16 +843,15 @@ def verify_payment(
         connection.commit()
 
         # ----------------------------------------------------
-        # Cashfree Easy Split
+        # Cashfree Easy Split verification
         #
-        # Runs AFTER successful customer payment.
-        #
-        # 5% EduSphere commission
-        # 95% seller amount
-        #
-        # A missing/unverified seller should not roll back
-        # an already successful customer payment.
+        # The split was attached to the Cashfree order BEFORE
+        # checkout. After payment, this only verifies Cashfree's
+        # authoritative split/settlement state. It never creates
+        # another split request for an already-processed payment.
         # ----------------------------------------------------
+
+        attempt_cashfree_split(order_id)
 
         return {
             "message": (
