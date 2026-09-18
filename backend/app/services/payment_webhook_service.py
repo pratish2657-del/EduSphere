@@ -226,7 +226,14 @@ def process_payment_webhook(
         )
 
     # --------------------------------------------------------
-    # 6. Unknown/unneeded event
+    # 6. Refund status webhook
+    # --------------------------------------------------------
+
+    if event_type == "REFUND_STATUS_WEBHOOK":
+        return _handle_refund_status_webhook(payload)
+
+    # --------------------------------------------------------
+    # 7. Unknown/unneeded event
     # --------------------------------------------------------
 
     return {
@@ -458,3 +465,222 @@ def _handle_payment_failure(
 
     finally:
         connection.close()
+
+# ============================================================
+# REFUND STATUS WEBHOOK
+# ============================================================
+
+
+def _handle_refund_status_webhook(
+    payload: dict[str, Any],
+):
+    """Synchronize an Easy Split refund from Cashfree.
+
+    Cashfree sends REFUND_STATUS_WEBHOOK when a merchant-initiated
+    refund succeeds, fails, or is cancelled. A partial refund must not
+    restore the full order inventory or mark the payment as fully
+    refunded. Those final transitions happen only after cumulative
+    processed refunds reach the original payment amount.
+    """
+
+    data = payload.get("data", {})
+    refund_data = (
+        data.get("refund", {})
+        if isinstance(data, dict)
+        else {}
+    )
+
+    if not isinstance(refund_data, dict):
+        raise BadRequestError(
+            "Invalid Cashfree refund webhook data"
+        )
+
+    cf_refund_id = (
+        refund_data.get("cf_refund_id")
+        or refund_data.get("refund_id")
+    )
+    refund_status = str(
+        refund_data.get("refund_status") or ""
+    ).upper()
+
+    if not cf_refund_id:
+        raise BadRequestError(
+            "Cashfree refund webhook does not contain a refund ID"
+        )
+
+    status_map = {
+        "SUCCESS": "PROCESSED",
+        "PENDING": "PENDING",
+        "ONHOLD": "PENDING",
+        "FAILED": "FAILED",
+        "CANCELLED": "FAILED",
+    }
+    local_status = status_map.get(refund_status)
+
+    if not local_status:
+        return {
+            "message": "Cashfree refund webhook received",
+            "processed": False,
+            "refund_status": refund_status,
+        }
+
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                r.id,
+                r.order_id,
+                r.payment_id,
+                r.amount,
+                r.status,
+                r.inventory_restored,
+                p.amount AS payment_amount
+            FROM marketplace_refunds r
+            INNER JOIN marketplace_payments p
+                ON p.id = r.payment_id
+            WHERE r.cashfree_refund_id = %s
+            FOR UPDATE
+            """,
+            (str(cf_refund_id),),
+        )
+
+        refund = cursor.fetchone()
+
+        if not refund:
+            connection.commit()
+            return {
+                "message": "Refund webhook received for unknown refund",
+                "processed": False,
+                "cashfree_refund_id": str(cf_refund_id),
+            }
+
+        cursor.execute(
+            """
+            UPDATE marketplace_refunds
+            SET
+                status = %s,
+                cashfree_refund_arn = COALESCE(%s, cashfree_refund_arn),
+                cashfree_refund_splits = COALESCE(%s, cashfree_refund_splits),
+                processed_at = CASE
+                    WHEN %s = 'PROCESSED' THEN COALESCE(
+                        processed_at,
+                        CURRENT_TIMESTAMP
+                    )
+                    ELSE processed_at
+                END,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """,
+            (
+                local_status,
+                refund_data.get("refund_arn"),
+                json.dumps(refund_data.get("refund_splits"))
+                if refund_data.get("refund_splits") is not None
+                else None,
+                local_status,
+                refund["id"],
+            ),
+        )
+
+        fully_refunded = False
+
+        if local_status == "PROCESSED":
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(amount), 0) AS refunded
+                FROM marketplace_refunds
+                WHERE payment_id = %s
+                  AND status = 'PROCESSED'
+                """,
+                (refund["payment_id"],),
+            )
+
+            total_refunded = float(
+                cursor.fetchone()["refunded"] or 0
+            )
+            fully_refunded = (
+                total_refunded
+                >= float(refund["payment_amount"]) - 0.0001
+            )
+
+            if fully_refunded:
+                if not refund.get("inventory_restored"):
+                    finalize_cursor = cursor
+                    from app.services.marketplace_inventory_service import (
+                        restore_order_inventory,
+                    )
+                    restore_order_inventory(
+                        refund["order_id"],
+                        finalize_cursor,
+                    )
+                    cursor.execute(
+                        """
+                        UPDATE marketplace_refunds
+                        SET inventory_restored = TRUE
+                        WHERE id = %s
+                        """,
+                        (refund["id"],),
+                    )
+
+                cursor.execute(
+                    """
+                    UPDATE marketplace_payments
+                    SET
+                        status = 'REFUNDED',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                      AND status = 'PAID'
+                    """,
+                    (refund["payment_id"],),
+                )
+
+                cursor.execute(
+                    """
+                    UPDATE marketplace_seller_payout_transactions
+                    SET
+                        status = 'REFUNDED',
+                        failure_reason = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE order_id = %s
+                      AND status <> 'REVERSED'
+                    """,
+                    (
+                        "Marketplace refund fully processed",
+                        refund["order_id"],
+                    ),
+                )
+
+                cursor.execute(
+                    """
+                    UPDATE marketplace_orders
+                    SET
+                        status = 'REFUNDED',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                      AND status NOT IN ('CANCELLED', 'REFUNDED')
+                    """,
+                    (refund["order_id"],),
+                )
+
+        connection.commit()
+
+        return {
+            "message": "Cashfree refund status synchronized",
+            "processed": True,
+            "refund_id": refund["id"],
+            "cashfree_refund_id": str(cf_refund_id),
+            "status": local_status,
+            "fully_refunded": fully_refunded,
+        }
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        connection.close()
+

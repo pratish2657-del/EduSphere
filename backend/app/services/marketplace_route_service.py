@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import uuid
 from typing import Any
 
@@ -1325,11 +1327,87 @@ def refund_payment(
                 f"{uuid.uuid4().hex[:12]}"
             )
 
+            # ----------------------------------------------------
+            # Cashfree Easy Split refund allocation
+            #
+            # Cashfree expects refund_splits when a marketplace
+            # refund needs to debit vendor balances. Allocate the
+            # refund across the vendors in proportion to their
+            # original seller amounts. The platform keeps any
+            # remainder when the refund exceeds the vendor shares.
+            # ----------------------------------------------------
+
+            refund_splits = []
+
+            if reverse_all:
+                cursor.execute(
+                    """
+                    SELECT
+                        pt.cashfree_vendor_id,
+                        pt.seller_amount
+                    FROM marketplace_seller_payout_transactions pt
+                    WHERE pt.order_id = %s
+                      AND pt.cashfree_vendor_id IS NOT NULL
+                      AND pt.seller_amount > 0
+                    ORDER BY pt.id ASC
+                    FOR UPDATE
+                    """,
+                    (payment["order_id"],),
+                )
+
+                payout_rows = cursor.fetchall()
+                total_seller_amount = sum(
+                    float(row.get("seller_amount") or 0)
+                    for row in payout_rows
+                )
+
+                remaining_refund = round(refund_amount, 2)
+
+                if total_seller_amount > 0:
+                    for index, row in enumerate(payout_rows):
+                        vendor_id = str(row["cashfree_vendor_id"])
+                        seller_amount = float(row.get("seller_amount") or 0)
+
+                        if index == len(payout_rows) - 1:
+                            vendor_refund = min(
+                                seller_amount,
+                                remaining_refund,
+                            )
+                        else:
+                            vendor_refund = min(
+                                seller_amount,
+                                round(
+                                    refund_amount
+                                    * seller_amount
+                                    / total_seller_amount,
+                                    2,
+                                ),
+                                remaining_refund,
+                            )
+
+                        vendor_refund = round(vendor_refund, 2)
+
+                        if vendor_refund > 0:
+                            refund_splits.append(
+                                {
+                                    "vendor_id": vendor_id,
+                                    "amount": vendor_refund,
+                                }
+                            )
+                            remaining_refund = round(
+                                remaining_refund - vendor_refund,
+                                2,
+                            )
+
+                        if remaining_refund <= 0:
+                            break
+
             payload = create_refund(
                 f"EDU-{payment['order_id']}",
                 refund_amount,
                 refund_id,
                 reason,
+                refund_splits=refund_splits,
             )
 
             first = (
@@ -1352,6 +1430,11 @@ def refund_payment(
                 or refund_id
             )
 
+            cashfree_refund_arn = first.get("refund_arn")
+            cashfree_refund_splits = first.get(
+                "refund_splits"
+            ) or refund_splits
+
             status = str(
                 first.get(
                     "refund_status"
@@ -1369,11 +1452,13 @@ def refund_payment(
                     f"Cashfree refund failed: {first}"
                 )
 
-            status = (
-                "PROCESSED"
-                if status == "SUCCESS"
-                else status
-            )
+            status = {
+                "SUCCESS": "PROCESSED",
+                "PENDING": "PENDING",
+                "ONHOLD": "PENDING",
+                "FAILED": "FAILED",
+                "CANCELLED": "FAILED",
+            }.get(status, "PENDING")
 
             processed_at = (
                 "CURRENT_TIMESTAMP"
@@ -1395,6 +1480,8 @@ def refund_payment(
                     amount,
                     reverse_transfers,
                     cashfree_refund_id,
+                    cashfree_refund_arn,
+                    cashfree_refund_splits,
                     status,
                     created_by,
                     processed_at
@@ -1402,6 +1489,7 @@ def refund_payment(
 
             VALUES
                 (
+                    %s,
                     %s,
                     %s,
                     %s,
@@ -1420,6 +1508,8 @@ def refund_payment(
                 refund_amount,
                 reverse_all,
                 cashfree_refund_id,
+                cashfree_refund_arn,
+                json.dumps(cashfree_refund_splits),
                 status,
                 created_by,
             ),
@@ -1428,86 +1518,86 @@ def refund_payment(
         refund_db_id = cursor.lastrowid
 
         # ========================================================
-        # FINALIZED REFUND
+        # REFUND FINALIZATION
         # ========================================================
 
+        fully_refunded = False
+
         if status == "PROCESSED":
-
-            restore_order_inventory(
-                payment["order_id"],
-                cursor,
-            )
-
-            # ----------------------------------------------------
-            # PAYMENT
-            # ----------------------------------------------------
-
             cursor.execute(
                 """
-                UPDATE marketplace_payments
-
-                SET
-                    status = 'REFUNDED',
-                    updated_at = CURRENT_TIMESTAMP
-
-                WHERE id = %s
-                  AND status = 'PAID'
+                SELECT COALESCE(SUM(amount), 0) AS refunded
+                FROM marketplace_refunds
+                WHERE payment_id = %s
+                  AND status = 'PROCESSED'
                 """,
-                (
-                    payment_db_id,
-                ),
+                (payment_db_id,),
             )
 
-            # ----------------------------------------------------
-            # PAYOUT
-            # ----------------------------------------------------
+            total_refunded = float(
+                cursor.fetchone()["refunded"] or 0
+            )
+            fully_refunded = (
+                total_refunded
+                >= float(payment["amount"]) - 0.0001
+            )
 
-            cursor.execute(
-                """
-                UPDATE marketplace_seller_payout_transactions
-
-                SET
-                    status = 'REFUNDED',
-                    failure_reason = %s,
-                    updated_at = CURRENT_TIMESTAMP
-
-                WHERE order_id = %s
-
-                  AND status IN (
-                      'PENDING',
-                      'READY',
-                      'TRANSFER_INITIATED'
-                  )
-                """,
-                (
-                    "Marketplace refund processed",
+            # Partial refunds must not restore the entire order
+            # inventory or mark the payment/order as fully refunded.
+            if fully_refunded:
+                restore_order_inventory(
                     payment["order_id"],
-                ),
-            )
+                    cursor,
+                )
 
-            # ----------------------------------------------------
-            # ORDER
-            # ----------------------------------------------------
+                cursor.execute(
+                    """
+                    UPDATE marketplace_refunds
+                    SET inventory_restored = TRUE
+                    WHERE id = %s
+                    """,
+                    (refund_db_id,),
+                )
 
-            cursor.execute(
-                """
-                UPDATE marketplace_orders
+                cursor.execute(
+                    """
+                    UPDATE marketplace_payments
+                    SET
+                        status = 'REFUNDED',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                      AND status = 'PAID'
+                    """,
+                    (payment_db_id,),
+                )
 
-                SET
-                    status = 'REFUNDED',
-                    updated_at = CURRENT_TIMESTAMP
+                cursor.execute(
+                    """
+                    UPDATE marketplace_seller_payout_transactions
+                    SET
+                        status = 'REFUNDED',
+                        failure_reason = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE order_id = %s
+                      AND status <> 'REVERSED'
+                    """,
+                    (
+                        "Marketplace refund fully processed",
+                        payment["order_id"],
+                    ),
+                )
 
-                WHERE id = %s
-
-                  AND status NOT IN (
-                      'CANCELLED',
-                      'REFUNDED'
-                  )
-                """,
-                (
-                    payment["order_id"],
-                ),
-            )
+                cursor.execute(
+                    """
+                    UPDATE marketplace_orders
+                    SET
+                        status = 'REFUNDED',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                      AND status NOT IN ('CANCELLED', 'REFUNDED')
+                    """,
+                    (payment["order_id"],),
+                )
 
         connection.commit()
 
@@ -1540,6 +1630,14 @@ def refund_payment(
                 "MANUAL_CASH"
                 if is_cod
                 else "CASHFREE_EASY_SPLIT"
+            ),
+
+            "fully_refunded": fully_refunded,
+
+            "refund_splits": (
+                cashfree_refund_splits
+                if not is_cod
+                else []
             ),
         }
 

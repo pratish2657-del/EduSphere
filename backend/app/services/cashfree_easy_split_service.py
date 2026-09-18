@@ -264,6 +264,7 @@ def create_refund(
     refund_amount: float,
     refund_id: str,
     reason: str | None = None,
+    refund_splits: list[dict] | None = None,
 ):
     return _request(
         "POST",
@@ -279,6 +280,7 @@ def create_refund(
                 or "EduSphere marketplace refund"
             ),
             "refund_speed": "STANDARD",
+            **({"refund_splits": refund_splits} if refund_splits else {}),
         },
         idempotency_key=str(
             uuid.uuid5(
