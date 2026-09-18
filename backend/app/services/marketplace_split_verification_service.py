@@ -21,29 +21,18 @@ def _extract_cashfree_vendor_ids(
 ) -> set[str]:
     """Extract vendor IDs actually reported by Cashfree."""
 
-    if not isinstance(
-        reconciliation,
-        dict,
-    ):
+    if not isinstance(reconciliation, dict):
         return set()
 
-    data = reconciliation.get(
-        "data"
-    )
+    data = reconciliation.get("data")
 
-    if not isinstance(
-        data,
-        list,
-    ):
+    if not isinstance(data, list):
         return set()
 
     vendor_ids: set[str] = set()
 
     for item in data:
-        if not isinstance(
-            item,
-            dict,
-        ):
+        if not isinstance(item, dict):
             continue
 
         # --------------------------------------------------------
@@ -51,21 +40,14 @@ def _extract_cashfree_vendor_ids(
         # --------------------------------------------------------
 
         entity_type = str(
-            item.get(
-                "entity_type"
-            )
-            or ""
+            item.get("entity_type") or ""
         ).strip().lower()
 
         if entity_type == "vendor_commission":
-            vendor_id = item.get(
-                "merchant_vendor_id"
-            )
+            vendor_id = item.get("merchant_vendor_id")
 
             if vendor_id:
-                vendor_ids.add(
-                    str(vendor_id)
-                )
+                vendor_ids.add(str(vendor_id))
 
         # --------------------------------------------------------
         # Direct vendor fields
@@ -75,65 +57,41 @@ def _extract_cashfree_vendor_ids(
             "merchant_vendor_id",
             "vendor_id",
         ):
-            vendor_id = item.get(
-                key
-            )
+            vendor_id = item.get(key)
 
             if vendor_id:
-                vendor_ids.add(
-                    str(vendor_id)
-                )
+                vendor_ids.add(str(vendor_id))
 
         # --------------------------------------------------------
         # Order splits
         # --------------------------------------------------------
 
-        order_splits = item.get(
-            "order_splits"
-        )
+        order_splits = item.get("order_splits")
 
-        if not isinstance(
-            order_splits,
-            list,
-        ):
+        if not isinstance(order_splits, list):
             continue
 
         for split_group in order_splits:
-            if not isinstance(
-                split_group,
-                dict,
-            ):
+            if not isinstance(split_group, dict):
                 continue
 
-            split_items = split_group.get(
-                "split"
-            )
+            split_items = split_group.get("split")
 
-            if not isinstance(
-                split_items,
-                list,
-            ):
+            if not isinstance(split_items, list):
                 continue
 
             for split_item in split_items:
-                if not isinstance(
-                    split_item,
-                    dict,
-                ):
+                if not isinstance(split_item, dict):
                     continue
 
                 for key in (
                     "merchant_vendor_id",
                     "vendor_id",
                 ):
-                    vendor_id = split_item.get(
-                        key
-                    )
+                    vendor_id = split_item.get(key)
 
                     if vendor_id:
-                        vendor_ids.add(
-                            str(vendor_id)
-                        )
+                        vendor_ids.add(str(vendor_id))
 
     return vendor_ids
 
@@ -143,53 +101,33 @@ def _extract_settlement_vendor_ids(
 ) -> set[str]:
     """Extract vendor IDs from Cashfree settlement details."""
 
-    if not isinstance(
-        cashfree_settlement,
-        dict,
-    ):
+    if not isinstance(cashfree_settlement, dict):
         return set()
 
-    settlement = cashfree_settlement.get(
-        "settlement"
-    )
+    settlement = cashfree_settlement.get("settlement")
 
-    if not isinstance(
-        settlement,
-        dict,
-    ):
+    if not isinstance(settlement, dict):
         return set()
 
-    vendors = settlement.get(
-        "vendors"
-    )
+    vendors = settlement.get("vendors")
 
-    if not isinstance(
-        vendors,
-        list,
-    ):
+    if not isinstance(vendors, list):
         return set()
 
     vendor_ids: set[str] = set()
 
     for vendor in vendors:
-        if not isinstance(
-            vendor,
-            dict,
-        ):
+        if not isinstance(vendor, dict):
             continue
 
         for key in (
             "merchant_vendor_id",
             "vendor_id",
         ):
-            vendor_id = vendor.get(
-                key
-            )
+            vendor_id = vendor.get(key)
 
             if vendor_id:
-                vendor_ids.add(
-                    str(vendor_id)
-                )
+                vendor_ids.add(str(vendor_id))
 
     return vendor_ids
 
@@ -197,7 +135,7 @@ def _extract_settlement_vendor_ids(
 def verify_cashfree_split(
     payout_transaction_id: int,
 ) -> dict[str, Any]:
-    """Verify local payout state against Cashfree.
+    """Verify local payout state against authoritative Cashfree data.
 
     This endpoint is READ/RECONCILIATION only.
 
@@ -207,6 +145,9 @@ def verify_cashfree_split(
         - create a transfer
         - reverse a transfer
         - create a refund
+
+    Cashfree is treated as the source of truth for whether a
+    vendor split actually exists.
     """
 
     connection = get_connection()
@@ -215,7 +156,7 @@ def verify_cashfree_split(
         cursor = connection.cursor()
 
         # ========================================================
-        # 1. Local payout + successful Cashfree order
+        # 1. LOCAL PAYOUT + SUCCESSFUL CASHFREE ORDER
         # ========================================================
 
         cursor.execute(
@@ -259,10 +200,8 @@ def verify_cashfree_split(
                 "Payout transaction not found"
             )
 
-        cashfree_order_id = (
-            payout.get(
-                "gateway_order_id"
-            )
+        cashfree_order_id = payout.get(
+            "gateway_order_id"
         )
 
         if not cashfree_order_id:
@@ -272,7 +211,7 @@ def verify_cashfree_split(
             )
 
         # ========================================================
-        # 2. Cashfree order-level information
+        # 2. CASHFREE ORDER / SETTLEMENT INFORMATION
         # ========================================================
 
         cashfree_settlement = (
@@ -282,7 +221,7 @@ def verify_cashfree_split(
         )
 
         # ========================================================
-        # 3. Cashfree vendor reconciliation
+        # 3. CASHFREE VENDOR RECONCILIATION
         # ========================================================
 
         cashfree_reconciliation = (
@@ -292,13 +231,11 @@ def verify_cashfree_split(
         )
 
         # ========================================================
-        # 4. Local vendor
+        # 4. LOCAL VENDOR
         # ========================================================
 
-        local_vendor_id = (
-            payout.get(
-                "cashfree_vendor_id"
-            )
+        local_vendor_id = payout.get(
+            "cashfree_vendor_id"
         )
 
         local_vendor_id_text = (
@@ -308,7 +245,7 @@ def verify_cashfree_split(
         )
 
         # ========================================================
-        # 5. Cashfree vendor IDs
+        # 5. CASHFREE VENDOR IDS
         # ========================================================
 
         reconciliation_vendor_ids = (
@@ -324,31 +261,10 @@ def verify_cashfree_split(
         )
 
         # ========================================================
-        # 6. Authoritative confirmation
+        # 6. CASHFREE SETTLEMENT DATA
         # ========================================================
 
-        reconciliation_confirms_vendor = (
-            local_vendor_id_text is not None
-            and local_vendor_id_text
-            in reconciliation_vendor_ids
-        )
-
-        settlement_confirms_vendor = (
-            local_vendor_id_text is not None
-            and local_vendor_id_text
-            in settlement_vendor_ids
-        )
-
-        cashfree_split_confirmed = (
-            reconciliation_confirms_vendor
-            or settlement_confirms_vendor
-        )
-
-        # ========================================================
-        # 7. Settlement details
-        # ========================================================
-
-        settlement = {}
+        settlement: dict[str, Any] = {}
 
         if isinstance(
             cashfree_settlement,
@@ -374,18 +290,65 @@ def verify_cashfree_split(
         )
 
         # ========================================================
-        # 8. SYNCHRONIZE LOCAL DATABASE
+        # 7. AUTHORITATIVE SPLIT CONFIRMATION
         #
-        # If Cashfree confirms vendor:
-        #     CREATED + TRANSFER_INITIATED
+        # Cashfree can confirm the vendor through either:
         #
-        # If Cashfree does NOT confirm vendor:
-        #     PENDING + ON_HOLD
+        # A. Vendor reconciliation
+        # B. Order-level settlement vendors
         #
-        # This fixes stale local state such as Order #30.
+        # For Order #31 both are expected to contain:
+        #
+        #     edusphere_seller_4628
+        #
+        # ========================================================
+
+        reconciliation_confirms_vendor = (
+            local_vendor_id_text is not None
+            and local_vendor_id_text
+            in reconciliation_vendor_ids
+        )
+
+        settlement_confirms_vendor = (
+            local_vendor_id_text is not None
+            and local_vendor_id_text
+            in settlement_vendor_ids
+        )
+
+        cashfree_split_confirmed = (
+            reconciliation_confirms_vendor
+            or settlement_confirms_vendor
+        )
+
+        # ========================================================
+        # 8. DETERMINE CASHFREE SETTLEMENT STATE
+        #
+        # Split confirmed + no UTR:
+        #     Split exists but bank transfer is not completed.
+        #
+        # UTR / transfer time present:
+        #     Cashfree has actually transferred the settlement.
+        # ========================================================
+
+        cashfree_transfer_completed = bool(
+            transfer_utr
+            or transfer_time
+        )
+
+        # ========================================================
+        # 9. SYNCHRONIZE LOCAL DATABASE
         # ========================================================
 
         if cashfree_split_confirmed:
+
+            # ----------------------------------------------------
+            # Cashfree confirms the vendor split.
+            # ----------------------------------------------------
+
+            if cashfree_transfer_completed:
+                local_status = "SETTLED"
+            else:
+                local_status = "TRANSFER_INITIATED"
 
             cursor.execute(
                 """
@@ -395,11 +358,7 @@ def verify_cashfree_split(
                 SET
                     cashfree_split_status = 'CREATED',
 
-                    status = CASE
-                        WHEN status = 'ON_HOLD'
-                        THEN 'TRANSFER_INITIATED'
-                        ELSE status
-                    END,
+                    status = %s,
 
                     cashfree_settlement_id =
                         COALESCE(
@@ -412,6 +371,7 @@ def verify_cashfree_split(
                 WHERE id = %s
                 """,
                 (
+                    local_status,
                     cf_settlement_id,
                     payout_transaction_id,
                 ),
@@ -423,15 +383,7 @@ def verify_cashfree_split(
                 "CREATED"
             )
 
-            if str(
-                payout.get(
-                    "status"
-                )
-                or ""
-            ).upper() == "ON_HOLD":
-                payout["status"] = (
-                    "TRANSFER_INITIATED"
-                )
+            payout["status"] = local_status
 
             payout["cashfree_settlement_id"] = (
                 cf_settlement_id
@@ -443,10 +395,11 @@ def verify_cashfree_split(
         else:
 
             # ----------------------------------------------------
-            # No Cashfree vendor split.
+            # Cashfree does NOT report the local vendor.
             #
-            # If the local database incorrectly says CREATED,
-            # correct it immediately.
+            # This is deliberately placed ON_HOLD.
+            #
+            # We must NOT trust a stale local CREATED status.
             # ----------------------------------------------------
 
             cursor.execute(
@@ -456,7 +409,9 @@ def verify_cashfree_split(
 
                 SET
                     cashfree_split_status = 'PENDING',
+
                     status = 'ON_HOLD',
+
                     failure_reason = %s
 
                 WHERE id = %s
@@ -473,12 +428,10 @@ def verify_cashfree_split(
                 "PENDING"
             )
 
-            payout["status"] = (
-                "ON_HOLD"
-            )
+            payout["status"] = "ON_HOLD"
 
         # ========================================================
-        # 9. Return authoritative verification result
+        # 10. RETURN AUTHORITATIVE VERIFICATION RESULT
         # ========================================================
 
         return {
@@ -496,6 +449,10 @@ def verify_cashfree_split(
                 cashfree_order_id
             ),
 
+            # ----------------------------------------------------
+            # Split status
+            # ----------------------------------------------------
+
             "cashfree_split_confirmed": (
                 cashfree_split_confirmed
             ),
@@ -503,6 +460,18 @@ def verify_cashfree_split(
             "cashfree_vendor_confirmed": (
                 cashfree_split_confirmed
             ),
+
+            # ----------------------------------------------------
+            # Transfer status
+            # ----------------------------------------------------
+
+            "cashfree_transfer_completed": (
+                cashfree_transfer_completed
+            ),
+
+            # ----------------------------------------------------
+            # Local state
+            # ----------------------------------------------------
 
             "local": {
                 "status": payout.get(
@@ -555,6 +524,10 @@ def verify_cashfree_split(
                 ),
             },
 
+            # ----------------------------------------------------
+            # Cashfree state
+            # ----------------------------------------------------
+
             "cashfree": {
                 "settlement": (
                     cashfree_settlement
@@ -574,6 +547,14 @@ def verify_cashfree_split(
                     sorted(
                         settlement_vendor_ids
                     )
+                ),
+
+                "reconciliation_confirms_vendor": (
+                    reconciliation_confirms_vendor
+                ),
+
+                "settlement_confirms_vendor": (
+                    settlement_confirms_vendor
                 ),
 
                 "transfer_utr": (
