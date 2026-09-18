@@ -34,6 +34,12 @@ type Item = {
   cashfree_settlement_id?: string | null;
   cashfree_transfer_id?: string | null;
 
+  // Cashfree settlement/reconciliation details.
+  transfer_utr?: string | null;
+  transfer_time?: string | null;
+  settlement_status?: string | null;
+  settlement_eligibility_date?: string | null;
+
   route_activation_status?: string | null;
 
   razorpay_linked_account_id?: string | null;
@@ -54,6 +60,42 @@ type Finance = {
 
 const money = (n: number) =>
   `₹${Number(n || 0).toFixed(2)}`;
+
+const upper = (value?: string | null) =>
+  String(value || "").trim().toUpperCase();
+
+const getSettlementState = (item: Item) => {
+  const status = upper(item.status);
+  const splitStatus = upper(item.cashfree_split_status);
+  const explicitSettlement = upper(item.settlement_status);
+
+  if (
+    status === "SETTLED" ||
+    explicitSettlement === "SETTLED" ||
+    Boolean(item.transfer_utr && item.transfer_time)
+  ) {
+    return "SETTLED";
+  }
+
+  if (splitStatus === "CREATED") {
+    return "PENDING";
+  }
+
+  if (splitStatus === "PENDING") {
+    return "WAITING";
+  }
+
+  return "NOT_CREATED";
+};
+
+const getSettlementLabel = (item: Item) => {
+  const state = getSettlementState(item);
+
+  if (state === "SETTLED") return "SETTLED";
+  if (state === "PENDING") return "SETTLEMENT PENDING";
+  if (state === "WAITING") return "SPLIT PENDING";
+  return "NOT CREATED";
+};
 
 
 export default function SuperAdminMarketplacePayouts() {
@@ -398,17 +440,28 @@ export default function SuperAdminMarketplacePayouts() {
           settlementBody?.transfer_utr ||
           null;
 
-        if (utr) {
+        const transferTime =
+          data?.cashfree?.transfer_time ||
+          settlementBody?.transfer_time ||
+          null;
+
+        if (utr && transferTime) {
           setMessage(
             `✅ Cashfree confirmed the vendor split for ${cashfreeOrderId} — Seller ${money(
               sellerAmount
-            )} — UTR ${utr}`
+            )} — Settlement SETTLED — UTR ${utr}`
+          );
+        } else if (utr) {
+          setMessage(
+            `✅ Cashfree confirmed the vendor split for ${cashfreeOrderId} — Seller ${money(
+              sellerAmount
+            )} — UTR ${utr}. Settlement time is not reflected yet.`
           );
         } else {
           setMessage(
             `✅ Cashfree confirmed the vendor split for ${cashfreeOrderId} — Seller ${money(
               sellerAmount
-            )}. Settlement transfer is not reflected yet.`
+            )}. Split is CREATED and settlement is PENDING.`
           );
         }
 
@@ -1034,43 +1087,87 @@ export default function SuperAdminMarketplacePayouts() {
                     </td>
 
 
-                    {/* STATUS */}
+                    {/* STATUS / SETTLEMENT */}
 
                     <td>
 
-                      <span
-                        className={`sa-pill ${String(
-                          item.status
-                        ).toLowerCase()}`}
-                      >
-                        {String(
-                          item.status
-                        ).replaceAll(
-                          "_",
-                          " "
-                        )}
-                      </span>
+                      {(() => {
+                        const settlementState =
+                          getSettlementState(item);
 
+                        const displayStatus =
+                          settlementState === "SETTLED"
+                            ? "SETTLED"
+                            : settlementState === "PENDING"
+                              ? "SETTLEMENT PENDING"
+                              : item.status;
 
-                      {item.failure_reason && (
-                        <small
-                          className="sa-failure"
-                        >
-                          {
-                            item.failure_reason
-                          }
-                        </small>
-                      )}
+                        return (
+                          <>
+                            <span
+                              className={`sa-pill ${String(
+                                item.status
+                              ).toLowerCase()}`}
+                              title={
+                                settlementState === "PENDING"
+                                  ? "Cashfree vendor split is created; seller settlement has not completed yet."
+                                  : undefined
+                              }
+                            >
+                              {String(
+                                displayStatus
+                              ).replaceAll(
+                                "_",
+                                " "
+                              )}
+                            </span>
 
+                            {item.failure_reason && (
+                              <small
+                                className="sa-failure"
+                              >
+                                {
+                                  item.failure_reason
+                                }
+                              </small>
+                            )}
 
-                      {item.cashfree_split_status && (
-                        <small>
-                          Split:{" "}
-                          {
-                            item.cashfree_split_status
-                          }
-                        </small>
-                      )}
+                            {item.cashfree_split_status && (
+                              <small>
+                                Split:{" "}
+                                {
+                                  item.cashfree_split_status
+                                }
+                              </small>
+                            )}
+
+                            <small>
+                              Settlement:{" "}
+                              {getSettlementLabel(item)}
+                            </small>
+
+                            {item.transfer_utr && (
+                              <small>
+                                UTR: {item.transfer_utr}
+                              </small>
+                            )}
+
+                            {item.transfer_time && (
+                              <small>
+                                Transfer time:{" "}
+                                {item.transfer_time}
+                              </small>
+                            )}
+
+                            {item.settlement_eligibility_date && (
+                              <small>
+                                Eligible:{" "}
+                                {item.settlement_eligibility_date}
+                              </small>
+                            )}
+                          </>
+                        );
+                      })()}
 
                     </td>
 
@@ -1110,10 +1207,21 @@ export default function SuperAdminMarketplacePayouts() {
 
                       {item.cashfree_settlement_id && (
                         <small>
-                          Settlement:{" "}
+                          Settlement ID:{" "}
                           {
                             item.cashfree_settlement_id
                           }
+                        </small>
+                      )}
+
+                      <small>
+                        Settlement:{" "}
+                        {getSettlementLabel(item)}
+                      </small>
+
+                      {item.transfer_utr && (
+                        <small>
+                          UTR: {item.transfer_utr}
                         </small>
                       )}
 
