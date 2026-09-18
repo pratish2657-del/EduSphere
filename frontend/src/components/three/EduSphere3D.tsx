@@ -748,6 +748,12 @@ function EarthGlobe() {
           ATMOSPHERIC RIM
       ====================================================== */}
 
+      <EarthAtmosphere
+        color="#55dfff"
+        scale={1.045}
+        opacity={0.8}
+      />
+
       <mesh
         scale={1.045}
         renderOrder={6}
