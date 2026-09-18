@@ -4384,3 +4384,536 @@ button:focus-visible {
   animation: orbFloat 5s ease-in-out infinite;
 }
 }
+
+/* ============================================================
+   EDUSPHERE STUDENT DASHBOARD — RESPONSIVE MOBILE / TABLET
+   ============================================================ */
+.edusphere-main,.edusphere-main *{min-width:0}
+.edusphere-main{overflow-x:hidden}
+.edusphere-main h1,.edusphere-main h2,.edusphere-main h3,.edusphere-main p,.edusphere-main strong,.edusphere-main span{overflow-wrap:anywhere}
+.edusphere-course-grid,.edusphere-marketplace-grid,.edusphere-event-grid{width:100%}
+.edusphere-course-grid>*,.edusphere-marketplace-grid>*,.edusphere-event-grid>*{min-width:0!important;max-width:100%}
+.edusphere-week-grid{scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+
+@media (max-width:1100px){
+  .edusphere-sidebar{width:220px!important;flex:0 0 220px!important;padding:22px 13px!important}
+  .edusphere-main{padding:28px 24px!important;max-width:none!important}
+  .edusphere-course-grid,.edusphere-marketplace-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .edusphere-event-grid{grid-template-columns:1fr!important}
+  .edusphere-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .edusphere-content-grid{grid-template-columns:1fr!important}
+  .edusphere-timetable-identity,.edusphere-schedule-summary{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .edusphere-hero-card{padding:26px!important}
+  .edusphere-hero-cube{width:210px!important;height:210px!important}
+}
+
+@media (max-width:820px){
+  .edusphere-app-shell{display:block!important}
+  .edusphere-sidebar{position:sticky!important;top:0!important;z-index:80!important;width:100%!important;min-height:auto!important;height:auto!important;max-height:none!important;flex:none!important;padding:12px 14px!important;border-right:0!important;border-bottom:1px solid rgba(148,163,184,.12)!important;background:rgba(5,8,18,.97)!important}
+  .edusphere-sidebar .student-brand{padding:0 5px 11px!important}
+  .edusphere-navigation{width:100%!important;flex-direction:row!important;gap:6px!important;overflow-x:auto!important;overflow-y:hidden!important;padding:1px 1px 5px!important;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+  .edusphere-navigation::-webkit-scrollbar{height:4px}
+  .edusphere-navigation::-webkit-scrollbar-track{background:transparent}
+  .edusphere-navigation::-webkit-scrollbar-thumb{background:rgba(148,163,184,.24);border-radius:999px}
+  .edusphere-navigation .edusphere-nav-label{display:none!important}
+  .edusphere-navigation>button{flex:0 0 auto!important;width:auto!important;min-height:38px!important;padding:8px 11px!important;white-space:nowrap!important;font-size:12px!important}
+  .edusphere-sidebar-bottom{display:flex!important;align-items:center!important;justify-content:flex-end!important;margin-top:7px!important;gap:8px!important}
+  .edusphere-sidebar-bottom .connection-status,.edusphere-sidebar-bottom>div:first-child{display:none!important}
+  .edusphere-sidebar-bottom button{width:auto!important;padding:8px 11px!important;font-size:11px!important}
+  .edusphere-main{width:100%!important;padding:22px 18px 70px!important}
+  .edusphere-header{align-items:stretch!important;flex-direction:column!important;gap:14px!important;margin-bottom:20px!important}
+  .edusphere-header-profile{width:100%!important;justify-content:flex-start!important}
+  .edusphere-hero-card{min-height:0!important;padding:24px!important}
+  .edusphere-hero-cube{width:170px!important;height:170px!important}
+  .edusphere-stats-grid{gap:11px!important}
+  .edusphere-content-grid{gap:14px!important}
+  .edusphere-week-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;overflow-x:visible!important}
+  .edusphere-day-column{min-width:0!important}
+}
+
+@media (max-width:600px){
+  .edusphere-main{padding:17px 12px 64px!important}
+  .edusphere-header{margin-bottom:16px!important}
+  .edusphere-header>div:first-child{width:100%!important}
+  .edusphere-header .edusphere-header-profile{padding:8px 10px!important}
+  .edusphere-main h1{font-size:30px!important;line-height:1.08!important;letter-spacing:-.035em!important}
+  .edusphere-sidebar{padding:9px 10px 8px!important}
+  .edusphere-sidebar .student-brand{padding:0 3px 9px!important}
+  .edusphere-sidebar .student-brand-logo{width:34px!important;height:34px!important;flex-basis:34px!important}
+  .edusphere-sidebar .student-brand-text strong{font-size:12px!important;letter-spacing:1.4px!important}
+  .edusphere-sidebar .student-brand-text span{font-size:6px!important;letter-spacing:1.1px!important}
+  .edusphere-navigation>button{min-height:36px!important;padding:7px 10px!important;gap:7px!important;font-size:11px!important;border-radius:9px!important}
+  .edusphere-navigation>button svg{width:16px!important;height:16px!important;flex:0 0 16px!important}
+  .edusphere-sidebar-bottom{margin-top:5px!important}
+  .edusphere-sidebar-bottom button{min-height:32px!important;padding:6px 9px!important;font-size:10px!important}
+
+  .edusphere-hero-card{display:block!important;padding:20px!important;border-radius:18px!important;margin-bottom:13px!important}
+  .edusphere-hero-content{width:100%!important}
+  .edusphere-hero-cube{display:none!important}
+  .edusphere-hero-card h2{font-size:25px!important;line-height:1.18!important}
+  .edusphere-hero-card p{font-size:12px!important;line-height:1.5!important}
+  .edusphere-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}
+  .edusphere-stats-grid>*{padding:13px!important;border-radius:14px!important}
+  .edusphere-stats-grid>* svg{width:17px!important;height:17px!important}
+  .edusphere-stats-grid>* strong{max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere!important;line-height:1.25!important}
+  .edusphere-content-grid{grid-template-columns:1fr!important;gap:12px!important}
+  .edusphere-content-grid>*{width:100%!important;padding:16px!important;border-radius:16px!important}
+
+  /* Long profile values must wrap instead of clipping on phones. */
+  .edusphere-content-grid [style*="infoRow"]{flex-direction:column!important;align-items:flex-start!important;gap:5px!important;padding:10px 0!important}
+  .edusphere-content-grid [style*="infoValue"]{width:100%!important;max-width:100%!important;text-align:left!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere!important;line-height:1.45!important}
+  .edusphere-content-grid [style*="infoLabel"]{width:100%!important}
+
+  .edusphere-course-grid,.edusphere-marketplace-grid,.edusphere-event-grid{grid-template-columns:1fr!important;gap:11px!important}
+  .edusphere-course-grid>*,.edusphere-marketplace-grid>*,.edusphere-event-grid>*{width:100%!important}
+  .edusphere-course-grid article{padding:15px!important;border-radius:15px!important}
+  .edusphere-course-grid article h3{font-size:17px!important;line-height:1.25!important}
+  .edusphere-marketplace-grid article,.edusphere-event-grid article{border-radius:15px!important}
+  .edusphere-marketplace-grid article h3,.edusphere-event-grid article h3{font-size:16px!important;line-height:1.25!important}
+
+  .edusphere-timetable-header{flex-direction:column!important;gap:12px!important;margin-bottom:15px!important}
+  .edusphere-timetable-header>button{width:100%!important}
+  .edusphere-timetable-identity,.edusphere-schedule-summary{grid-template-columns:1fr 1fr!important;gap:8px!important}
+  .edusphere-timetable-identity>*,.edusphere-schedule-summary>*{padding:11px!important;border-radius:12px!important}
+  .edusphere-timetable-identity strong{display:block!important;white-space:normal!important;overflow-wrap:anywhere!important;line-height:1.35!important}
+  .edusphere-week-grid{grid-template-columns:1fr!important;gap:10px!important}
+  .edusphere-day-column{width:100%!important;min-height:0!important;padding:8px!important}
+
+  /* Compact horizontal timetable cards for narrow screens. */
+  .edusphere-main [style*="gridTemplateColumns: 92px 18px"]{grid-template-columns:70px 10px minmax(0,1fr)!important}
+  .edusphere-main [style*="gridTemplateColumns: 92px 18px"]>*{min-width:0!important}
+  .edusphere-main [style*="gridTemplateColumns: 92px 18px"] h3{font-size:15px!important;line-height:1.25!important;overflow-wrap:anywhere!important}
+  .edusphere-main [style*="gridTemplateColumns: 92px 18px"]>div:first-child{padding:15px 6px 15px 10px!important}
+  .edusphere-main [style*="gridTemplateColumns: 92px 18px"]>div:last-child{padding:15px 12px!important}
+
+  /* Stack search/filter toolbars instead of forcing horizontal overflow. */
+  .edusphere-main [style*="courseToolbar"],.edusphere-main [style*="marketplaceToolbar"]{flex-direction:column!important;align-items:stretch!important;width:100%!important}
+  .edusphere-main [style*="courseSearchBox"]{min-width:0!important;max-width:none!important;width:100%!important}
+  .edusphere-main input,.edusphere-main textarea,.edusphere-main select{max-width:100%!important}
+  .edusphere-main button{max-width:100%}
+
+  .edusphere-footer{flex-direction:column!important;align-items:flex-start!important;gap:10px!important}
+  .edusphere-main [style*="modalBackdrop"]{padding:10px!important}
+  .edusphere-main [style*="eventModal"],.edusphere-main [style*="cartModal"]{width:100%!important;max-width:100%!important;max-height:calc(100vh - 20px)!important;border-radius:16px!important}
+  .edusphere-main [style*="modalHeader"],.edusphere-main [style*="modalBody"],.edusphere-main [style*="formBody"]{padding:16px!important}
+  .edusphere-main [style*="formTwoColumn"],.edusphere-main [style*="modalInfoGrid"]{grid-template-columns:1fr!important}
+}
+
+@media (max-width:380px){
+  .edusphere-main{padding-left:9px!important;padding-right:9px!important}
+  .edusphere-main h1{font-size:27px!important}
+  .edusphere-hero-card{padding:17px!important}
+  .edusphere-timetable-identity,.edusphere-schedule-summary{grid-template-columns:1fr!important}
+  .edusphere-stats-grid{grid-template-columns:1fr!important}
+  .edusphere-main [style*="gridTemplateColumns: 92px 18px"]{grid-template-columns:58px 7px minmax(0,1fr)!important}
+  .edusphere-main [style*="gridTemplateColumns: 92px 18px"]>div:first-child{padding-left:7px!important;padding-right:4px!important}
+  .edusphere-main [style*="gridTemplateColumns: 92px 18px"]>div:last-child{padding-left:9px!important;padding-right:9px!important}
+}
+
+
+/* ============================================================
+   EDUSPHERE STUDENT DASHBOARD — ALL DEVICE WIDTHS
+   Prevent cramped cards, text collisions and horizontal clipping.
+   Desktop / laptop / tablet / mobile use the same fluid system.
+   ============================================================ */
+
+.edusphere-main,
+.edusphere-main * {
+  min-width: 0;
+}
+
+.edusphere-main {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.edusphere-main h1,
+.edusphere-main h2,
+.edusphere-main h3,
+.edusphere-main p,
+.edusphere-main strong,
+.edusphere-main span {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* Timetable: cards must always have a real content width. */
+.edusphere-week-grid {
+  width: 100%;
+  display: grid !important;
+  gap: 12px !important;
+  overflow-x: visible !important;
+  align-items: start !important;
+}
+
+.edusphere-day-column {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.edusphere-day-column > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.edusphere-class-card {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.edusphere-class-time {
+  width: 100% !important;
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+}
+
+.edusphere-class-time span {
+  min-width: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.edusphere-class-time span:last-child {
+  text-align: right;
+}
+
+.edusphere-class-title {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin-right: 0 !important;
+  overflow-wrap: anywhere !important;
+  word-break: normal !important;
+  hyphens: auto;
+}
+
+/* The metadata was previously inline text beside SVG icons.
+   Make every row a proper flex row so long values cannot collide. */
+.edusphere-class-meta {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.edusphere-class-meta > span {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 7px !important;
+  line-height: 1.4 !important;
+  overflow-wrap: anywhere !important;
+  word-break: normal !important;
+}
+
+.edusphere-class-meta > span > svg {
+  flex: 0 0 auto !important;
+  margin-top: 1px !important;
+}
+
+.edusphere-class-meta > span:not(:has(svg)) {
+  display: block !important;
+}
+
+/* Never allow a long professor / room / course value to force the card wider. */
+.edusphere-class-card .edusphere-class-meta,
+.edusphere-class-card .edusphere-class-meta * {
+  overflow-wrap: anywhere !important;
+}
+
+/* Timetable header and identity cards are fluid too. */
+.edusphere-timetable-header {
+  width: 100%;
+  min-width: 0;
+}
+
+.edusphere-timetable-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.edusphere-timetable-header > button {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.edusphere-timetable-identity {
+  width: 100%;
+}
+
+.edusphere-timetable-identity > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.edusphere-timetable-identity strong {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+/* Course / marketplace / event cards */
+.edusphere-course-grid,
+.edusphere-marketplace-grid,
+.edusphere-event-grid {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.edusphere-course-grid > *,
+.edusphere-marketplace-grid > *,
+.edusphere-event-grid > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.edusphere-course-grid h3,
+.edusphere-marketplace-grid h3,
+.edusphere-event-grid h3 {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Profile / information rows */
+.edusphere-content-grid > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* ============================================================
+   WIDE DESKTOP — 7 days visible when there is enough room
+   ============================================================ */
+@media (min-width: 1500px) {
+  .edusphere-week-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  }
+
+  .edusphere-day-column {
+    min-height: 360px !important;
+  }
+}
+
+/* ============================================================
+   STANDARD LAPTOP / LARGE TABLET — 4 day columns
+   ============================================================ */
+@media (min-width: 1101px) and (max-width: 1499px) {
+  .edusphere-week-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .edusphere-day-column {
+    min-height: 340px !important;
+  }
+}
+
+/* ============================================================
+   TABLET / SMALL LAPTOP — 3 day columns
+   ============================================================ */
+@media (min-width: 821px) and (max-width: 1100px) {
+  .edusphere-main {
+    padding-left: 22px !important;
+    padding-right: 22px !important;
+  }
+
+  .edusphere-week-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .edusphere-day-column {
+    min-height: 320px !important;
+    padding: 9px !important;
+  }
+
+  .edusphere-class-card {
+    padding: 12px !important;
+  }
+
+  .edusphere-class-title {
+    font-size: 16px !important;
+    line-height: 1.28 !important;
+  }
+
+  .edusphere-class-meta {
+    font-size: 10px !important;
+  }
+}
+
+/* ============================================================
+   TABLET / LARGE PHONE — 2 columns
+   ============================================================ */
+@media (min-width: 601px) and (max-width: 820px) {
+  .edusphere-main {
+    width: 100% !important;
+    padding: 20px 16px 64px !important;
+  }
+
+  .edusphere-week-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .edusphere-day-column {
+    min-height: 0 !important;
+    padding: 8px !important;
+  }
+
+  .edusphere-class-card {
+    padding: 12px !important;
+  }
+
+  .edusphere-class-title {
+    font-size: 15px !important;
+    line-height: 1.28 !important;
+  }
+
+  .edusphere-class-meta {
+    font-size: 10px !important;
+    gap: 7px !important;
+  }
+
+  .edusphere-class-meta > span {
+    gap: 6px !important;
+  }
+
+  .edusphere-timetable-identity {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ============================================================
+   PHONE — one comfortable column, no squeezing
+   ============================================================ */
+@media (max-width: 600px) {
+  .edusphere-main {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 16px 12px 64px !important;
+    overflow-x: hidden !important;
+  }
+
+  .edusphere-week-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .edusphere-day-column {
+    width: 100% !important;
+    min-height: 0 !important;
+    padding: 8px !important;
+  }
+
+  .edusphere-day-column-header {
+    min-width: 0;
+  }
+
+  .edusphere-class-card {
+    width: 100% !important;
+    padding: 13px !important;
+    border-radius: 14px !important;
+  }
+
+  .edusphere-class-time {
+    font-size: 10px !important;
+    gap: 10px !important;
+    margin-bottom: 9px !important;
+  }
+
+  .edusphere-class-title {
+    font-size: 17px !important;
+    line-height: 1.24 !important;
+    letter-spacing: -0.015em !important;
+  }
+
+  .edusphere-class-meta {
+    margin-top: 10px !important;
+    gap: 7px !important;
+    font-size: 10px !important;
+  }
+
+  .edusphere-class-meta > span {
+    gap: 7px !important;
+    line-height: 1.4 !important;
+  }
+
+  .edusphere-class-meta > span > svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  .edusphere-class-card .nextBadge {
+    margin-top: 10px !important;
+  }
+
+  .edusphere-timetable-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .edusphere-timetable-header > button {
+    width: 100% !important;
+  }
+
+  .edusphere-timetable-identity {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .edusphere-timetable-identity > * {
+    padding: 11px !important;
+  }
+
+  .edusphere-course-grid,
+  .edusphere-marketplace-grid,
+  .edusphere-event-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .edusphere-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ============================================================
+   VERY SMALL PHONE — keep readable rather than shrinking text
+   ============================================================ */
+@media (max-width: 380px) {
+  .edusphere-main {
+    padding-left: 9px !important;
+    padding-right: 9px !important;
+  }
+
+  .edusphere-class-card {
+    padding: 11px !important;
+  }
+
+  .edusphere-class-title {
+    font-size: 16px !important;
+  }
+
+  .edusphere-class-meta {
+    font-size: 9.5px !important;
+  }
+
+  .edusphere-timetable-identity,
+  .edusphere-schedule-summary,
+  .edusphere-stats-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

@@ -1220,6 +1220,74 @@ export default function AppPlaceholder() {
         }
       }
 
+      /* ----------------------------------------------------------
+         MOBILE TIMETABLE: prevent narrow cards from squeezing text
+         ---------------------------------------------------------- */
+      @media (max-width: 760px) {
+        .edusphere-day-column {
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          padding: 7px !important;
+          box-sizing: border-box !important;
+        }
+
+        .edusphere-class-card {
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          padding: 12px !important;
+          box-sizing: border-box !important;
+          overflow: hidden !important;
+        }
+
+        .edusphere-class-time {
+          width: 100% !important;
+          min-width: 0 !important;
+          font-size: 8px !important;
+          line-height: 1.3 !important;
+          margin-bottom: 8px !important;
+        }
+
+        .edusphere-class-title {
+          min-width: 0 !important;
+          max-width: 100% !important;
+          margin: 0 !important;
+          font-size: 16px !important;
+          line-height: 1.22 !important;
+          letter-spacing: -0.015em !important;
+          white-space: normal !important;
+          overflow-wrap: anywhere !important;
+          word-break: normal !important;
+        }
+
+        .edusphere-class-meta {
+          width: 100% !important;
+          min-width: 0 !important;
+          gap: 7px !important;
+          margin-top: 10px !important;
+          font-size: 8px !important;
+          line-height: 1.35 !important;
+        }
+
+        .edusphere-class-meta > span {
+          display: flex !important;
+          align-items: flex-start !important;
+          gap: 6px !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          white-space: normal !important;
+          overflow-wrap: anywhere !important;
+          word-break: break-word !important;
+        }
+
+        .edusphere-class-meta > span svg {
+          flex: 0 0 auto !important;
+          margin-top: 1px !important;
+        }
+      }
+
       @media (max-width: 480px) {
         .edusphere-stats-grid,
         .edusphere-module-grid,
@@ -4415,12 +4483,13 @@ function TimetableView({
                         return (
                           <div
                             key={entry.timetable_id}
+                            className="edusphere-class-card"
                             style={{
                               ...styles.classCard,
                               ...(isNext ? styles.classCardNext : {}),
                             }}
                           >
-                            <div style={styles.classTimeRow}>
+                            <div style={styles.classTimeRow} className="edusphere-class-time">
                               <span>{formatTime(entry.start_time)}</span>
                               <span>{formatTime(entry.end_time)}</span>
                             </div>
@@ -4431,9 +4500,9 @@ function TimetableView({
                               {entry.course_code}
                             </span>
 
-                            <h3 style={styles.classTitle}>{entry.course_name}</h3>
+                            <h3 style={styles.classTitle} className="edusphere-class-title">{entry.course_name}</h3>
 
-                            <div style={styles.classMetaStack}>
+                            <div style={styles.classMetaStack} className="edusphere-class-meta">
                               <span>
                                 <CalendarDays size={12} />
                                 {getDurationLabel(
