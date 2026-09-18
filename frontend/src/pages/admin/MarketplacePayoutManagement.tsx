@@ -18,9 +18,14 @@ type Payout = {
   cashfree_transfer_id?: string | null;
   transfer_status?: string | null;
   settlement_status?: string | null;
+  cashfree_split_status?: string | null;
+  cashfree_settlement_id?: string | null;
+  cashfree_vendor_status?: string | null;
+  transfer_utr?: string | null;
+  transfer_time?: string | null;
+  settlement_eligibility_date?: string | null;
   failure_reason?: string | null;
   payout_status?: string | null;
-  cashfree_vendor_status?: string | null;
   action?: string;
 };
 
@@ -35,6 +40,42 @@ type Finance = {
 };
 
 const money = (value: number) => `₹${Number(value || 0).toFixed(2)}`;
+
+const upper = (value?: string | null) =>
+  String(value || "").trim().toUpperCase();
+
+const getSettlementState = (item: Payout) => {
+  const status = upper(item.status);
+  const splitStatus = upper(item.cashfree_split_status);
+  const explicitSettlement = upper(item.settlement_status);
+
+  if (
+    status === "SETTLED" ||
+    explicitSettlement === "SETTLED" ||
+    Boolean(item.transfer_utr && item.transfer_time)
+  ) {
+    return "SETTLED";
+  }
+
+  if (splitStatus === "CREATED") {
+    return "PENDING";
+  }
+
+  if (splitStatus === "PENDING") {
+    return "WAITING";
+  }
+
+  return "NOT_CREATED";
+};
+
+const getSettlementLabel = (item: Payout) => {
+  const state = getSettlementState(item);
+
+  if (state === "SETTLED") return "SETTLED";
+  if (state === "PENDING") return "SETTLEMENT PENDING";
+  if (state === "WAITING") return "SPLIT PENDING";
+  return "NOT CREATED";
+};
 
 export default function MarketplacePayoutManagement() {
   const [items, setItems] = useState<Payout[]>([]);
@@ -82,6 +123,63 @@ export default function MarketplacePayoutManagement() {
     }
   };
 
+  const verifyCashfree = async (item: Payout) => {
+    setBusy(item.id);
+    setMsg("");
+
+    try {
+      const response = await fetch(
+        `${API}/marketplace/easy-split/payouts/${item.id}/verify`,
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Cashfree verification failed");
+      }
+
+      const confirmed = Boolean(data.cashfree_split_confirmed);
+      const settlement =
+        data?.cashfree?.settlement?.settlement || {};
+
+      if (confirmed) {
+        const utr =
+          data?.cashfree?.transfer_utr ||
+          settlement?.transfer_utr ||
+          null;
+        const transferTime =
+          data?.cashfree?.transfer_time ||
+          settlement?.transfer_time ||
+          null;
+
+        setMsg(
+          utr && transferTime
+            ? `Cashfree confirmed settlement for #${item.order_id}. UTR: ${utr}`
+            : `Cashfree confirmed the vendor split for #${item.order_id}. Settlement is still pending.`
+        );
+      } else {
+        setMsg(
+          `Cashfree payment is processed, but no vendor split is confirmed for #${item.order_id}. Payout remains on hold.`
+        );
+      }
+
+      await load();
+    } catch (error) {
+      setMsg(
+        error instanceof Error
+          ? error.message
+          : "Cashfree verification failed"
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+
   const reverse = async (item: Payout) => {
     const raw = window.prompt(`Reversal amount in INR. Leave blank for ${money(item.seller_amount)} full reversal.`);
     if (raw === null) return;
@@ -113,25 +211,88 @@ export default function MarketplacePayoutManagement() {
   };
 
   const action = (item: Payout) => {
+    const settlementState = getSettlementState(item);
+
     if (item.action === "REVERSE") {
       return (
-        <button className="payout-action danger" disabled={busy === item.id} onClick={() => reverse(item)}>
-          <RotateCcw size={14} /> Reverse
+        <div className="payout-action-group">
+          <button
+            className="payout-action secondary"
+            disabled={busy === item.id}
+            onClick={() => verifyCashfree(item)}
+            title="Check the actual Cashfree Easy Split state"
+          >
+            <RefreshCw size={14} />
+            {busy === item.id ? "Checking…" : "Verify Cashfree"}
+          </button>
+
+          {settlementState === "SETTLED" && (
+            <button
+              className="payout-action danger"
+              disabled={busy === item.id}
+              onClick={() => reverse(item)}
+              title="Reverse only after Cashfree confirms settlement"
+            >
+              <RotateCcw size={14} />
+              Reverse
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    if (
+      item.action === "VERIFY" ||
+      settlementState === "PENDING" ||
+      settlementState === "WAITING"
+    ) {
+      return (
+        <button
+          className="payout-action secondary"
+          disabled={busy === item.id}
+          onClick={() => verifyCashfree(item)}
+        >
+          <RefreshCw size={14} />
+          {busy === item.id ? "Checking…" : "Verify Cashfree"}
         </button>
       );
     }
+
     if (item.action === "RETRY") {
       return (
-        <button className="payout-action primary" disabled={busy === item.id} onClick={() => retry(item.id)}>
-          <Play size={14} /> {busy === item.id ? "Working…" : "Retry"}
-        </button>
+        <div className="payout-action-group">
+          <button
+            className="payout-action primary"
+            disabled={busy === item.id}
+            onClick={() => retry(item.id)}
+          >
+            <Play size={14} />
+            {busy === item.id ? "Working…" : "Retry"}
+          </button>
+
+          <button
+            className="payout-action secondary"
+            disabled={busy === item.id}
+            onClick={() => verifyCashfree(item)}
+          >
+            <RefreshCw size={14} />
+            Verify
+          </button>
+        </div>
       );
     }
+
     if (item.action === "SELLER_ONBOARDING_REQUIRED") {
-      return <span className="action-muted"><CircleAlert size={14} /> Seller onboarding required</span>;
+      return (
+        <span className="action-muted">
+          <CircleAlert size={14} /> Seller onboarding required
+        </span>
+      );
     }
+
     return <span className="action-muted">Waiting</span>;
   };
+
 
   return (
     <div className="payout-page">
@@ -177,14 +338,78 @@ export default function MarketplacePayoutManagement() {
                 <td>{money(item.platform_fee_amount)}</td>
                 <td>{money(item.seller_amount)}</td>
                 <td>
-                  <span className={`pill ${String(item.status).toLowerCase()}`}>
-                    {String(item.status).replaceAll("_", " ")}
-                  </span>
-                  {item.failure_reason && <small className="failure">{item.failure_reason}</small>}
+                  {(() => {
+                    const settlementState = getSettlementState(item);
+                    const displayStatus =
+                      settlementState === "SETTLED"
+                        ? "SETTLED"
+                        : settlementState === "PENDING"
+                          ? "SETTLEMENT PENDING"
+                          : item.status;
+
+                    return (
+                      <>
+                        <span className={`pill ${String(item.status).toLowerCase()}`}>
+                          {String(displayStatus).replaceAll("_", " ")}
+                        </span>
+
+                        {item.failure_reason && (
+                          <small className="failure">
+                            {item.failure_reason}
+                          </small>
+                        )}
+
+                        {item.cashfree_split_status && (
+                          <small>
+                            Split: {item.cashfree_split_status}
+                          </small>
+                        )}
+
+                        <small>
+                          Settlement: {getSettlementLabel(item)}
+                        </small>
+
+                        {item.transfer_utr && (
+                          <small>UTR: {item.transfer_utr}</small>
+                        )}
+
+                        {item.transfer_time && (
+                          <small>
+                            Transfer time: {item.transfer_time}
+                          </small>
+                        )}
+
+                        {item.settlement_eligibility_date && (
+                          <small>
+                            Eligible: {item.settlement_eligibility_date}
+                          </small>
+                        )}
+                      </>
+                    );
+                  })()}
                 </td>
                 <td>
-                  <small>{item.cashfree_vendor_id || "Not connected"}</small>
-                  {item.cashfree_transfer_id && <small className="transfer">{item.cashfree_transfer_id}</small>}
+                  <small>
+                    {item.cashfree_vendor_id || "Not connected"}
+                  </small>
+
+                  {item.cashfree_vendor_status && (
+                    <small>
+                      Vendor: {item.cashfree_vendor_status}
+                    </small>
+                  )}
+
+                  {item.cashfree_transfer_id && (
+                    <small className="transfer">
+                      Transfer: {item.cashfree_transfer_id}
+                    </small>
+                  )}
+
+                  {item.cashfree_settlement_id && (
+                    <small>
+                      Settlement: {item.cashfree_settlement_id}
+                    </small>
+                  )}
                 </td>
                 <td>{action(item)}</td>
               </tr>
