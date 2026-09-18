@@ -4917,3 +4917,121 @@ button:focus-visible {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+
+/* ============================================================
+   ATTENDANCE — FLUID ACROSS DESKTOP / TABLET / MOBILE
+   ============================================================ */
+.edusphere-attendance-shell,
+.edusphere-attendance-shell * {
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+}
+
+.edusphere-attendance-shell {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+/* Any grid used by AttendanceView must be allowed to shrink. */
+.edusphere-attendance-shell [style*="grid-template-columns"],
+.edusphere-attendance-shell [style*="gridTemplateColumns"],
+.edusphere-attendance-shell [class*="grid"] {
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* Attendance statistic cards: five across on wide screens. */
+@media (min-width: 821px) {
+  .edusphere-attendance-shell [style*="grid-template-columns"],
+  .edusphere-attendance-shell [style*="gridTemplateColumns"],
+  .edusphere-attendance-shell [class*="stats-grid"],
+  .edusphere-attendance-shell [class*="stat-grid"] {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    width: 100% !important;
+    gap: 14px !important;
+  }
+}
+
+/* Tablet: two/three comfortable columns rather than five squeezed cards. */
+@media (max-width: 1100px) and (min-width: 821px) {
+  .edusphere-attendance-shell [style*="grid-template-columns"],
+  .edusphere-attendance-shell [style*="gridTemplateColumns"],
+  .edusphere-attendance-shell [class*="stats-grid"],
+  .edusphere-attendance-shell [class*="stat-grid"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Phone/tablet: stats become readable cards. */
+@media (max-width: 820px) {
+  .edusphere-attendance-shell {
+    width: 100% !important;
+    padding: 0 !important;
+  }
+
+  .edusphere-attendance-shell [style*="grid-template-columns"],
+  .edusphere-attendance-shell [style*="gridTemplateColumns"],
+  .edusphere-attendance-shell [class*="stats-grid"],
+  .edusphere-attendance-shell [class*="stat-grid"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100% !important;
+    gap: 10px !important;
+  }
+
+  .edusphere-attendance-shell h1,
+  .edusphere-attendance-shell h2,
+  .edusphere-attendance-shell h3,
+  .edusphere-attendance-shell p,
+  .edusphere-attendance-shell span,
+  .edusphere-attendance-shell strong,
+  .edusphere-attendance-shell div {
+    max-width: 100% !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+  }
+
+  .edusphere-attendance-shell button {
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .edusphere-attendance-shell {
+    font-size: 13px;
+  }
+
+  .edusphere-attendance-shell [style*="grid-template-columns"],
+  .edusphere-attendance-shell [style*="gridTemplateColumns"],
+  .edusphere-attendance-shell [class*="stats-grid"],
+  .edusphere-attendance-shell [class*="stat-grid"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .edusphere-attendance-shell > div {
+    max-width: 100% !important;
+  }
+
+  .edusphere-attendance-shell [class*="stat"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .edusphere-attendance-shell [class*="stat"] strong,
+  .edusphere-attendance-shell [class*="stat"] h3,
+  .edusphere-attendance-shell [class*="stat"] span {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    text-overflow: clip !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .edusphere-attendance-shell [style*="grid-template-columns"],
+  .edusphere-attendance-shell [style*="gridTemplateColumns"],
+  .edusphere-attendance-shell [class*="stats-grid"],
+  .edusphere-attendance-shell [class*="stat-grid"] {
+    grid-template-columns: 1fr !important;
+  }
+}

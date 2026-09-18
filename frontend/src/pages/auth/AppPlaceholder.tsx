@@ -1952,7 +1952,9 @@ export default function AppPlaceholder() {
               onRefresh={loadResults}
             />
           ) : activeTab === "attendance" ? (
-            <AttendanceView studentId={student.user_id} />
+            <div className="edusphere-attendance-shell">
+              <AttendanceView studentId={student.user_id} />
+            </div>
           ) : (
             <MarketplaceView
               marketplace={marketplace}
