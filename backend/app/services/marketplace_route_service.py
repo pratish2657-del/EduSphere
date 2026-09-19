@@ -15,7 +15,6 @@ from app.services.cashfree_easy_split_service import (
     create_vendor,
     get_split_and_settlement_details,
     get_vendor,
-    transfer_vendor_balance,
 )
 from app.services.marketplace_inventory_service import (
     restore_order_inventory,
@@ -646,17 +645,14 @@ def list_payouts(
                     /* =================================================
                        CONFIRMED CASHFREE SPLIT
 
-                       Reverse is allowed only when the local split
-                       is actually marked CREATED.
+                       Post-settlement adjustment is allowed only
+                       when the local split is actually marked CREATED.
 
                        This prevents an ON_HOLD / stale payout from
                        showing a Reverse button.
                        ================================================= */
 
-                    WHEN pt.status IN (
-                        'TRANSFER_INITIATED',
-                        'SETTLED'
-                    )
+                    WHEN pt.status = 'SETTLED'
 
                     AND pt.cashfree_split_status = 'CREATED'
 
@@ -664,6 +660,7 @@ def list_payouts(
                         SELECT 1
                         FROM marketplace_payout_reversals r
                         WHERE r.payout_transaction_id = pt.id
+                          AND r.cashfree_refund_id IS NOT NULL
                           AND r.status IN ('PENDING', 'PROCESSED')
                     )
 
@@ -754,6 +751,16 @@ def reverse_payout(
     amount: float | None = None,
     reason: str | None = None,
 ):
+    """
+    Create a post-settlement vendor adjustment by initiating a
+    Cashfree customer refund with a split directed only to the
+    target vendor.
+
+    The original payout remains SETTLED. The Easy Split transfer
+    endpoint is intentionally not used here because a VENDOR
+    transfer sends vendor-ledger funds to the vendor bank account;
+    it is not a reversal back to the merchant.
+    """
     connection = get_connection()
 
     try:
@@ -762,12 +769,8 @@ def reverse_payout(
         cursor.execute(
             """
             SELECT *
-
             FROM marketplace_seller_payout_transactions
-
             WHERE id = %s
-
-            FOR UPDATE
             """,
             (payout_transaction_id,),
         )
@@ -779,56 +782,78 @@ def reverse_payout(
                 "Payout transaction not found"
             )
 
-        vendor_id = payout.get(
-            "cashfree_vendor_id"
-        )
+        vendor_id = payout.get("cashfree_vendor_id")
 
         if not vendor_id:
             raise BadRequestError(
-                "This payout has no Cashfree "
-                "Easy Split vendor"
+                "This payout has no Cashfree Easy Split vendor"
             )
 
-        # ========================================================
-        # SAFETY CHECK
-        #
-        # Reverse only a payout whose Easy Split was confirmed.
-        # ========================================================
-
-        if (
-            payout.get(
-                "cashfree_split_status"
-            )
-            != "CREATED"
-        ):
+        if payout.get("cashfree_split_status") != "CREATED":
             raise BadRequestError(
-                "Cashfree Easy Split has not been "
-                "confirmed for this payout"
+                "Cashfree Easy Split has not been confirmed for this payout"
             )
 
-        if payout.get(
-            "status"
-        ) not in {
-            "TRANSFER_INITIATED",
-            "SETTLED",
-        }:
+        if payout.get("status") != "SETTLED":
             raise BadRequestError(
-                "Only initiated or settled "
-                "payouts can be reversed"
+                "Only settled payouts can be adjusted"
             )
 
-        # ========================================================
-        # DUPLICATE REVERSAL PROTECTION
-        # ========================================================
+        requested = round(
+            (
+                amount
+                if amount is not None
+                else float(payout["seller_amount"])
+            ),
+            2,
+        )
 
+        seller_amount = round(
+            float(payout["seller_amount"] or 0),
+            2,
+        )
+
+        if requested < 1:
+            raise BadRequestError(
+                "Reversal amount must be at least ₹1"
+            )
+
+        if requested > seller_amount + 0.0001:
+            raise BadRequestError(
+                "Reversal amount cannot exceed the seller payout amount"
+            )
+
+        cursor.execute(
+            """
+            SELECT id
+            FROM marketplace_payments
+            WHERE order_id = %s
+              AND status = 'PAID'
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (payout["order_id"],),
+        )
+
+        payment = cursor.fetchone()
+
+        if not payment:
+            raise BadRequestError(
+                "The marketplace payment is not refundable for this payout"
+            )
+
+        # Only refund-backed reversal records participate in duplicate
+        # protection. The old transfer-based row from the previous
+        # implementation is historical and is not a refund adjustment.
         cursor.execute(
             """
             SELECT
                 id,
                 status,
-                cashfree_transfer_id
+                cashfree_refund_id
             FROM marketplace_payout_reversals
             WHERE payout_transaction_id = %s
+              AND cashfree_refund_id IS NOT NULL
               AND status IN ('PENDING', 'PROCESSED')
             ORDER BY id DESC
             LIMIT 1
@@ -841,61 +866,38 @@ def reverse_payout(
 
         if active_reversal:
             raise ConflictError(
-                "A reversal has already been submitted for this payout"
+                "A payout adjustment has already been submitted for this payout"
             )
 
-        requested = round(
-            (
-                amount
-                if amount is not None
-                else float(
-                    payout["seller_amount"]
-                )
-            ),
-            2,
-        )
-
-        if requested < 1:
-            raise BadRequestError(
-                "Reversal amount must be at least ₹1"
-            )
-
-        # ========================================================
-        # CASHFREE VENDOR BALANCE TRANSFER
-        # ========================================================
-
-        result = transfer_vendor_balance(
-            vendor_id,
-            requested,
-            transfer_from="VENDOR",
-            remark=(
+        result = refund_payment(
+            payment_db_id=int(payment["id"]),
+            created_by=created_by,
+            amount=requested,
+            reverse_all=True,
+            reason=(
                 reason
-                or "EduSphere marketplace "
-                "payout reversal"
+                or "EduSphere marketplace settled payout adjustment"
             ),
+            target_vendor_id=str(vendor_id),
         )
 
-        transfer_id = str(
-            (
-                result.get(
-                    "transfer_details"
-                )
-                or {}
-            ).get(
-                "transfer_id"
+        refund_id = result.get("refund_id")
+        refund_db_id = result.get("refund_db_id")
+
+        if not refund_id or not refund_db_id:
+            raise BadRequestError(
+                "Cashfree refund adjustment did not return a refund ID"
             )
-            or uuid.uuid4()
-        )
 
-        # ========================================================
-        # REVERSAL RECORD
-        #
-        # Cashfree vendor-balance transfers are asynchronous.
-        # A transfer ID means the reversal request was accepted;
-        # it does NOT prove that the reversal has completed.
-        #
-        # Keep the original payout settlement state untouched.
-        # ========================================================
+        adjustment_status = str(
+            result.get("refund_status") or "PENDING"
+        ).upper()
+
+        if adjustment_status == "SUCCESS":
+            adjustment_status = "PROCESSED"
+
+        if adjustment_status not in {"PROCESSED", "PENDING", "FAILED"}:
+            adjustment_status = "PENDING"
 
         cursor.execute(
             """
@@ -903,27 +905,35 @@ def reverse_payout(
                 (
                     payout_transaction_id,
                     amount,
-                    cashfree_transfer_id,
+                    cashfree_refund_id,
                     cashfree_reversal_status,
                     status,
-                    created_by
+                    created_by,
+                    processed_at
                 )
-
             VALUES
                 (
                     %s,
                     %s,
                     %s,
-                    'PENDING',
-                    'PENDING',
-                    %s
+                    %s,
+                    %s,
+                    %s,
+                    CASE
+                        WHEN %s = 'PROCESSED'
+                        THEN CURRENT_TIMESTAMP
+                        ELSE NULL
+                    END
                 )
             """,
             (
                 payout_transaction_id,
                 requested,
-                transfer_id,
+                str(refund_id),
+                adjustment_status,
+                adjustment_status,
                 created_by,
+                adjustment_status,
             ),
         )
 
@@ -931,11 +941,18 @@ def reverse_payout(
 
         return {
             "success": True,
-            "transfer_id": transfer_id,
+            "refund_id": str(refund_id),
+            "refund_db_id": int(refund_db_id),
             "amount": requested,
-            "reversal_status": "PENDING",
+            "reversal_status": adjustment_status,
+            "payout_status": (
+                "REFUNDED"
+                if result.get("fully_refunded")
+                else "SETTLED"
+            ),
+            "adjustment_type": "CASHFREE_REFUND_SPLIT",
+            "refund_splits": result.get("refund_splits") or [],
         }
-        
 
     except Exception:
         connection.rollback()
@@ -943,7 +960,6 @@ def reverse_payout(
 
     finally:
         connection.close()
-
 
 # ============================================================
 # CANCEL MARKETPLACE ORDER
@@ -1852,6 +1868,7 @@ def refund_payment(
     amount: float | None = None,
     reverse_all: bool = True,
     reason: str | None = None,
+    target_vendor_id: str | None = None,
 ):
     connection = get_connection()
 
@@ -1952,6 +1969,7 @@ def refund_payment(
                     "refund_mode": "CASHFREE_EASY_SPLIT",
                     "fully_refunded": True,
                     "already_refunded": True,
+                    "refund_status": "PROCESSED",
                     "refund_splits": [],
                 }
 
@@ -2106,81 +2124,132 @@ def refund_payment(
             refund_splits = []
 
             if reverse_all:
-                cursor.execute(
-                    """
-                    SELECT
-                        pt.cashfree_vendor_id,
-                        pt.seller_amount
-                    FROM marketplace_seller_payout_transactions pt
-                    WHERE pt.order_id = %s
-                      AND pt.cashfree_vendor_id IS NOT NULL
-                      AND pt.seller_amount > 0
-                    ORDER BY pt.id ASC
-                    FOR UPDATE
-                    """,
-                    (payment["order_id"],),
-                )
+                # Normal refunds can reverse all vendors in the order.
+                # A payout adjustment must debit ONLY the target vendor.
+                if target_vendor_id:
+                    cursor.execute(
+                        """
+                        SELECT
+                            pt.cashfree_vendor_id,
+                            pt.seller_amount
+                        FROM marketplace_seller_payout_transactions pt
+                        WHERE pt.order_id = %s
+                          AND pt.cashfree_vendor_id = %s
+                          AND pt.seller_amount > 0
+                        ORDER BY pt.id ASC
+                        LIMIT 1
+                        FOR UPDATE
+                        """,
+                        (
+                            payment["order_id"],
+                            str(target_vendor_id),
+                        ),
+                    )
 
-                payout_rows = cursor.fetchall()
+                    payout_row = cursor.fetchone()
 
-                total_seller_amount = sum(
-                    float(row.get("seller_amount") or 0)
-                    for row in payout_rows
-                )
-
-                remaining_refund = round(
-                    refund_amount,
-                    2,
-                )
-
-                if total_seller_amount > 0:
-                    for index, row in enumerate(payout_rows):
-                        vendor_id = str(
-                            row["cashfree_vendor_id"]
+                    if not payout_row:
+                        raise BadRequestError(
+                            "The target Cashfree vendor payout "
+                            "was not found for this order"
                         )
 
-                        seller_amount = float(
-                            row.get("seller_amount") or 0
+                    seller_amount = round(
+                        float(payout_row["seller_amount"] or 0),
+                        2,
+                    )
+
+                    if refund_amount > seller_amount + 0.0001:
+                        raise BadRequestError(
+                            "Reversal amount cannot exceed the "
+                            "seller payout amount"
                         )
 
-                        if index == len(payout_rows) - 1:
-                            vendor_refund = min(
-                                seller_amount,
-                                remaining_refund,
-                            )
-                        else:
-                            vendor_refund = min(
-                                seller_amount,
-                                round(
-                                    refund_amount
-                                    * seller_amount
-                                    / total_seller_amount,
-                                    2,
-                                ),
-                                remaining_refund,
+                    refund_splits.append(
+                        {
+                            "vendor_id": str(
+                                payout_row["cashfree_vendor_id"]
+                            ),
+                            "amount": refund_amount,
+                        }
+                    )
+
+                else:
+                    cursor.execute(
+                        """
+                        SELECT
+                            pt.cashfree_vendor_id,
+                            pt.seller_amount
+                        FROM marketplace_seller_payout_transactions pt
+                        WHERE pt.order_id = %s
+                          AND pt.cashfree_vendor_id IS NOT NULL
+                          AND pt.seller_amount > 0
+                        ORDER BY pt.id ASC
+                        FOR UPDATE
+                        """,
+                        (payment["order_id"],),
+                    )
+
+                    payout_rows = cursor.fetchall()
+
+                    total_seller_amount = sum(
+                        float(row.get("seller_amount") or 0)
+                        for row in payout_rows
+                    )
+
+                    remaining_refund = round(
+                        refund_amount,
+                        2,
+                    )
+
+                    if total_seller_amount > 0:
+                        for index, row in enumerate(payout_rows):
+                            vendor_id = str(
+                                row["cashfree_vendor_id"]
                             )
 
-                        vendor_refund = round(
-                            vendor_refund,
-                            2,
-                        )
-
-                        if vendor_refund > 0:
-                            refund_splits.append(
-                                {
-                                    "vendor_id": vendor_id,
-                                    "amount": vendor_refund,
-                                }
+                            seller_amount = float(
+                                row.get("seller_amount") or 0
                             )
 
-                            remaining_refund = round(
-                                remaining_refund
-                                - vendor_refund,
+                            if index == len(payout_rows) - 1:
+                                vendor_refund = min(
+                                    seller_amount,
+                                    remaining_refund,
+                                )
+                            else:
+                                vendor_refund = min(
+                                    seller_amount,
+                                    round(
+                                        refund_amount
+                                        * seller_amount
+                                        / total_seller_amount,
+                                        2,
+                                    ),
+                                    remaining_refund,
+                                )
+
+                            vendor_refund = round(
+                                vendor_refund,
                                 2,
                             )
 
-                        if remaining_refund <= 0:
-                            break
+                            if vendor_refund > 0:
+                                refund_splits.append(
+                                    {
+                                        "vendor_id": vendor_id,
+                                        "amount": vendor_refund,
+                                    }
+                                )
+
+                                remaining_refund = round(
+                                    remaining_refund
+                                    - vendor_refund,
+                                    2,
+                                )
+
+                            if remaining_refund <= 0:
+                                break
 
             # ----------------------------------------------------
             # IMPORTANT:
@@ -2435,6 +2504,7 @@ def refund_payment(
             "success": True,
             "refund_id": cashfree_refund_id,
             "refund_db_id": refund_db_id,
+            "refund_status": status,
             "amount": refund_amount,
             "reverse_all": reverse_all,
             "gateway": (
