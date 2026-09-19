@@ -22,7 +22,9 @@ from app.services.marketplace_order_service import (
 )
 from app.services.marketplace_service import (
     ALLOWED_MARKETPLACE_FILE_TYPES,
+    ALLOWED_MARKETPLACE_PREVIEW_TYPES,
     MAX_MARKETPLACE_FILE_SIZE,
+    MAX_MARKETPLACE_PREVIEW_SIZE,
     add_product_attachment,
     create_product,
     delete_product,
@@ -30,7 +32,9 @@ from app.services.marketplace_service import (
     get_marketplace_attachment_for_download,
     get_product,
     get_product_attachment,
+    get_product_preview,
     get_products,
+    save_product_preview,
     update_product,
 )
 
@@ -419,6 +423,247 @@ async def delete_product_route(
     except Exception as error:
         raise HTTPException(
             status_code=400,
+            detail=str(error),
+        ) from error
+
+
+# ============================================================
+# UPLOAD PRODUCT PREVIEW IMAGE
+#
+# POST /marketplace/{product_id}/preview
+#
+# Seller only.
+# Preview is separate from the protected digital attachment.
+# ============================================================
+
+
+@router.post("/{product_id}/preview")
+async def upload_product_preview(
+    product_id: int,
+    request: Request,
+    file: UploadFile = MARKETPLACE_UPLOAD_FILE,
+):
+
+    user = require_completed_profile(request)
+
+    file_path = None
+
+    try:
+        # ----------------------------------------------------
+        # Validate filename
+        # ----------------------------------------------------
+
+        if not file.filename:
+            raise HTTPException(
+                status_code=400,
+                detail="Preview image filename is required",
+            )
+
+        # ----------------------------------------------------
+        # Validate content type
+        # ----------------------------------------------------
+
+        if file.content_type not in ALLOWED_MARKETPLACE_PREVIEW_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Preview image must be JPG, PNG or WEBP"
+                ),
+            )
+
+        # ----------------------------------------------------
+        # Read file
+        # ----------------------------------------------------
+
+        contents = await file.read()
+
+        if not contents:
+            raise HTTPException(
+                status_code=400,
+                detail="Preview image cannot be empty",
+            )
+
+        # ----------------------------------------------------
+        # Maximum 5 MB
+        # ----------------------------------------------------
+
+        if len(contents) > MAX_MARKETPLACE_PREVIEW_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail="Preview image cannot exceed 5 MB",
+            )
+
+        # ----------------------------------------------------
+        # Preview directory
+        # ----------------------------------------------------
+
+        upload_directory = os.path.join(
+            "private_uploads",
+            "marketplace",
+            "previews",
+        )
+
+        os.makedirs(
+            upload_directory,
+            exist_ok=True,
+        )
+
+        # ----------------------------------------------------
+        # Preserve image extension only
+        # ----------------------------------------------------
+
+        extension = ""
+
+        if "." in file.filename:
+            extension = os.path.splitext(
+                file.filename
+            )[1].lower()
+
+        if extension not in {
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp",
+        }:
+            extension = ".jpg"
+
+        # ----------------------------------------------------
+        # Random filename
+        # ----------------------------------------------------
+
+        stored_name = (
+            f"{uuid.uuid4().hex}{extension}"
+        )
+
+        file_path = os.path.join(
+            upload_directory,
+            stored_name,
+        )
+
+        # ----------------------------------------------------
+        # ASYNC FILE WRITE
+        # ----------------------------------------------------
+
+        async with aiofiles.open(
+            file_path,
+            "wb",
+        ) as output_file:
+
+            await output_file.write(contents)
+
+        # ----------------------------------------------------
+        # Database update
+        # ----------------------------------------------------
+
+        result = save_product_preview(
+            product_id=product_id,
+            user_id=user["id"],
+            file_path=file_path,
+            file_type=file.content_type,
+            file_size=len(contents),
+        )
+
+        return result
+
+    except HTTPException:
+        # ----------------------------------------------------
+        # Cleanup physical file
+        # ----------------------------------------------------
+
+        if file_path and os.path.isfile(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+
+        raise
+
+    except Exception as error:
+        # ----------------------------------------------------
+        # Cleanup if DB operation fails
+        # ----------------------------------------------------
+
+        if file_path and os.path.isfile(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        ) from error
+
+
+# ============================================================
+# VIEW PRODUCT PREVIEW IMAGE
+#
+# GET /marketplace/{product_id}/preview
+#
+# Any authenticated completed-profile marketplace user
+# can view the preview.
+# ============================================================
+
+
+@router.get("/{product_id}/preview")
+async def view_product_preview(
+    product_id: int,
+    request: Request,
+):
+
+    require_completed_profile(request)
+
+    try:
+        preview = get_product_preview(
+            product_id=product_id,
+        )
+
+        file_path = preview["preview_image_path"]
+
+        if not file_path:
+            raise MarketplaceRouteError(
+                "Preview image is not available"
+            )
+
+        if not os.path.isfile(file_path):
+            raise MarketplaceRouteError(
+                "Preview image is no longer available"
+            )
+
+        # ----------------------------------------------------
+        # Determine image media type
+        # ----------------------------------------------------
+
+        extension = os.path.splitext(
+            file_path
+        )[1].lower()
+
+        media_types = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp",
+        }
+
+        media_type = media_types.get(
+            extension,
+            "application/octet-stream",
+        )
+
+        return FileResponse(
+            path=file_path,
+            media_type=media_type,
+        )
+
+    except MarketplaceRouteError as error:
+        raise HTTPException(
+            status_code=404,
+            detail=str(error),
+        ) from error
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=404,
             detail=str(error),
         ) from error
 

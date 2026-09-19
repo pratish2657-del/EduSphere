@@ -58,6 +58,7 @@ type MarketplaceProduct = {
   institution_name: string | null;
   name: string;
   description: string | null;
+  preview_image_path?: string | null;
   category: string | null;
   product_type: "DIGITAL" | "PHYSICAL" | string;
   condition_type: string | null;
@@ -1001,6 +1002,22 @@ function MarketplaceProductCard({
         style={styles.marketplaceProductMain}
         onClick={onSelect}
       >
+        {product.preview_image_path && (
+          <img
+            src={`${API_BASE_URL}/marketplace/${product.product_id}/preview`}
+            alt={`${product.name} preview`}
+            loading="lazy"
+            style={{
+              width: "100%",
+              height: 150,
+              objectFit: "cover",
+              borderRadius: 12,
+              marginBottom: 10,
+              display: "block",
+            }}
+          />
+        )}
+
         <div style={styles.marketplaceProductIcon}>
           {product.product_type === "DIGITAL" ? (
             <BookOpen size={22} />
@@ -1584,6 +1601,7 @@ function MarketplaceProductForm({
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [file, setFile] = useState<File | null>(null);
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -1601,6 +1619,18 @@ function MarketplaceProductForm({
       }
       if (!Number.isInteger(numericQuantity) || numericQuantity < 0) {
         throw new Error("Enter a valid non-negative quantity.");
+      }
+
+      if (!previewFile) {
+        throw new Error("A preview photo is required for every marketplace listing.");
+      }
+
+      if (!["image/jpeg", "image/png", "image/webp"].includes(previewFile.type)) {
+        throw new Error("Preview photo must be JPG, PNG or WEBP.");
+      }
+
+      if (previewFile.size > 5 * 1024 * 1024) {
+        throw new Error("Preview photo cannot exceed 5 MB.");
       }
 
       if (productType === "DIGITAL") {
@@ -1675,6 +1705,33 @@ function MarketplaceProductForm({
             )
           );
         }
+      }
+
+      if (!Number.isFinite(productId)) {
+        throw new Error("Product was created but no product ID was returned.");
+      }
+
+      const previewForm = new FormData();
+      previewForm.append("file", previewFile as File);
+
+      const previewResponse = await fetch(
+        `${API_BASE_URL}/marketplace/${productId}/preview`,
+        {
+          method: "POST",
+          credentials: "include",
+          body: previewForm,
+        }
+      );
+
+      const previewData = await previewResponse.json().catch(() => null);
+      if (!previewResponse.ok) {
+        throw new Error(
+          String(
+            previewData?.detail ||
+              previewData?.message ||
+              "Product created but preview photo upload failed."
+          )
+        );
       }
 
       onCreated();
@@ -1809,7 +1866,26 @@ function MarketplaceProductForm({
             />
           </label>
 
-          {productType === "DIGITAL" && (
+                    <label style={styles.fileDrop}>
+            <Upload size={20} />
+            <strong>Preview photo</strong>
+            <span>JPG, PNG or WEBP · max 5 MB · required</span>
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+              onChange={(event) =>
+                setPreviewFile(event.target.files?.[0] ?? null)
+              }
+              style={{ display: "none" }}
+            />
+            {previewFile && (
+              <small style={styles.selectedFileName}>
+                Selected: {previewFile.name}
+              </small>
+            )}
+          </label>
+
+{productType === "DIGITAL" && (
             <label style={styles.fileDrop}>
               <Upload size={20} />
               <strong>Digital file</strong>

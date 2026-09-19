@@ -27,6 +27,7 @@ type Product = {
   id: number;
   name: string;
   description?: string | null;
+  preview_image_path?: string | null;
   category?: string | null;
   product_type?: string | null;
   condition_type?: string | null;

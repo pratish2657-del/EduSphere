@@ -37,6 +37,7 @@ type MarketplaceProduct = {
   institution_name: string | null;
   name: string;
   description: string | null;
+  preview_image_path?: string | null;
   category: string | null;
   product_type: "DIGITAL" | "PHYSICAL" | string;
   condition_type: string | null;
@@ -588,6 +589,14 @@ export default function AdminMarketplace() {
                       className="admin-marketplace-product-main"
                       onClick={() => setSelected(product)}
                     >
+                      {product.preview_image_path && (
+                        <img
+                          src={`${API_BASE_URL}/marketplace/${product.product_id}/preview`}
+                          alt={`${product.name} preview`}
+                          loading="lazy"
+                          className="admin-marketplace-product-preview"
+                        />
+                      )}
                       <div className="admin-marketplace-product-icon">
                         {product.product_type === "DIGITAL" ? <BookOpen size={23} /> : <Package size={23} />}
                       </div>
@@ -929,6 +938,7 @@ function ProductForm({
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [file, setFile] = useState<File | null>(null);
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -945,6 +955,18 @@ function ProductForm({
         throw new Error("Enter a valid non-negative price.");
       if (!Number.isInteger(numericQuantity) || numericQuantity < 0)
         throw new Error("Enter a valid non-negative quantity.");
+
+      if (!previewFile) {
+        throw new Error("A preview photo is required for every marketplace listing.");
+      }
+
+      if (!["image/jpeg", "image/png", "image/webp"].includes(previewFile.type)) {
+        throw new Error("Preview photo must be JPG, PNG or WEBP.");
+      }
+
+      if (previewFile.size > 5 * 1024 * 1024) {
+        throw new Error("Preview photo cannot exceed 5 MB.");
+      }
 
       if (productType === "DIGITAL" && !file) {
         throw new Error("A digital product requires a downloadable file.");
@@ -974,6 +996,14 @@ function ProductForm({
           })(),
         });
       }
+
+      const previewForm = new FormData();
+      previewForm.append("file", previewFile as File);
+
+      await api(`/marketplace/${created.product_id}/preview`, {
+        method: "POST",
+        body: previewForm,
+      });
 
       await onCreated();
     } catch (err) {
@@ -1043,7 +1073,19 @@ function ProductForm({
             </label>
           </div>
 
-          {productType === "DIGITAL" && (
+                    <label className="admin-marketplace-file">
+            <Upload size={19} />
+            <strong>Preview photo</strong>
+            <span>JPG, PNG or WEBP · max 5 MB · required</span>
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+              onChange={(e) => setPreviewFile(e.target.files?.[0] || null)}
+            />
+            {previewFile && <small>Selected: {previewFile.name}</small>}
+          </label>
+
+{productType === "DIGITAL" && (
             <label className="admin-marketplace-file">
               <Upload size={19} />
               <strong>Digital file</strong>

@@ -30,6 +30,18 @@ ALLOWED_MARKETPLACE_FILE_TYPES = {
 
 MAX_MARKETPLACE_FILE_SIZE = 10 * 1024 * 1024
 
+# ============================================================
+# MARKETPLACE PREVIEW IMAGE RULES
+# ============================================================
+
+ALLOWED_MARKETPLACE_PREVIEW_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
+
+MAX_MARKETPLACE_PREVIEW_SIZE = 5 * 1024 * 1024
+
 
 # ============================================================
 # LIST PRODUCTS
@@ -66,6 +78,7 @@ def get_products(
 
                 mp.name,
                 mp.description,
+                mp.preview_image_path,
                 mp.category,
                 mp.product_type,
                 mp.condition_type,
@@ -160,6 +173,7 @@ def get_product(product_id):
 
                 mp.name,
                 mp.description,
+                mp.preview_image_path,
                 mp.category,
                 mp.product_type,
                 mp.condition_type,
@@ -1083,6 +1097,187 @@ def get_marketplace_attachment_for_download(
             )
 
         return attachment
+
+    finally:
+        connection.close()
+        
+# ============================================================
+# SAVE MARKETPLACE PRODUCT PREVIEW IMAGE
+#
+# SELLER — OWN PRODUCT ONLY
+#
+# The route physically stores the file.
+# This function only validates ownership and saves the path.
+# ============================================================
+
+
+def save_product_preview(
+    product_id,
+    user_id,
+    file_path,
+    file_type,
+    file_size,
+):
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor()
+
+        # ----------------------------------------------------
+        # Validate file type
+        # ----------------------------------------------------
+
+        if file_type not in ALLOWED_MARKETPLACE_PREVIEW_TYPES:
+            raise BadRequestError(
+                "Preview image must be JPG, PNG or WEBP"
+            )
+
+        # ----------------------------------------------------
+        # Validate file size
+        # ----------------------------------------------------
+
+        if file_size <= 0:
+            raise BadRequestError(
+                "Preview image cannot be empty"
+            )
+
+        if file_size > MAX_MARKETPLACE_PREVIEW_SIZE:
+            raise BadRequestError(
+                "Preview image cannot exceed 5 MB"
+            )
+
+        # ----------------------------------------------------
+        # Find product
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                seller_id,
+                is_active,
+                preview_image_path
+
+            FROM marketplace_products
+
+            WHERE id = %s
+
+            FOR UPDATE
+            """,
+            (product_id,),
+        )
+
+        product = cursor.fetchone()
+
+        if not product:
+            raise NotFoundError(
+                "Marketplace product not found"
+            )
+
+        # ----------------------------------------------------
+        # Product must be active
+        # ----------------------------------------------------
+
+        if not product["is_active"]:
+            raise BadRequestError(
+                "Cannot upload preview to an inactive product"
+            )
+
+        # ----------------------------------------------------
+        # Seller ownership
+        # ----------------------------------------------------
+
+        if product["seller_id"] != user_id:
+            raise ForbiddenError(
+                "You can only upload a preview to your own product"
+            )
+
+        # ----------------------------------------------------
+        # Validate path
+        # ----------------------------------------------------
+
+        if not file_path:
+            raise BadRequestError(
+                "Preview image path is required"
+            )
+
+        # ----------------------------------------------------
+        # Save preview path
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            UPDATE marketplace_products
+
+            SET
+                preview_image_path = %s,
+                updated_at = CURRENT_TIMESTAMP
+
+            WHERE id = %s
+            """,
+            (
+                file_path,
+                product_id,
+            ),
+        )
+
+        connection.commit()
+
+        return {
+            "message": (
+                "Marketplace preview image uploaded successfully"
+            ),
+            "product_id": product_id,
+            "preview_image_path": file_path,
+            "file_type": file_type,
+            "file_size": file_size,
+        }
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        connection.close()
+        
+# ============================================================
+# GET MARKETPLACE PRODUCT PREVIEW
+# ============================================================
+
+
+def get_product_preview(product_id):
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                id AS product_id,
+                preview_image_path
+
+            FROM marketplace_products
+
+            WHERE id = %s
+              AND is_active = TRUE
+            """,
+            (product_id,),
+        )
+
+        product = cursor.fetchone()
+
+        if not product:
+            raise NotFoundError(
+                "Marketplace product not found"
+            )
+
+        if not product["preview_image_path"]:
+            raise NotFoundError(
+                "Preview image is not available"
+            )
+
+        return product
 
     finally:
         connection.close()

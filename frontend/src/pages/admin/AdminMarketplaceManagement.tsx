@@ -29,6 +29,7 @@ type Product = {
   institution_name?: string | null;
   name: string;
   description?: string | null;
+  preview_image_path?: string | null;
   category?: string | null;
   product_type: string;
   condition_type?: string | null;
@@ -584,6 +585,13 @@ export default function AdminMarketplaceManagement() {
               </div>
               <button onClick={() => setSelected(null)}><X size={18} /></button>
             </div>
+            {selected.preview_image_path && (
+              <img
+                src={`${API_BASE_URL}/marketplace/${selected.product_id}/preview`}
+                alt={`${selected.name} preview`}
+                className="amm-preview-image"
+              />
+            )}
             <p>{selected.description || "No description provided."}</p>
             <div className="amm-detail-grid">
               <div><span>Seller</span><strong>{selected.seller_name || "—"}</strong></div>
