@@ -1,6 +1,5 @@
 import base64
 import hashlib
-import time
 import hmac
 import json
 import os
@@ -109,117 +108,6 @@ def _parse_webhook_payload(
 
     return payload
 
-def run_duplicate_webhook_idempotency_test(payment_id: int):
-    """
-    Temporary admin-only test helper.
-
-    Creates a valid signed PAYMENT_SUCCESS_WEBHOOK payload for an
-    existing PAID Cashfree payment and sends the exact same request
-    through the production webhook processor twice.
-
-    Remove this function after Test #6 is completed.
-    """
-    connection = get_connection()
-
-    try:
-        cursor = connection.cursor()
-
-        cursor.execute(
-            """
-            SELECT
-                id,
-                order_id,
-                gateway,
-                gateway_order_id,
-                gateway_payment_id,
-                status
-            FROM marketplace_payments
-            WHERE id = %s
-            LIMIT 1
-            """,
-            (payment_id,),
-        )
-
-        payment = cursor.fetchone()
-
-        if not payment:
-            raise NotFoundError("Payment not found")
-
-        if str(payment["gateway"] or "").upper() != "CASHFREE":
-            raise BadRequestError(
-                "Payment does not belong to Cashfree"
-            )
-
-        if str(payment["status"] or "").upper() != "PAID":
-            raise BadRequestError(
-                "Duplicate webhook test requires a PAID Cashfree payment"
-            )
-
-        if not payment["gateway_order_id"]:
-            raise BadRequestError(
-                "Cashfree gateway order ID is missing"
-            )
-
-        timestamp = str(int(time.time() * 1000))
-
-        payload = {
-            "type": "PAYMENT_SUCCESS_WEBHOOK",
-            "data": {
-                "order": {
-                    "order_id": str(
-                        payment["gateway_order_id"]
-                    ),
-                },
-                "payment": {
-                    "cf_payment_id": (
-                        str(payment["gateway_payment_id"])
-                        if payment["gateway_payment_id"]
-                        else None
-                    ),
-                },
-            },
-        }
-
-        raw_body = json.dumps(
-            payload,
-            separators=(",", ":"),
-        ).encode("utf-8")
-
-        secret = _get_cashfree_webhook_secret()
-
-        signature = base64.b64encode(
-            hmac.new(
-                secret.encode("utf-8"),
-                timestamp.encode("utf-8") + raw_body,
-                hashlib.sha256,
-            ).digest()
-        ).decode("utf-8")
-
-    finally:
-        connection.close()
-
-    # First delivery
-    first = process_payment_webhook(
-        raw_body=raw_body,
-        signature=signature,
-        timestamp=timestamp,
-    )
-
-    # Exact same signed delivery again
-    second = process_payment_webhook(
-        raw_body=raw_body,
-        signature=signature,
-        timestamp=timestamp,
-    )
-
-    return {
-        "message": "Duplicate webhook idempotency test completed",
-        "payment_id": payment_id,
-        "order_id": payment["order_id"],
-        "first_delivery": first,
-        "second_delivery": second,
-        "same_signed_request": True,
-    }
     
     
 # ============================================================

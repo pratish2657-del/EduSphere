@@ -19,11 +19,7 @@ from app.services.marketplace_payment_service import (
     mark_cod_payment_collected,
     verify_payment,
 )
-
-from app.services.payment_webhook_service import (
-    process_payment_webhook,
-    run_duplicate_webhook_idempotency_test,
-)
+from app.services.payment_webhook_service import process_payment_webhook
 
 router = APIRouter(
     prefix="/marketplace/payments",
@@ -44,7 +40,6 @@ async def create_payment_route(
     request: Request,
     data: MarketplacePaymentCreate,
 ):
-
     user = require_completed_profile(request)
 
     try:
@@ -96,7 +91,6 @@ async def get_order_payment_route(
     order_id: int,
     request: Request,
 ):
-
     user = require_completed_profile(request)
 
     try:
@@ -137,7 +131,6 @@ async def verify_payment_route(
     request: Request,
     data: MarketplacePaymentVerify,
 ):
-
     user = require_completed_profile(request)
 
     try:
@@ -191,7 +184,6 @@ async def verify_payment_route(
 
 @router.post("/webhook")
 async def cashfree_webhook(request: Request):
-
     raw_body = await request.body()
 
     signature = request.headers.get(
@@ -202,19 +194,6 @@ async def cashfree_webhook(request: Request):
         "x-webhook-timestamp"
     )
 
-    # Safe diagnostic logging:
-    # Never log the actual signature, timestamp, secret, or raw payload.
-    print(
-        "CASHFREE WEBHOOK DEBUG:",
-        {
-            "has_signature": bool(signature),
-            "has_timestamp": bool(timestamp),
-            "body_length": len(raw_body),
-            "content_type": request.headers.get("content-type"),
-        },
-        flush=True,
-    )
-
     try:
         return process_payment_webhook(
             raw_body=raw_body,
@@ -223,14 +202,6 @@ async def cashfree_webhook(request: Request):
         )
 
     except BadRequestError as error:
-        print(
-            "CASHFREE WEBHOOK 400 DEBUG:",
-            {
-                "error": str(error),
-                "error_type": type(error).__name__,
-            },
-            flush=True,
-        )
         raise HTTPException(
             status_code=400,
             detail=str(error),
@@ -239,45 +210,6 @@ async def cashfree_webhook(request: Request):
     except NotFoundError as error:
         raise HTTPException(
             status_code=404,
-            detail=str(error),
-        ) from error
-
-    except ConflictError as error:
-        raise HTTPException(
-            status_code=409,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# TEMPORARY DUPLICATE WEBHOOK TEST
-# ADMIN / SUPER ADMIN ONLY
-#
-# Remove after Test #6 is completed.
-# ============================================================
-
-
-@router.post("/test/duplicate-webhook/{payment_id}")
-async def duplicate_webhook_test_route(
-    payment_id: int,
-    request: Request,
-):
-    require_admin(request)
-
-    try:
-        return run_duplicate_webhook_idempotency_test(
-            payment_id
-        )
-
-    except NotFoundError as error:
-        raise HTTPException(
-            status_code=404,
-            detail=str(error),
-        ) from error
-
-    except BadRequestError as error:
-        raise HTTPException(
-            status_code=400,
             detail=str(error),
         ) from error
 
@@ -306,14 +238,30 @@ async def mark_cod_payment_collected_route(
             payment_id=payment_id,
             admin_user_id=user["id"],
         )
+
     except NotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise HTTPException(
+            status_code=404,
+            detail=str(error),
+        ) from error
+
     except ForbiddenError as error:
-        raise HTTPException(status_code=403, detail=str(error)) from error
+        raise HTTPException(
+            status_code=403,
+            detail=str(error),
+        ) from error
+
     except ConflictError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
+        raise HTTPException(
+            status_code=409,
+            detail=str(error),
+        ) from error
+
     except BadRequestError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        ) from error
 
 
 # ============================================================
@@ -328,7 +276,6 @@ async def get_payment_route(
     payment_id: int,
     request: Request,
 ):
-
     user = require_completed_profile(request)
 
     try:
@@ -354,5 +301,3 @@ async def get_payment_route(
             status_code=400,
             detail=str(error),
         ) from error
-        
-
