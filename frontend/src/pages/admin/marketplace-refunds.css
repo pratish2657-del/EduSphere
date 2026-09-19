@@ -617,3 +617,43 @@
 .refund-page,.refund-page *{box-sizing:border-box}.refund-page{width:100%;max-width:100%;overflow-x:hidden}.refund-head>*{min-width:0}.refund-table-wrap{width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 @media (min-width:701px) and (max-width:900px){.refund-page{padding:18px}.refund-head h1{font-size:23px}}
 @media (max-width:700px){.refund-page{padding:12px}.refund-head{gap:12px;margin-bottom:15px}.refund-head h1{font-size:21px;line-height:1.25}.refund-head p{font-size:12px;line-height:1.5}.refund-head-actions{width:100%;flex-wrap:wrap}.refund-head-actions button{flex:1 1 0;min-width:0}}
+
+
+/* =========================================================
+   Cashfree Refund Reconciliation
+   ========================================================= */
+
+.refund-reconcile-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #c7d2fe;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.refund-reconcile-button:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(129, 140, 248, 0.65);
+}
+
+.refund-reconcile-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 700px) {
+  .refund-reconcile-button {
+    width: 100%;
+    min-width: 96px;
+  }
+}
