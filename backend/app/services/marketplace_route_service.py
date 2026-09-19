@@ -1536,6 +1536,207 @@ def _reconcile_cashfree_refunds(
     }
 
 
+def reconcile_cashfree_refund(
+    refund_db_id: int,
+    created_by: int,
+) -> dict[str, Any]:
+    """
+    Reconcile one local marketplace refund with Cashfree.
+
+    This operation is READ/RECONCILE only:
+    it never creates a new Cashfree refund.
+
+    It is safe to call for a PENDING or FAILED local refund when
+    Cashfree may already have processed the refund.
+    """
+
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor()
+
+        # ========================================================
+        # LOAD LOCAL REFUND + PAYMENT
+        # ========================================================
+
+        cursor.execute(
+            """
+            SELECT
+                r.id,
+                r.payment_id,
+                r.status AS refund_status,
+                r.cashfree_refund_id,
+                p.status AS payment_status,
+                p.gateway,
+                p.gateway_order_id
+            FROM marketplace_refunds r
+            INNER JOIN marketplace_payments p
+                ON p.id = r.payment_id
+            WHERE r.id = %s
+            FOR UPDATE
+            """,
+            (refund_db_id,),
+        )
+
+        refund = cursor.fetchone()
+
+        if not refund:
+            raise NotFoundError(
+                "Marketplace refund not found"
+            )
+
+        gateway = str(
+            refund.get("gateway") or ""
+        ).upper()
+
+        if gateway != "CASHFREE":
+            raise BadRequestError(
+                "Only Cashfree marketplace refunds can be reconciled"
+            )
+
+        if not refund.get("gateway_order_id"):
+            raise BadRequestError(
+                "This payment has no Cashfree gateway order ID"
+            )
+
+        # ========================================================
+        # LOAD THE COMPLETE PAYMENT ROW
+        #
+        # _reconcile_cashfree_refunds() also performs the required
+        # payment/order/inventory finalization when the payment is
+        # fully refunded.
+        # ========================================================
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM marketplace_payments
+            WHERE id = %s
+            FOR UPDATE
+            """,
+            (refund["payment_id"],),
+        )
+
+        payment = cursor.fetchone()
+
+        if not payment:
+            raise NotFoundError(
+                "Marketplace payment not found"
+            )
+
+        reconciliation = _reconcile_cashfree_refunds(
+            cursor,
+            payment,
+            created_by,
+        )
+
+        reconciled_ids = (
+            reconciliation.get(
+                "reconciled_refund_ids"
+            )
+            or []
+        )
+
+        # ========================================================
+        # READ THE LOCAL REFUND AFTER RECONCILIATION
+        # ========================================================
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                amount,
+                status,
+                cashfree_refund_id,
+                cashfree_refund_arn,
+                cashfree_refund_splits,
+                failure_reason,
+                inventory_restored,
+                processed_at
+            FROM marketplace_refunds
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (refund_db_id,),
+        )
+
+        updated_refund = cursor.fetchone()
+
+        connection.commit()
+
+        return {
+            "success": True,
+            "reconciled": bool(
+                refund_db_id
+                and (
+                    str(
+                        updated_refund.get(
+                            "cashfree_refund_id"
+                        )
+                        or ""
+                    )
+                    in {
+                        str(value)
+                        for value in reconciled_ids
+                    }
+                    if updated_refund
+                    else False
+                )
+            ),
+            "refund_db_id": refund_db_id,
+            "refund_id": (
+                updated_refund.get(
+                    "cashfree_refund_id"
+                )
+                if updated_refund
+                else None
+            ),
+            "status": (
+                updated_refund.get("status")
+                if updated_refund
+                else None
+            ),
+            "amount": (
+                float(updated_refund["amount"])
+                if updated_refund
+                and updated_refund.get("amount") is not None
+                else None
+            ),
+            "refund_arn": (
+                updated_refund.get(
+                    "cashfree_refund_arn"
+                )
+                if updated_refund
+                else None
+            ),
+            "fully_refunded": bool(
+                reconciliation.get("fully_refunded")
+            ),
+            "total_refunded": float(
+                reconciliation.get("total_refunded") or 0
+            ),
+            "cashfree_order_id": payment.get(
+                "gateway_order_id"
+            ),
+            "message": (
+                "Cashfree refund reconciled successfully."
+                if updated_refund
+                and updated_refund.get("status") == "PROCESSED"
+                else (
+                    "No processed Cashfree refund was found "
+                    "for this local refund yet."
+                )
+            ),
+        }
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        connection.close()
+
+
 # ============================================================
 # REFUND PAYMENT
 # ============================================================

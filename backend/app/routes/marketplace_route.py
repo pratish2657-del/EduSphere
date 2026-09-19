@@ -12,6 +12,7 @@ from app.services.marketplace_route_service import (
     get_route_onboarding,
     list_payouts,
     list_refunds,
+    reconcile_cashfree_refund,
     refresh_route_status,
     refund_payment,
     retry_payout,
@@ -96,6 +97,22 @@ async def admin_verify_payout(
 async def admin_refunds(request: Request):
     require_admin(request)
     return {"items": list_refunds()}
+
+
+@router.post("/refunds/{refund_id}/reconcile")
+async def admin_reconcile_refund(
+    request: Request,
+    refund_id: int,
+):
+    user = require_admin(request)
+
+    try:
+        return reconcile_cashfree_refund(
+            refund_id,
+            user["id"],
+        )
+    except Exception as error:
+        raise _error(error) from error
 
 
 @router.get("/finance-summary")
