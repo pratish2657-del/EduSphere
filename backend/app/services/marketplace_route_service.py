@@ -1174,6 +1174,34 @@ def cancel_marketplace_order(
 # REFUND FINALIZATION / CASHFREE RECONCILIATION
 # ============================================================
 
+def _cashfree_refund_id_variants(value: Any) -> list[str]:
+    """
+    Return equivalent Cashfree refund-ID representations.
+
+    Cashfree responses can expose the same refund as, for example:
+    1319877536 and refund_1319877536. Treat those as one provider
+    refund so reconciliation cannot create a duplicate local refund.
+    """
+    if value is None:
+        return []
+
+    raw = str(value).strip()
+
+    if not raw:
+        return []
+
+    variants = [raw]
+
+    if raw.startswith("refund_"):
+        base = raw[len("refund_"):]
+        if base:
+            variants.append(base)
+    else:
+        variants.append(f"refund_{raw}")
+
+    return list(dict.fromkeys(variants))
+
+
 
 def _finalize_fully_refunded_payment(
     cursor,
@@ -1371,37 +1399,61 @@ def _reconcile_cashfree_refunds(
             or []
         )
 
-        # The current schema has one Cashfree refund-ID column. During
-        # a refund request it may temporarily contain EduSphere's
-        # merchant refund ID; after Cashfree responds it contains the
-        # provider cf_refund_id. Match either form so a delayed webhook
-        # or reconciliation can recover the same local row.
-        cursor.execute(
-            """
-            SELECT
-                id,
-                status,
-                inventory_restored
-            FROM marketplace_refunds
-            WHERE payment_id = %s
-              AND (
-                    (%s IS NOT NULL AND cashfree_refund_id = %s)
-                 OR (%s IS NOT NULL AND cashfree_refund_id = %s)
-              )
-            ORDER BY id DESC
-            LIMIT 1
-            FOR UPDATE
-            """,
-            (
-                payment["id"],
-                provider_refund_id,
-                provider_refund_id,
-                merchant_refund_id,
-                merchant_refund_id,
-            ),
+        # The schema has one Cashfree refund-ID column. Cashfree can
+        # represent the same refund as both:
+        #
+        #     1319877536
+        #     refund_1319877536
+        #
+        # Match both representations and prefer an existing PENDING
+        # local row over an already-PROCESSED duplicate. This prevents
+        # reconciliation from creating a second local refund record.
+        provider_id_variants = _cashfree_refund_id_variants(
+            provider_refund_id
+        )
+        merchant_id_variants = _cashfree_refund_id_variants(
+            merchant_refund_id
         )
 
-        local_refund = cursor.fetchone()
+        refund_id_variants = list(
+            dict.fromkeys(
+                provider_id_variants
+                + merchant_id_variants
+            )
+        )
+
+        if refund_id_variants:
+            placeholders = ", ".join(
+                ["%s"] * len(refund_id_variants)
+            )
+
+            cursor.execute(
+                f"""
+                SELECT
+                    id,
+                    status,
+                    inventory_restored,
+                    cashfree_refund_id
+                FROM marketplace_refunds
+                WHERE payment_id = %s
+                  AND cashfree_refund_id IN ({placeholders})
+                ORDER BY
+                    CASE
+                        WHEN status = 'PENDING' THEN 0
+                        WHEN status = 'FAILED' THEN 1
+                        WHEN status = 'PROCESSED' THEN 2
+                        ELSE 3
+                    END,
+                    id ASC
+                LIMIT 1
+                FOR UPDATE
+                """,
+                [payment["id"], *refund_id_variants],
+            )
+
+            local_refund = cursor.fetchone()
+        else:
+            local_refund = None
 
         if local_refund:
             cursor.execute(
@@ -1429,6 +1481,39 @@ def _reconcile_cashfree_refunds(
                     local_refund["id"],
                 ),
             )
+
+            # If an older reconciliation/request left another
+            # PROCESSED local row for the equivalent Cashfree ID,
+            # keep it for audit history but exclude it from refund
+            # totals so the same Cashfree refund is never counted twice.
+            if refund_id_variants:
+                placeholders = ", ".join(
+                    ["%s"] * len(refund_id_variants)
+                )
+
+                cursor.execute(
+                    f"""
+                    UPDATE marketplace_refunds
+                    SET
+                        status = 'FAILED',
+                        failure_reason = %s,
+                        processed_at = NULL,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE payment_id = %s
+                      AND id <> %s
+                      AND status = 'PROCESSED'
+                      AND ABS(amount - %s) < 0.0001
+                      AND cashfree_refund_id IN ({placeholders})
+                    """,
+                    [
+                        "Duplicate local record for an already "
+                        "processed Cashfree refund",
+                        payment["id"],
+                        local_refund["id"],
+                        refund_amount,
+                        *refund_id_variants,
+                    ],
+                )
 
             reconciled_refund_ids.append(
                 refund_identifier
