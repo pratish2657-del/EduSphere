@@ -209,55 +209,30 @@ function formatDate(value?: string | null) {
     return "—";
   }
 
+  const raw = String(value).trim();
+  const hasTimezone = /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(raw);
+
   /*
-   * We intentionally avoid new Date() here as well.
+   * Event datetime values without a timezone are EduSphere's stored
+   * local event times. Treat them explicitly as IST instead of using
+   * the browser's local timezone.
    *
-   * This keeps the event's stored local time exactly as it is.
+   * Values that already contain a timezone are converted to IST.
    */
+  const normalized =
+    !hasTimezone &&
+    /^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}/.test(raw)
+      ? `${raw.replace(" ", "T")}:00+05:30`
+      : raw;
 
-  const cleaned = toInputDateTime(value);
-
-  if (!cleaned) {
-    return "—";
-  }
-
-  const [datePart, timePart] = cleaned.split("T");
-
-  if (!datePart || !timePart) {
-    return value;
-  }
-
-  const [year, month, day] = datePart
-    .split("-")
-    .map(Number);
-
-  const [hours, minutes] = timePart
-    .split(":")
-    .map(Number);
-
-  if (
-    !year ||
-    !month ||
-    !day ||
-    Number.isNaN(hours) ||
-    Number.isNaN(minutes)
-  ) {
-    return value;
-  }
-
-  const date = new Date(
-    year,
-    month - 1,
-    day,
-    hours,
-    minutes
-  );
+  const date = new Date(normalized);
 
   if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
     dateStyle: "medium",
     timeStyle: "short",
   });
@@ -593,11 +568,11 @@ export default function AdminEvents() {
     -------------------------------------------------------- */
 
     const startDate = new Date(
-      form.start_datetime
+      `${form.start_datetime}:00+05:30`
     );
 
     const endDate = new Date(
-      form.end_datetime
+      `${form.end_datetime}:00+05:30`
     );
 
     if (
@@ -628,7 +603,7 @@ export default function AdminEvents() {
     ) {
       const deadlineDate =
         new Date(
-          form.registration_deadline
+          `${form.registration_deadline}:00+05:30`
         );
 
       if (
@@ -997,15 +972,15 @@ export default function AdminEvents() {
         return false;
       }
 
-      /*
-       * Parse as local time for the
-       * upcoming calculation.
-       */
-      const input =
-        toInputDateTime(value);
+      const input = toInputDateTime(value);
+      const hasTimezone =
+        /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(input);
 
-      const date =
-        new Date(input);
+      const date = new Date(
+        hasTimezone
+          ? input
+          : `${input}:00+05:30`
+      );
 
       return (
         !Number.isNaN(

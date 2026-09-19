@@ -3851,7 +3851,10 @@ function EventCard({
       <div style={styles.eventDateBlock}>
         <span style={styles.eventMonth}>
           {start
-            ? start.toLocaleDateString(undefined, { month: "short" }).toUpperCase()
+            ? start.toLocaleDateString("en-IN", {
+              timeZone: "Asia/Kolkata",
+              month: "short",
+            }).toUpperCase()
             : "DATE"}
         </span>
         <strong style={styles.eventDay}>
@@ -3859,7 +3862,10 @@ function EventCard({
         </strong>
         <span style={styles.eventWeekday}>
           {start
-            ? start.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase()
+            ? start.toLocaleDateString("en-IN", {
+              timeZone: "Asia/Kolkata",
+              weekday: "short",
+            }).toUpperCase()
             : ""}
         </span>
       </div>
@@ -3964,7 +3970,8 @@ function EventDetailModal({
                 <span style={styles.modalInfoLabel}>DATE</span>
                 <strong style={styles.modalInfoValue}>
                   {start
-                    ? start.toLocaleDateString(undefined, {
+                    ? start.toLocaleDateString("en-IN", {
+                        timeZone: "Asia/Kolkata",
                         weekday: "long",
                         year: "numeric",
                         month: "long",
@@ -4013,7 +4020,11 @@ function EventDetailModal({
               <div>
                 <span style={styles.modalInfoLabel}>REGISTRATION DEADLINE</span>
                 <strong style={styles.modalInfoValue}>
-                  {deadline.toLocaleString()}
+                  {deadline.toLocaleString("en-IN", {
+                    timeZone: "Asia/Kolkata",
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
                 </strong>
               </div>
             </div>
@@ -4056,7 +4067,8 @@ function parseEventDate(value: string | null | undefined) {
 function formatEventTime(date: Date | null) {
   if (!date) return "Time unavailable";
 
-  return date.toLocaleTimeString(undefined, {
+  return date.toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata",
     hour: "numeric",
     minute: "2-digit",
   });

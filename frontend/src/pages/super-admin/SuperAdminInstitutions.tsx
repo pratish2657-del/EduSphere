@@ -316,7 +316,15 @@ export default function SuperAdminInstitutions() {
                         <td>
                           <span className="sai-status active"><span /> Active</span>
                         </td>
-                        <td>{item.created_at ? new Date(item.created_at).toLocaleDateString() : "—"}</td>
+                        <td>{item.created_at
+                            ? new Date(
+                                /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(item.created_at)
+                                  ? item.created_at
+                                  : `${item.created_at.replace(" ", "T")}Z`
+                              ).toLocaleDateString("en-IN", {
+                                timeZone: "Asia/Kolkata",
+                              })
+                            : "—"}</td>
                         <td>
                           <button className="sai-edit" onClick={() => openEdit(item)}>
                             <Edit3 size={15} /> Edit

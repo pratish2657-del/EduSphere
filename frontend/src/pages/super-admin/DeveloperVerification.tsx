@@ -23,10 +23,25 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 function Detail({label,value}:{label:string;value?:string}) {
   return <div style={styles.detail}><span>{label}</span><strong>{value || "—"}</strong></div>;
 }
-function date(value?:string) {
+function date(value?: string) {
   if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
+
+  const raw = String(value).trim();
+  const hasTimezone = /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(raw);
+  const normalized =
+    !hasTimezone &&
+    /^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}/.test(raw)
+      ? `${raw.replace(" ", "T")}Z`
+      : raw;
+
+  const d = new Date(normalized);
+  return Number.isNaN(d.getTime())
+    ? value
+    : d.toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
 }
 
 export default function DeveloperVerification() {

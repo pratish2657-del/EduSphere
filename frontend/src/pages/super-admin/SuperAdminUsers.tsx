@@ -223,7 +223,15 @@ export default function SuperAdminUsers() {
                       <td><span className={`sau-badge ${user.verification_status === "VERIFIED" ? "good" : user.verification_status === "REJECTED" ? "bad" : ""}`}>{user.verification_status || "—"}</span></td>
                       <td>{user.profile_completed ? "Complete" : "Incomplete"}</td>
                       <td><span className={`sau-status ${user.is_active ? "active" : "inactive"}`}><span/>{user.is_active ? "Active" : "Inactive"}</span></td>
-                      <td>{user.created_at ? new Date(user.created_at).toLocaleDateString() : "—"}</td>
+                      <td>{user.created_at
+                          ? new Date(
+                              /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(user.created_at)
+                                ? user.created_at
+                                : `${user.created_at.replace(" ", "T")}Z`
+                            ).toLocaleDateString("en-IN", {
+                              timeZone: "Asia/Kolkata",
+                            })
+                          : "—"}</td>
                       <td>
                         {user.is_super_admin ? <span className="sau-locked"><Shield size={14}/> Protected</span> : <button className="sau-edit" onClick={() => openEdit(user)}><Edit3 size={14}/> Edit</button>}
                       </td>

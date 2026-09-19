@@ -185,6 +185,8 @@ function formatTimeForInput(value?: unknown) {
 }
 
 function formatTime(value?: unknown) {
+  // Timetable times are wall-clock values stored for EduSphere's IST
+  // academic schedule. Do not convert them through the browser timezone.
   if (value === null || value === undefined || value === "") {
     return "—";
   }

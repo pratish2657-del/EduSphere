@@ -338,7 +338,15 @@ export default function SuperAdminCourses() {
                       <td><strong className="sac-light">{course.institution_name || "—"}</strong><small>{course.university_code || ""}</small></td>
                       <td><strong className="sac-light">{course.program_name || "Unassigned"}</strong><small>{course.program_code || ""}</small></td>
                       <td><span className="sac-semester">Semester {course.semester ?? "—"}</span></td>
-                      <td>{course.created_at ? new Date(course.created_at).toLocaleDateString() : "—"}</td>
+                      <td>{course.created_at
+                        ? new Date(
+                            /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(course.created_at)
+                              ? course.created_at
+                              : `${course.created_at.replace(" ", "T")}Z`
+                          ).toLocaleDateString("en-IN", {
+                            timeZone: "Asia/Kolkata",
+                          })
+                        : "—"}</td>
                       <td><div className="sac-row-actions"><button className="sac-edit" onClick={() => openEdit(course)}><Edit3 size={14}/> Edit</button><button className="sac-delete" onClick={() => removeCourse(course)} disabled={deleting === course.id}>{deleting === course.id ? <RefreshCw className="sac-spin" size={14}/> : <Trash2 size={14}/>}</button></div></td>
                     </tr>
                   ))}

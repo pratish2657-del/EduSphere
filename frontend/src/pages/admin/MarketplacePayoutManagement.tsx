@@ -41,6 +41,40 @@ type Finance = {
 
 const money = (value: number) => `₹${Number(value || 0).toFixed(2)}`;
 
+const formatIST = (value?: string | null) => {
+  if (!value) return "—";
+
+  const raw = String(value).trim();
+
+  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)) {
+    const date = new Date(`${raw}T00:00:00Z`);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return date.toLocaleDateString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  const hasTimezone = /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(raw);
+  const normalized =
+    !hasTimezone &&
+    /^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}/.test(raw)
+      ? `${raw.replace(" ", "T")}Z`
+      : raw;
+
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+};
+
 const upper = (value?: string | null) =>
   String(value || "").trim().toUpperCase();
 
@@ -375,13 +409,13 @@ export default function MarketplacePayoutManagement() {
 
                         {item.transfer_time && (
                           <small>
-                            Transfer time: {item.transfer_time}
+                            Transfer time: {formatIST(item.transfer_time)}
                           </small>
                         )}
 
                         {item.settlement_eligibility_date && (
                           <small>
-                            Eligible: {item.settlement_eligibility_date}
+                            Eligible: {formatIST(item.settlement_eligibility_date)}
                           </small>
                         )}
                       </>

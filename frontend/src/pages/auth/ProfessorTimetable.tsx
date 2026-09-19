@@ -169,8 +169,16 @@ export default function ProfessorTimetable() {
     void loadTimetable();
   }, []);
 
+  const istDayName = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    weekday: "long",
+  }).format(new Date());
+
   const today =
-    DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1];
+    DAYS[
+      ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        .indexOf(istDayName)
+    ];
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();

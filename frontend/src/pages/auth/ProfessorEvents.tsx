@@ -513,7 +513,9 @@ export default function ProfessorEvents() {
 
     if (
       form.registration_deadline &&
-      new Date(form.registration_deadline) > start
+      new Date(
+        `${form.registration_deadline}:00+05:30`
+      ) > start
     ) {
       throw new Error(
         "Registration deadline cannot be after the event start time.",

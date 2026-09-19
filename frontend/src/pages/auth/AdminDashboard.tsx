@@ -111,9 +111,20 @@ function getEventId(event: EventItem) {
 
 function formatDate(value?: string) {
   if (!value) return "Date not available";
-  const date = new Date(value);
+
+  const raw = String(value).trim();
+  const hasTimezone = /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(raw);
+  const normalized =
+    !hasTimezone &&
+    /^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}/.test(raw)
+      ? `${raw.replace(" ", "T")}Z`
+      : raw;
+
+  const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, {
+
+  return date.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -632,11 +643,12 @@ export default function AdminDashboard() {
               <div className="admin-hero-meta" style={styles.heroMeta}>
                 <span style={styles.heroMetaItem}>
                   <Clock3 size={15} />
-                  {new Date().toLocaleDateString(undefined, {
+                  {new Intl.DateTimeFormat("en-IN", {
+                    timeZone: "Asia/Kolkata",
                     weekday: "long",
                     day: "numeric",
                     month: "long",
-                  })}
+                  }).format(new Date())}
                 </span>
                 <span style={styles.heroMetaItem}>
                   <ShieldCheck size={15} />
