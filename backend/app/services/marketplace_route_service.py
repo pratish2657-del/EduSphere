@@ -1303,12 +1303,16 @@ def refund_payment(
                         %s,
                         %s,
                         %s,
-                        NULL,
-                        NULL,
                         %s,
-                        'PROCESSED',
                         %s,
-                        CURRENT_TIMESTAMP
+                        %s,
+                        %s,
+                        %s,
+                        CASE
+                            WHEN %s = 'PROCESSED'
+                            THEN CURRENT_TIMESTAMP
+                            ELSE NULL
+                        END
                     )
                 """,
                 (
@@ -1317,8 +1321,12 @@ def refund_payment(
                     payment["buyer_id"],
                     refund_amount,
                     reverse_all,
-                    json.dumps([]),
+                    cashfree_refund_id,
+                    cashfree_refund_arn,
+                    json.dumps(cashfree_refund_splits),
+                    status,
                     created_by,
+                    status,
                 ),
             )
 
