@@ -113,10 +113,10 @@ function formatDate(value?: string) {
   if (!value) return "Date not available";
 
   const raw = String(value).trim();
-  const hasTimezone = /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(raw);
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
   const normalized =
     !hasTimezone &&
-    /^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}/.test(raw)
+    /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(raw)
       ? `${raw.replace(" ", "T")}Z`
       : raw;
 

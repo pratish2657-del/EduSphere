@@ -225,7 +225,7 @@ export default function SuperAdminUsers() {
                       <td><span className={`sau-status ${user.is_active ? "active" : "inactive"}`}><span/>{user.is_active ? "Active" : "Inactive"}</span></td>
                       <td>{user.created_at
                           ? new Date(
-                              /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(user.created_at)
+                              /(?:Z|[+-]\d{2}:?\d{2})$/i.test(user.created_at)
                                 ? user.created_at
                                 : `${user.created_at.replace(" ", "T")}Z`
                             ).toLocaleDateString("en-IN", {

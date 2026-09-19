@@ -318,7 +318,7 @@ export default function SuperAdminInstitutions() {
                         </td>
                         <td>{item.created_at
                             ? new Date(
-                                /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(item.created_at)
+                                /(?:Z|[+-]\d{2}:?\d{2})$/i.test(item.created_at)
                                   ? item.created_at
                                   : `${item.created_at.replace(" ", "T")}Z`
                               ).toLocaleDateString("en-IN", {

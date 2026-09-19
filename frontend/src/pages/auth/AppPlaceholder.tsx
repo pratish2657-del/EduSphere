@@ -3654,11 +3654,11 @@ function formatMarketplaceDate(value: string) {
   const raw = String(value).trim();
 
   const hasTimezone =
-    /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(raw);
+    /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
 
   const normalized =
     !hasTimezone &&
-    /^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}/.test(raw)
+    /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(raw)
       ? `${raw.replace(" ", "T")}Z`
       : raw;
 
@@ -4710,7 +4710,7 @@ function timeToMinutes(value: string | number | null | undefined) {
   const normalized = String(value).trim();
 
   // Numeric TIME representation, e.g. 34200 = 09:30:00.
-  if (/^\\d+(?:\\.\\d+)?$/.test(normalized)) {
+  if (/^\d+(?:\\.\d+)?$/.test(normalized)) {
     const numeric = Number(normalized);
     if (Number.isFinite(numeric)) {
       if (numeric >= 0 && numeric < 86400) {

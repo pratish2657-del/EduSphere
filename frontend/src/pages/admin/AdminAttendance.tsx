@@ -118,7 +118,7 @@ function formatDate(value: string) {
   // Attendance date is a calendar date, not a UTC timestamp.
   // Keep it stable regardless of the browser timezone.
   const match = String(value).trim().match(
-    /^(\\d{4})-(\\d{2})-(\\d{2})$/
+    /^(\d{4})-(\d{2})-(\d{2})$/
   );
 
   if (!match) return value;

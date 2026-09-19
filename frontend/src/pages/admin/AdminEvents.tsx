@@ -210,7 +210,7 @@ function formatDate(value?: string | null) {
   }
 
   const raw = String(value).trim();
-  const hasTimezone = /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(raw);
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
 
   /*
    * Event datetime values without a timezone are EduSphere's stored
@@ -221,7 +221,7 @@ function formatDate(value?: string | null) {
    */
   const normalized =
     !hasTimezone &&
-    /^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}/.test(raw)
+    /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(raw)
       ? `${raw.replace(" ", "T")}:00+05:30`
       : raw;
 
@@ -974,7 +974,7 @@ export default function AdminEvents() {
 
       const input = toInputDateTime(value);
       const hasTimezone =
-        /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(input);
+        /(?:Z|[+-]\d{2}:?\d{2})$/i.test(input);
 
       const date = new Date(
         hasTimezone
