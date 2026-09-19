@@ -198,6 +198,19 @@ async def cashfree_webhook(request: Request):
         "x-webhook-timestamp"
     )
 
+    # Safe diagnostic logging:
+    # Never log the actual signature, timestamp, secret, or raw payload.
+    print(
+        "CASHFREE WEBHOOK DEBUG:",
+        {
+            "has_signature": bool(signature),
+            "has_timestamp": bool(timestamp),
+            "body_length": len(raw_body),
+            "content_type": request.headers.get("content-type"),
+        },
+        flush=True,
+    )
+
     try:
         return process_payment_webhook(
             raw_body=raw_body,
