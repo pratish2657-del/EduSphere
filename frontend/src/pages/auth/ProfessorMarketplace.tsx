@@ -1367,7 +1367,17 @@ function MarketplaceCartModal({
           {cart.items.some(
             (item) => String(item.product_type).toUpperCase() === "DIGITAL"
           ) && (
-            <div style={{ width: "100%", marginBottom: 12, color: "#94a3b8", fontSize: 11 }}>
+            <div
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                marginBottom: 12,
+                padding: "0 20px",
+                color: "#94a3b8",
+                fontSize: 11,
+                lineHeight: 1.5,
+              }}
+            >
               Digital products require online payment. COD is unavailable for digital items.
             </div>
           )}
@@ -2861,8 +2871,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   cartModal: {
-    width: "min(760px, 100%)",
+    width: "min(760px, calc(100vw - 44px))",
     maxHeight: "90vh",
+    boxSizing: "border-box",
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
@@ -2874,7 +2885,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   cartBody: {
-    padding: 20,
+    padding: "20px 24px",
+    boxSizing: "border-box",
     overflowY: "auto",
   },
 
