@@ -4,6 +4,7 @@ import {
   RotateCcw,
   ShieldAlert,
   X,
+  CheckCircle2,
 } from "lucide-react";
 import "./marketplace-refunds.css";
 
@@ -27,11 +28,38 @@ type Refund = {
 
 const money = (n: number) => `₹${Number(n || 0).toFixed(2)}`;
 
+const formatIST = (value?: string | null) => {
+  if (!value) return "—";
+
+  const raw = String(value).trim();
+  const hasTimezone = /[zZ]|[+-]\d{2}:\d{2}$/.test(raw);
+
+  const date = new Date(
+    hasTimezone ? raw : `${raw.replace(" ", "T")}Z`
+  );
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+};
+
 export default function MarketplaceRefundManagement() {
   const [items, setItems] = useState<Refund[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reconcilingId, setReconcilingId] = useState<number | null>(null);
 
   // Refund modal state
   const [showModal, setShowModal] = useState(false);
@@ -83,6 +111,41 @@ export default function MarketplaceRefundManagement() {
     setPaymentId("");
     setAmount("");
     setReverseTransfers(false);
+  };
+
+  const reconcileRefund = async (refundId: number) => {
+    setReconcilingId(refundId);
+    setMessage("");
+
+    try {
+      const r = await fetch(
+        `${API}/marketplace/easy-split/refunds/${refundId}/reconcile`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+
+      const d = await r.json().catch(() => ({}));
+
+      if (!r.ok) {
+        setMessage(d.detail || "Refund reconciliation failed.");
+        return;
+      }
+
+      setMessage(
+        d.reconciled
+          ? `Refund #${refundId} reconciled with Cashfree.`
+          : d.message ||
+              `No processed Cashfree refund found for refund #${refundId} yet.`
+      );
+
+      await load();
+    } catch {
+      setMessage("Backend unavailable");
+    } finally {
+      setReconcilingId(null);
+    }
   };
 
   const submitRefund = async () => {
@@ -214,17 +277,18 @@ export default function MarketplaceRefundManagement() {
               <th>Status</th>
               <th>Cashfree</th>
               <th>Created</th>
+              <th>Action</th>
             </tr>
           </thead>
 
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8}>Loading…</td>
+                <td colSpan={9}>Loading…</td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={8}>No refunds recorded.</td>
+                <td colSpan={9}>No refunds recorded.</td>
               </tr>
             ) : (
               items.map((x) => (
@@ -271,10 +335,23 @@ export default function MarketplaceRefundManagement() {
 
                   <td>
                     <small>
-                      {x.created_at
-                        ? new Date(x.created_at).toLocaleString()
-                        : "—"}
+                      {formatIST(x.created_at)}
                     </small>
+                  </td>
+
+                  <td>
+                    {(String(x.status).toUpperCase() === "PENDING" ||
+                      String(x.status).toUpperCase() === "FAILED") && (
+                      <button
+                        className="refund-reconcile-button"
+                        onClick={() => reconcileRefund(x.id)}
+                        disabled={busy || reconcilingId === x.id}
+                        title="Check Cashfree for an already processed refund"
+                      >
+                        <CheckCircle2 size={14} />
+                        {reconcilingId === x.id ? "Checking…" : "Reconcile"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))
