@@ -19,7 +19,11 @@ from app.services.marketplace_payment_service import (
     mark_cod_payment_collected,
     verify_payment,
 )
-from app.services.payment_webhook_service import process_payment_webhook
+
+from app.services.payment_webhook_service import (
+    process_payment_webhook,
+    run_duplicate_webhook_idempotency_test,
+)
 
 router = APIRouter(
     prefix="/marketplace/payments",
@@ -245,6 +249,43 @@ async def cashfree_webhook(request: Request):
         ) from error
 
 
+# ============================================================
+# TEMPORARY DUPLICATE WEBHOOK TEST
+# ADMIN / SUPER ADMIN ONLY
+#
+# Remove after Test #6 is completed.
+# ============================================================
+
+
+@router.post("/test/duplicate-webhook/{payment_id}")
+async def duplicate_webhook_test_route(
+    payment_id: int,
+    request: Request,
+):
+    require_admin(request)
+
+    try:
+        return run_duplicate_webhook_idempotency_test(
+            payment_id
+        )
+
+    except NotFoundError as error:
+        raise HTTPException(
+            status_code=404,
+            detail=str(error),
+        ) from error
+
+    except BadRequestError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        ) from error
+
+    except ConflictError as error:
+        raise HTTPException(
+            status_code=409,
+            detail=str(error),
+        ) from error
 
 
 # ============================================================
