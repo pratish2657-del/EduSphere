@@ -796,15 +796,13 @@ EduSphere/
 │   └── ...
 │
 ├── backend/
-│   ├── app/
-│   │   ├── routes/
-│   │   ├── services/
-│   │   ├── schemas/
-│   │   ├── middleware/
-│   │   └── ...
-│   ├── tests/
-│   ├── requirements.txt
-│   └── ...
+│   └── app/
+│       ├── routes/
+│       ├── services/
+│       ├── schemas/
+│       ├── middleware/
+│       └── ...
+│   
 │
 ├── developer-ide/
 │   ├── Dockerfile
@@ -826,12 +824,11 @@ A typical feature workflow is:
 3. Add or update API route
 4. Update frontend API integration
 5. Build frontend
-6. Run backend tests
-7. Test locally
-8. Commit changes
-9. Push to GitHub
-10. Deploy
-11. Test production
+6. Test locally
+7. Commit changes
+8. Push to GitHub
+9. Deploy
+10. Test production
 For developer-workspace features:
 
 Edit code in Browser IDE
