@@ -1482,10 +1482,16 @@ def _reconcile_cashfree_refunds(
                 ),
             )
 
-            # If an older reconciliation/request left another
-            # PROCESSED local row for the equivalent Cashfree ID,
-            # keep it for audit history but exclude it from refund
-            # totals so the same Cashfree refund is never counted twice.
+            # Remove any other local row that represents the same
+            # Cashfree refund. Cashfree may expose the same refund as
+            # both `1319877536` and `refund_1319877536`; those are one
+            # provider refund, not two refunds.
+            #
+            # Keep the row we just reconciled and delete every older
+            # equivalent local duplicate. This makes the admin refund
+            # list show exactly one row for one real Cashfree refund and
+            # also prevents duplicate rows from affecting future refund
+            # operations.
             if refund_id_variants:
                 placeholders = ", ".join(
                     ["%s"] * len(refund_id_variants)
@@ -1493,21 +1499,13 @@ def _reconcile_cashfree_refunds(
 
                 cursor.execute(
                     f"""
-                    UPDATE marketplace_refunds
-                    SET
-                        status = 'FAILED',
-                        failure_reason = %s,
-                        processed_at = NULL,
-                        updated_at = CURRENT_TIMESTAMP
+                    DELETE FROM marketplace_refunds
                     WHERE payment_id = %s
                       AND id <> %s
-                      AND status = 'PROCESSED'
                       AND ABS(amount - %s) < 0.0001
                       AND cashfree_refund_id IN ({placeholders})
                     """,
                     [
-                        "Duplicate local record for an already "
-                        "processed Cashfree refund",
                         payment["id"],
                         local_refund["id"],
                         refund_amount,
