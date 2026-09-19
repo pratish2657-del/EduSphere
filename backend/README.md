@@ -45,7 +45,6 @@ Role-based permissions are enforced through the backend authentication and autho
 | PyMySQL | MySQL database connectivity |
 | Pydantic | Request/response validation |
 | Google Authentication | User authentication |
-| Pytest | Automated testing |
 | Ruff | Python linting |
 | Uvicorn | ASGI application server |
 
@@ -139,27 +138,6 @@ backend/
 │       ├── student_service.py
 │       ├── timetable_service.py
 │       └── user_service.py
-│
-├── tests/
-│   ├── __init__.py
-│   ├── test_admin.py
-│   ├── test_ai.py
-│   ├── test_api.py
-│   ├── test_attendance.py
-│   ├── test_course.py
-│   ├── test_dashboard.py
-│   ├── test_event.py
-│   ├── test_marketplace.py
-│   ├── test_mysql.py
-│   ├── test_professor.py
-│   ├── test_professor_verification.py
-│   ├── test_profile.py
-│   ├── test_program.py
-│   ├── test_result.py
-│   ├── test_section.py
-│   ├── test_student.py
-│   ├── test_timetable.py
-│   └── test_users.py
 │
 ├── .env
 ├── .gitignore
