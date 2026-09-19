@@ -34,10 +34,6 @@ def _extract_cashfree_vendor_ids(
         if not isinstance(item, dict):
             continue
 
-        # --------------------------------------------------------
-        # Direct vendor commission
-        # --------------------------------------------------------
-
         entity_type = str(
             item.get("entity_type") or ""
         ).strip().lower()
@@ -48,10 +44,6 @@ def _extract_cashfree_vendor_ids(
             if vendor_id:
                 vendor_ids.add(str(vendor_id))
 
-        # --------------------------------------------------------
-        # Direct vendor fields
-        # --------------------------------------------------------
-
         for key in (
             "merchant_vendor_id",
             "vendor_id",
@@ -60,10 +52,6 @@ def _extract_cashfree_vendor_ids(
 
             if vendor_id:
                 vendor_ids.add(str(vendor_id))
-
-        # --------------------------------------------------------
-        # Order splits
-        # --------------------------------------------------------
 
         order_splits = item.get("order_splits")
 
@@ -131,6 +119,91 @@ def _extract_settlement_vendor_ids(
     return vendor_ids
 
 
+def _extract_vendor_settlement(
+    reconciliation: Any,
+    vendor_id: str | None,
+) -> dict[str, Any] | None:
+    """Extract the authoritative vendor settlement from Cashfree recon."""
+
+    if not vendor_id or not isinstance(reconciliation, dict):
+        return None
+
+    data = reconciliation.get("data")
+
+    if not isinstance(data, list):
+        return None
+
+    target_vendor = str(vendor_id)
+
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+
+        item_vendor_id = (
+            item.get("merchant_vendor_id")
+            or item.get("vendor_id")
+        )
+
+        if str(item_vendor_id or "") != target_vendor:
+            continue
+
+        entity_type = str(
+            item.get("entity_type") or ""
+        ).strip().lower()
+
+        if entity_type != "vendor_commission":
+            continue
+
+        settled = str(
+            item.get("settled") or ""
+        ).strip().upper()
+
+        past_settlements = item.get("past_settlements")
+        successful_past = None
+
+        if isinstance(past_settlements, list):
+            for settlement in reversed(past_settlements):
+                if not isinstance(settlement, dict):
+                    continue
+
+                if (
+                    str(
+                        settlement.get("status") or ""
+                    ).strip().upper()
+                    == "SUCCESS"
+                ):
+                    successful_past = settlement
+                    break
+
+        if settled == "YES" or successful_past:
+            return {
+                "settled": True,
+                "settlement_id": (
+                    item.get("vendor_settlement_id")
+                    or (
+                        successful_past.get("settlement_id")
+                        if successful_past
+                        else None
+                    )
+                ),
+                "utr": item.get("vendor_settlement_utr"),
+                "settled_on": item.get("vendor_settlement_time"),
+                "initiated_on": item.get(
+                    "vendor_settlement_initiated_on"
+                ),
+                "eligibility_time": item.get(
+                    "vendor_settlement_eligibility_time"
+                ),
+                "amount": (
+                    item.get("vendor_commission")
+                    or item.get("amount")
+                ),
+                "raw": item,
+            }
+
+    return None
+
+
 def verify_cashfree_split(
     payout_transaction_id: int,
 ) -> dict[str, Any]:
@@ -144,19 +217,12 @@ def verify_cashfree_split(
         - create a transfer
         - reverse a transfer
         - create a refund
-
-    Cashfree is treated as the source of truth for whether a
-    vendor split actually exists.
     """
 
     connection = get_connection()
 
     try:
         cursor = connection.cursor()
-
-        # ========================================================
-        # 1. LOCAL PAYOUT + SUCCESSFUL CASHFREE ORDER
-        # ========================================================
 
         cursor.execute(
             """
@@ -172,6 +238,8 @@ def verify_cashfree_split(
                 pt.cashfree_split_status,
                 pt.cashfree_settlement_id,
                 pt.cashfree_transfer_id,
+                pt.cashfree_settlement_utr,
+                pt.cashfree_settlement_time,
                 mp.gateway_order_id
 
             FROM marketplace_seller_payout_transactions pt
@@ -187,21 +255,15 @@ def verify_cashfree_split(
 
             LIMIT 1
             """,
-            (
-                payout_transaction_id,
-            ),
+            (payout_transaction_id,),
         )
 
         payout = cursor.fetchone()
 
         if not payout:
-            raise NotFoundError(
-                "Payout transaction not found"
-            )
+            raise NotFoundError("Payout transaction not found")
 
-        cashfree_order_id = payout.get(
-            "gateway_order_id"
-        )
+        cashfree_order_id = payout.get("gateway_order_id")
 
         if not cashfree_order_id:
             raise NotFoundError(
@@ -209,33 +271,15 @@ def verify_cashfree_split(
                 "to this payout"
             )
 
-        # ========================================================
-        # 2. CASHFREE ORDER / SETTLEMENT INFORMATION
-        # ========================================================
-
-        cashfree_settlement = (
-            get_split_and_settlement_details(
-                cashfree_order_id
-            )
+        cashfree_settlement = get_split_and_settlement_details(
+            cashfree_order_id
         )
 
-        # ========================================================
-        # 3. CASHFREE VENDOR RECONCILIATION
-        # ========================================================
-
-        cashfree_reconciliation = (
-            get_split_reconciliation(
-                cashfree_order_id
-            )
+        cashfree_reconciliation = get_split_reconciliation(
+            cashfree_order_id
         )
 
-        # ========================================================
-        # 4. LOCAL VENDOR
-        # ========================================================
-
-        local_vendor_id = payout.get(
-            "cashfree_vendor_id"
-        )
+        local_vendor_id = payout.get("cashfree_vendor_id")
 
         local_vendor_id_text = (
             str(local_vendor_id)
@@ -243,75 +287,62 @@ def verify_cashfree_split(
             else None
         )
 
-        # ========================================================
-        # 5. CASHFREE VENDOR IDS
-        # ========================================================
-
-        reconciliation_vendor_ids = (
-            _extract_cashfree_vendor_ids(
-                cashfree_reconciliation
-            )
+        reconciliation_vendor_ids = _extract_cashfree_vendor_ids(
+            cashfree_reconciliation
         )
 
-        settlement_vendor_ids = (
-            _extract_settlement_vendor_ids(
-                cashfree_settlement
-            )
+        settlement_vendor_ids = _extract_settlement_vendor_ids(
+            cashfree_settlement
         )
-
-        # ========================================================
-        # 6. CASHFREE SETTLEMENT DATA
-        # ========================================================
 
         settlement: dict[str, Any] = {}
 
-        if isinstance(
-            cashfree_settlement,
-            dict,
-        ):
+        if isinstance(cashfree_settlement, dict):
             settlement = (
-                cashfree_settlement.get(
-                    "settlement"
-                )
+                cashfree_settlement.get("settlement")
                 or {}
             )
 
-        transfer_utr = settlement.get(
-            "transfer_utr"
+        transfer_utr = settlement.get("transfer_utr")
+        transfer_time = settlement.get("transfer_time")
+        cf_settlement_id = settlement.get("cf_settlement_id")
+
+        vendor_settlement = _extract_vendor_settlement(
+            cashfree_reconciliation,
+            local_vendor_id_text,
         )
 
-        transfer_time = settlement.get(
-            "transfer_time"
+        vendor_settlement_completed = bool(
+            vendor_settlement
+            and vendor_settlement.get("settled")
         )
 
-        cf_settlement_id = settlement.get(
-            "cf_settlement_id"
+        vendor_settlement_id = (
+            vendor_settlement.get("settlement_id")
+            if vendor_settlement
+            else None
         )
 
-        # ========================================================
-        # 7. AUTHORITATIVE SPLIT CONFIRMATION
-        #
-        # Cashfree can confirm the vendor through either:
-        #
-        # A. Vendor reconciliation
-        # B. Order-level settlement vendors
-        #
-        # For Order #31 both are expected to contain:
-        #
-        #     edusphere_seller_4628
-        #
-        # ========================================================
+        vendor_settlement_utr = (
+            vendor_settlement.get("utr")
+            if vendor_settlement
+            else None
+        )
+
+        vendor_settlement_time = (
+            vendor_settlement.get("settled_on")
+            if vendor_settlement
+            else None
+        )
 
         reconciliation_confirms_vendor = (
             local_vendor_id_text is not None
-            and local_vendor_id_text
-            in reconciliation_vendor_ids
+            and local_vendor_id_text in reconciliation_vendor_ids
         )
 
         settlement_confirms_vendor = (
             local_vendor_id_text is not None
-            and local_vendor_id_text
-            in settlement_vendor_ids
+            and local_vendor_id_text in settlement_vendor_ids
         )
 
         cashfree_split_confirmed = (
@@ -319,30 +350,12 @@ def verify_cashfree_split(
             or settlement_confirms_vendor
         )
 
-        # ========================================================
-        # 8. DETERMINE CASHFREE SETTLEMENT STATE
-        #
-        # Split confirmed + no UTR:
-        #     Split exists but bank transfer is not completed.
-        #
-        # UTR / transfer time present:
-        #     Cashfree has actually transferred the settlement.
-        # ========================================================
-
-        cashfree_transfer_completed = bool(
-            transfer_utr
-            or transfer_time
+        cashfree_transfer_completed = (
+            vendor_settlement_completed
+            or bool(transfer_utr or transfer_time)
         )
 
-        # ========================================================
-        # 9. SYNCHRONIZE LOCAL DATABASE
-        # ========================================================
-
         if cashfree_split_confirmed:
-
-            # ----------------------------------------------------
-            # Cashfree confirms the vendor split.
-            # ----------------------------------------------------
 
             if cashfree_transfer_completed:
                 local_status = "SETTLED"
@@ -351,19 +364,39 @@ def verify_cashfree_split(
 
             cursor.execute(
                 """
-                UPDATE
-                    marketplace_seller_payout_transactions
-
+                UPDATE marketplace_seller_payout_transactions
                 SET
                     cashfree_split_status = 'CREATED',
-
                     status = %s,
 
                     cashfree_settlement_id =
                         COALESCE(
                             %s,
+                            %s,
                             cashfree_settlement_id
                         ),
+
+                    cashfree_settlement_utr =
+                        COALESCE(
+                            %s,
+                            cashfree_settlement_utr
+                        ),
+
+                    cashfree_settlement_time =
+                        COALESCE(
+                            %s,
+                            cashfree_settlement_time
+                        ),
+
+                    settled_at =
+                        CASE
+                            WHEN %s = 'SETTLED'
+                            THEN COALESCE(
+                                settled_at,
+                                CURRENT_TIMESTAMP
+                            )
+                            ELSE settled_at
+                        END,
 
                     failure_reason = NULL
 
@@ -371,48 +404,42 @@ def verify_cashfree_split(
                 """,
                 (
                     local_status,
+                    vendor_settlement_id,
                     cf_settlement_id,
+                    vendor_settlement_utr,
+                    vendor_settlement_time,
+                    local_status,
                     payout_transaction_id,
                 ),
             )
 
             connection.commit()
 
-            payout["cashfree_split_status"] = (
-                "CREATED"
-            )
-
+            payout["cashfree_split_status"] = "CREATED"
             payout["status"] = local_status
 
             payout["cashfree_settlement_id"] = (
-                cf_settlement_id
-                or payout.get(
-                    "cashfree_settlement_id"
-                )
+                vendor_settlement_id
+                or cf_settlement_id
+                or payout.get("cashfree_settlement_id")
+            )
+
+            payout["cashfree_settlement_utr"] = (
+                vendor_settlement_utr
+            )
+
+            payout["cashfree_settlement_time"] = (
+                vendor_settlement_time
             )
 
         else:
-
-            # ----------------------------------------------------
-            # Cashfree does NOT report the local vendor.
-            #
-            # This is deliberately placed ON_HOLD.
-            #
-            # We must NOT trust a stale local CREATED status.
-            # ----------------------------------------------------
-
             cursor.execute(
                 """
-                UPDATE
-                    marketplace_seller_payout_transactions
-
+                UPDATE marketplace_seller_payout_transactions
                 SET
                     cashfree_split_status = 'PENDING',
-
                     status = 'ON_HOLD',
-
                     failure_reason = %s
-
                 WHERE id = %s
                 """,
                 (
@@ -423,150 +450,76 @@ def verify_cashfree_split(
 
             connection.commit()
 
-            payout["cashfree_split_status"] = (
-                "PENDING"
-            )
-
+            payout["cashfree_split_status"] = "PENDING"
             payout["status"] = "ON_HOLD"
-
-        # ========================================================
-        # 10. RETURN AUTHORITATIVE VERIFICATION RESULT
-        # ========================================================
 
         return {
             "success": True,
+            "payout_transaction_id": payout_transaction_id,
+            "order_id": payout["order_id"],
+            "cashfree_order_id": cashfree_order_id,
 
-            "payout_transaction_id": (
-                payout_transaction_id
-            ),
-
-            "order_id": payout[
-                "order_id"
-            ],
-
-            "cashfree_order_id": (
-                cashfree_order_id
-            ),
-
-            # ----------------------------------------------------
-            # Split status
-            # ----------------------------------------------------
-
-            "cashfree_split_confirmed": (
-                cashfree_split_confirmed
-            ),
-
-            "cashfree_vendor_confirmed": (
-                cashfree_split_confirmed
-            ),
-
-            # ----------------------------------------------------
-            # Transfer status
-            # ----------------------------------------------------
-
-            "cashfree_transfer_completed": (
-                cashfree_transfer_completed
-            ),
-
-            # ----------------------------------------------------
-            # Local state
-            # ----------------------------------------------------
+            "cashfree_split_confirmed": cashfree_split_confirmed,
+            "cashfree_vendor_confirmed": cashfree_split_confirmed,
+            "cashfree_transfer_completed": cashfree_transfer_completed,
 
             "local": {
-                "status": payout.get(
-                    "status"
+                "status": payout.get("status"),
+                "cashfree_vendor_id": payout.get(
+                    "cashfree_vendor_id"
                 ),
-
-                "cashfree_vendor_id": (
-                    payout.get(
-                        "cashfree_vendor_id"
-                    )
+                "cashfree_split_status": payout.get(
+                    "cashfree_split_status"
                 ),
-
-                "cashfree_split_status": (
-                    payout.get(
-                        "cashfree_split_status"
-                    )
+                "cashfree_settlement_id": payout.get(
+                    "cashfree_settlement_id"
                 ),
-
-                "cashfree_settlement_id": (
-                    payout.get(
-                        "cashfree_settlement_id"
-                    )
+                "cashfree_transfer_id": payout.get(
+                    "cashfree_transfer_id"
                 ),
-
-                "cashfree_transfer_id": (
-                    payout.get(
-                        "cashfree_transfer_id"
-                    )
+                "cashfree_settlement_utr": payout.get(
+                    "cashfree_settlement_utr"
                 ),
-
+                "cashfree_settlement_time": payout.get(
+                    "cashfree_settlement_time"
+                ),
                 "gross_amount": float(
-                    payout.get(
-                        "gross_amount"
-                    )
-                    or 0
+                    payout.get("gross_amount") or 0
                 ),
-
                 "platform_fee_amount": float(
-                    payout.get(
-                        "platform_fee_amount"
-                    )
-                    or 0
+                    payout.get("platform_fee_amount") or 0
                 ),
-
                 "seller_amount": float(
-                    payout.get(
-                        "seller_amount"
-                    )
-                    or 0
+                    payout.get("seller_amount") or 0
                 ),
             },
 
-            # ----------------------------------------------------
-            # Cashfree state
-            # ----------------------------------------------------
-
             "cashfree": {
-                "settlement": (
-                    cashfree_settlement
+                "settlement": cashfree_settlement,
+                "reconciliation": cashfree_reconciliation,
+                "reconciliation_vendor_ids": sorted(
+                    reconciliation_vendor_ids
                 ),
-
-                "reconciliation": (
-                    cashfree_reconciliation
+                "settlement_vendor_ids": sorted(
+                    settlement_vendor_ids
                 ),
-
-                "reconciliation_vendor_ids": (
-                    sorted(
-                        reconciliation_vendor_ids
-                    )
-                ),
-
-                "settlement_vendor_ids": (
-                    sorted(
-                        settlement_vendor_ids
-                    )
-                ),
-
                 "reconciliation_confirms_vendor": (
                     reconciliation_confirms_vendor
                 ),
-
                 "settlement_confirms_vendor": (
                     settlement_confirms_vendor
                 ),
+                "transfer_utr": transfer_utr,
+                "transfer_time": transfer_time,
+                "cf_settlement_id": cf_settlement_id,
 
-                "transfer_utr": (
-                    transfer_utr
+                "vendor_settlement": vendor_settlement,
+                "vendor_settlement_completed": (
+                    vendor_settlement_completed
                 ),
-
-                "transfer_time": (
-                    transfer_time
-                ),
-
-                "cf_settlement_id": (
-                    cf_settlement_id
-                ),
+                "vendor_settlement_id": vendor_settlement_id,
+                "vendor_settlement_utr": vendor_settlement_utr,
+                "vendor_settlement_time": vendor_settlement_time,
             },
         }
 
