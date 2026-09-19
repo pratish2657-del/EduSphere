@@ -1,70 +1,61 @@
-EduSphere
+✨ Overview
 
-EduSphere x StudyFlow --- a student-focused academic ecosystem and
-marketplace with role-based campus management, learning resources,
-developer tooling, and an AI-powered study assistant.
+EduSphere is a full-stack education platform designed to bring academic activities, learning resources, student services, marketplace functionality, developer tooling, and AI-assisted study workflows into one system.
 
-Overview
-EduSphere is a full-stack education platform designed to bring academic
-activities and student services into one system.
+Instead of relying on multiple disconnected systems, EduSphere provides role-based access to students, professors, administrators, Super Admins, and developers.
 
-The platform combines:
+Core Platform
 
-Student academic management
+🎓 Student academic management
 
-Professor and teaching workflows
+👨‍🏫 Professor and teaching workflows
 
-Administrator and Super Admin controls
+🛡️ Administrator and Super Admin controls
 
-Timetables and course management
+🗓️ Timetable and course management
 
-Student attendance
+✅ Attendance management
 
-Examination results
+📊 Examination results
 
-Digital library and learning resources
+📚 Digital library and learning resources
 
-Marketplace for educational products/resources
+🛒 Educational marketplace
 
-Developer workspace with a browser-based VS Code-compatible IDE
+💻 Browser-based Developer Workspace
 
-AI-powered study assistance through StudyFlow AI
+🤖 EduSphere AI for AI-assisted study workflows
 
-Google authentication
+🔐 Google authentication
 
-Cloud deployment and persistent storage
+☁️ Cloud deployment and persistent storage
 
-The project is designed around a role-based architecture so that
-students, professors, administrators, Super Admins, and developers
-receive different capabilities and permissions.
+🎯 Vision
 
-Core Vision
-EduSphere aims to provide a unified digital environment for an
-educational institution instead of requiring students and faculty to use
-many disconnected systems.
+EduSphere aims to provide a unified digital environment for educational institutions.
 
-Main goals
-Make academic information accessible from one dashboard.
+Main Goals
 
-Give professors tools for courses, timetables, students, and
-attendance.
+Centralize academic information in one dashboard.
 
-Give administrators tools for institutional management.
+Give professors tools for courses, timetables, students, and attendance.
 
-Provide students with learning resources and academic information.
+Give administrators institution-level management tools.
 
-Provide a marketplace for educational resources and products.
+Give students access to learning resources and academic information.
 
-Provide a controlled developer workspace for building and submitting
-code.
+Provide a marketplace for educational products and resources.
 
-Add AI-assisted study workflows through StudyFlow AI.
+Provide a controlled browser-based development environment.
 
-Major Modules
-1. Authentication
-EduSphere supports Google OAuth authentication.
+Add AI-assisted study workflows through EduSphere AI.
 
-Authentication flow
+🧩 Major Modules
+
+1. 🔐 Authentication
+
+EduSphere uses Google OAuth with session-based authentication and role-based authorization.
+
 User
   ↓
 EduSphere Frontend
@@ -75,23 +66,25 @@ Google OAuth
   ↓
 Google Callback
   ↓
-Authenticated EduSphere Session
+Authenticated Session
   ↓
 Role / Profile Resolution
   ↓
 Appropriate Dashboard
-The platform uses role and profile information to determine what the
-authenticated user can access.
 
-2. Role-Based Access
+The authenticated user's role and academic profile determine which parts of the platform are accessible.
+
+2. 👥 Role-Based Access
+
 EduSphere is designed around multiple roles.
 
 Student
-Students can access features such as:
 
-Student dashboard
+Students can access:
 
-Academic profile
+Student Dashboard
+
+Academic Profile
 
 Timetable
 
@@ -99,22 +92,23 @@ Courses
 
 Attendance
 
-Examination results
+Examination Results
 
-Library
+Digital Library
 
 Marketplace
 
-StudyFlow AI
+EduSphere AI
 
 Professor
+
 Professors can access:
 
-Professor dashboard
+Professor Dashboard
 
-Assigned courses
+Assigned Courses
 
-Course details
+Course Details
 
 Students belonging to their teaching sections
 
@@ -124,8 +118,9 @@ Attendance
 
 Academic workflows
 
-Admin
-Administrators manage institution-level academic data such as:
+Administrator
+
+Administrators manage institution-level academic data, including:
 
 Students
 
@@ -142,9 +137,10 @@ Timetables
 Academic configuration
 
 Super Admin
-Super Admin provides higher-level platform control, including:
 
-User/institution management
+Super Admin functionality includes:
+
+User and institution management
 
 Verification workflows
 
@@ -152,44 +148,49 @@ Library administration
 
 Marketplace administration
 
-Developer approval/review workflows
+Developer approval and review workflows
 
 Platform-level controls
 
 Developer
+
 Developers receive a controlled development environment where they can:
 
 Create and edit code
 
 Work inside an isolated browser IDE
 
-Save files to the EduSphere developer workspace
+Save files to an EduSphere-managed workspace
 
 Synchronize IDE files with EduSphere
 
 Submit files for Super Admin review
 
-Developer access can be subject to Super Admin verification/approval.
+Developer access may require Super Admin verification or approval.
 
-3. Student Academic System
-The academic system connects:
+🎓 Academic Management
+
+Student Academic System
+
+The academic system connects institutional and student information through:
 
 Institution
-   ↓
+    ↓
 Program
-   ↓
+    ↓
 Section
-   ↓
+    ↓
 Student Profile
-   ↓
+    ↓
 Courses
-   ↓
+    ↓
 Timetable
-   ↓
+    ↓
 Attendance / Results
-Students are associated with academic programs and sections.
 
-The timetable system supports:
+Timetable
+
+Timetable records can contain:
 
 Day
 
@@ -209,14 +210,11 @@ Semester
 
 Academic year
 
-4. Professor System
+👨‍🏫 Professor System
+
 The professor module provides teaching-oriented workflows.
 
-Professor dashboard
-Professors can view information related to their teaching activities.
-
-Professor courses
-Professors can view assigned courses and course details.
+Professor Courses
 
 Course information can include:
 
@@ -234,15 +232,13 @@ Start/end time
 
 Room
 
-Professor students
-The student roster is based on academic section relationships and
-teaching assignments.
+Student Roster
+
+Professor student lists are based on academic section relationships and teaching assignments.
 
 Attendance
-Professors can record attendance for students in courses they are
-authorized to teach.
 
-The attendance data model includes:
+Authorized professors can record attendance for students in their courses.
 
 attendance
 ├── id
@@ -250,33 +246,10 @@ attendance
 ├── course_id
 ├── attendance_date
 └── status
-5. Timetable System
-EduSphere includes timetable management for students, professors, and
-administrators.
 
-The timetable connects courses, sections, professors, and rooms.
+📊 Examination Results
 
-A simplified relationship is:
-
-Program
-  ↓
-Section
-  ↓
-Timetable
-  ├── Course
-  ├── Professor
-  ├── Day
-  ├── Time
-  └── Room
-Administrator workflows can assign professors to timetable entries.
-
-Professor assignments are validated against the appropriate professor
-profile and verification state.
-
-6. Examination Results
-EduSphere supports examination-result records.
-
-The result system stores information such as:
+EduSphere supports examination-result records containing information such as:
 
 Student profile
 
@@ -308,14 +281,13 @@ Timestamps
 
 Possible result statuses include:
 
-PASS
-FAIL
-ABSENT
-WITHHELD
-7. Digital Library
-The Library provides digital learning resources.
+PASS · FAIL · ABSENT · WITHHELD
 
-Resources can contain:
+📚 Digital Library
+
+The EduSphere Library provides digital learning resources.
+
+Resources may contain:
 
 Title
 
@@ -345,11 +317,9 @@ Status
 
 Featured state
 
-Persistent file storage
-Library files use Supabase Storage rather than depending on a
-web-service local filesystem.
+🔒 Private File Storage
 
-The intended production architecture is:
+Library files use Supabase Storage.
 
 Student / Admin
       ↓
@@ -360,20 +330,20 @@ Supabase Storage
 Private Library Bucket
       ↓
 Time-limited Signed URL
-The library bucket should remain private, with protected downloads
-served through signed URLs.
 
-8. Marketplace
-EduSphere includes an educational marketplace designed for buying and
-selling educational products/resources.
+The library bucket is intended to remain private, with protected downloads served through signed URLs.
 
-Marketplace functionality includes concepts such as:
+🛒 Marketplace
+
+EduSphere includes an educational marketplace for buying and selling educational products and resources.
+
+Marketplace Features
 
 Products
 
 Attachments
 
-Cart
+Shopping carts
 
 Orders
 
@@ -393,7 +363,7 @@ Payout reversals
 
 Payment webhook events
 
-The database contains marketplace tables including:
+Database Tables
 
 marketplace_products
 marketplace_attachments
@@ -407,35 +377,30 @@ marketplace_refunds
 marketplace_seller_payouts
 marketplace_seller_payout_transactions
 marketplace_payout_reversals
-The marketplace payment architecture was being transitioned from
-Razorpay Route toward Cashfree Easy Split for marketplace
-split/payout workflows.
 
-Payment provider activation, production credentials, KYC, and payout
-eligibility depend on the provider's current requirements and should
-be configured separately from the application code.
+The payment architecture has been transitioning from Razorpay Route toward Cashfree Easy Split for marketplace split and payout workflows.
 
-9. Developer Workspace
-EduSphere contains a dedicated Developer Workspace.
+Payment-provider activation, production credentials, KYC, and payout eligibility depend on the provider's current requirements and account configuration.
 
-The goal is to provide developers with a browser-accessible development
-environment without mounting the main EduSphere source tree or
-production secrets directly into the IDE.
+💻 Developer Workspace
 
-Browser IDE
-The IDE uses:
+EduSphere contains a dedicated Developer Workspace designed to provide developers with a browser-accessible development environment.
+
+The workspace is designed so that developers do not receive direct access to the main EduSphere source tree or production secrets.
+
+Browser IDE Stack
 
 code-server
 
 nginx
 
-FastAPI-based IDE bridge
+FastAPI IDE bridge
 
 Docker
 
 Render
 
-Architecture:
+Architecture
 
 Developer Workspace
         ↓
@@ -443,34 +408,36 @@ Vercel Frontend
         ↓
 Public IDE URL
         ↓
-nginx
-   ┌────┴────┐
-   ↓         ↓
+      nginx
+     ↙     ↘
 code-server  IDE API
-   ↓         ↓
-workspace   files
+     ↓        ↓
+workspace    files
+
 Each developer receives an isolated workspace:
 
 /home/coder/workspace/<developer_id>
-Two-way synchronization
-EduSphere supports both directions:
+
+🔄 Two-Way Synchronization
+
+EduSphere → IDE
 
 EduSphere DB
-     ↓
- Export DB
-     ↓
- Browser IDE
-and:
+    ↓
+Export DB
+    ↓
+Browser IDE
+
+IDE → EduSphere
 
 Browser IDE
-     ↓
- Sync IDE
-     ↓
- EduSphere DB
-This allows developers to edit code in the browser IDE while keeping an
-EduSphere-managed copy.
+    ↓
+Sync IDE
+    ↓
+EduSphere DB
 
-Submission workflow
+📝 Submission Workflow
+
 Developer edits code
         ↓
 Save in IDE
@@ -482,16 +449,16 @@ Submit file
 Super Admin review
         ↓
 Approved / Rejected
-Accepted submissions are reviewed before being used in the platform.
-They are not automatically deployed into EduSphere.
 
-10. StudyFlow AI
-StudyFlow AI is EduSphere's AI-powered study assistant.
+Accepted submissions are reviewed before being used in the platform and are not automatically deployed into EduSphere.
 
-The concept is to help students turn study material into more useful
-exam-preparation content.
+🤖 EduSphere AI
 
-Potential workflows include:
+EduSphere AI is EduSphere's AI-powered study assistant.
+
+It is designed to help students turn study material into more useful exam-preparation content.
+
+Study Workflows
 
 Note organization
 
@@ -503,85 +470,155 @@ Study assistance
 
 Learning support
 
-The AI interface is branded as StudyFlow AI inside EduSphere.
+The AI experience is branded consistently as EduSphere AI across the platform.
 
-Technology Stack
+🧰 Technology Stack
+
 Frontend
+
+Technology
+
+Purpose
+
 React
+
+UI
+
 TypeScript
+
+Application development
+
 Vite
+
+Frontend tooling
+
 Tailwind CSS
+
+Styling
+
 React Router
+
+Routing
+
 Lucide React
-The frontend is deployed on Vercel.
+
+Icons
+
+Vercel
+
+Deployment
 
 Backend
+
+Technology
+
+Purpose
+
 Python
+
+Backend development
+
 FastAPI
+
+API framework
+
 Uvicorn
-The backend is deployed on Render.
 
-Database
-MySQL 8.x
-Production database hosting uses Aiven MySQL.
+ASGI server
 
-Authentication
-Google OAuth
-Session-based authentication
-Role-based authorization
-File Storage
-Supabase Storage
-Private buckets
-Signed URLs
-Browser IDE
-code-server
-Docker
-nginx
-FastAPI
-Supervisor
-Deployment
-Vercel
 Render
+
+Deployment
+
+Database & Storage
+
+Technology
+
+Purpose
+
+MySQL 8.x
+
+Application database
+
+Aiven MySQL
+
+Production database hosting
+
+Supabase Storage
+
+Private file storage
+
+Signed URLs
+
+Protected file access
+
+Authentication & Developer Infrastructure
+
+Google OAuth
+
+Session-based authentication
+
+Role-based authorization
+
+code-server
+
+Docker
+
+nginx
+
+Supervisor
+
+Deployment
+
+Vercel
+
+Render
+
 Aiven
+
 Supabase
+
 Google Cloud OAuth
-Production Architecture
+
+🏗️ Production Architecture
+
                          ┌──────────────────┐
                          │      USERS       │
                          └────────┬─────────┘
                                   │
                                   ▼
                          ┌──────────────────┐
-                         │     VERCEL      │
-                         │ React + Vite     │
+                         │      VERCEL      │
+                         │   React + Vite   │
                          └────────┬─────────┘
                                   │ HTTPS
                                   ▼
                          ┌──────────────────┐
-                         │     RENDER       │
-                         │ FastAPI Backend  │
-                         │ edusphere-fovh   │
-                         └───────┬───┬──────┘
-                                 │   │
-                    ┌────────────┘   └───────────────┐
-                    ▼                                ▼
-           ┌─────────────────┐              ┌─────────────────┐
-           │      AIVEN      │              │     SUPABASE    │
-           │     MySQL       │              │ Storage / Files │
-           └─────────────────┘              └─────────────────┘
+                         │      RENDER      │
+                         │  FastAPI Backend │
+                         └───────┬─────┬────┘
+                                 │     │
+                     ┌───────────┘     └──────────────┐
+                     ▼                                ▼
+            ┌─────────────────┐              ┌─────────────────┐
+            │      AIVEN      │              │    SUPABASE     │
+            │      MySQL      │              │ Storage / Files │
+            └─────────────────┘              └─────────────────┘
 
-                                  │
-                                  │ Developer IDE
-                                  ▼
+                                 │
+                                 │ Developer IDE
+                                 ▼
                          ┌──────────────────┐
-                         │     RENDER       │
+                         │      RENDER      │
                          │  edusphere-ide   │
                          │                  │
-                         │ nginx            │
-                         │ code-server      │
-                         │ IDE API          │
+                         │     nginx        │
+                         │   code-server    │
+                         │     IDE API      │
                          └──────────────────┘
-Database Model
+
+🗄️ Database Model
+
 Important academic tables include:
 
 institutions
@@ -599,35 +636,26 @@ course_enrollments
 attendance
 examination_results
 professor_verifications
-The system intentionally separates user identity from academic profiles.
 
-For example:
-
-users
-  ↓
-student_profiles
+User identity and academic profiles are intentionally separated:
 
 users
-  ↓
-professor_profiles
+  ├── student_profiles
+  ├── professor_profiles
+  └── admin_profiles
 
-users
-  ↓
-admin_profiles
-This allows platform authentication and academic information to remain
-logically separated.
+This keeps platform authentication logically separate from academic information.
 
-Environment Variables
+🔑 Environment Variables
+
 Never commit production secrets to GitHub.
 
-Typical frontend configuration includes:
+Frontend
 
 VITE_API_BASE_URL=https://edusphere-fovh.onrender.com
 VITE_DEVELOPER_IDE_URL=https://edusphere-ide.onrender.com
-Backend configuration includes database, OAuth, CORS, storage, and
-developer IDE settings.
 
-Example:
+Backend
 
 DB_HOST=
 DB_PORT=
@@ -647,103 +675,113 @@ SUPABASE_LIBRARY_BUCKET=library
 
 DEVELOPER_IDE_INTERNAL_URL=
 DEVELOPER_IDE_SHARED_SECRET=
-Security
-Never commit:
 
-Database passwords
+Never commit
 
-OAuth client secrets
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+service-account.json
+database dumps containing private data
+production API keys
+payment provider secret keys
 
-Supabase service-role keys
+Use environment variables or a secure secret-management system for production credentials.
 
-Developer IDE shared secrets
+🚀 Local Development
 
-Payment provider secret keys
-
-Production API keys
-
-Use environment variables in Vercel, Render, Aiven/Supabase
-configuration, or another secure secret-management mechanism.
-
-Local Development
 Frontend
+
 From the frontend directory:
 
 npm install
 npm run dev
+
 The Vite development server normally runs on:
 
 http://localhost:5173
-Backend
-Create the backend environment configuration and install the Python
-dependencies required by the project.
 
-Run FastAPI with Uvicorn, for example:
+Backend
+
+Install the required Python dependencies and configure the backend environment.
+
+Run FastAPI with Uvicorn:
 
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
 The local backend normally runs on:
 
 http://localhost:8000
-Browser IDE
-The repository includes the developer IDE Docker configuration.
 
-A local development environment can use:
+Developer IDE
+
+The repository includes Docker configuration for the developer workspace:
 
 docker compose -f docker-compose.developer-workspace.yml up -d
-The production browser IDE is deployed separately from the main FastAPI
-service.
 
-Deployment
-Frontend --- Vercel
-The Vercel project uses:
+The production browser IDE is deployed separately from the main FastAPI service.
+
+☁️ Deployment
+
+Frontend — Vercel
 
 Root Directory: frontend
 Framework: Vite
 Build Command: npm run build
 Output Directory: dist
-Production API configuration:
+
+Production API:
 
 VITE_API_BASE_URL=https://edusphere-fovh.onrender.com
-Developer IDE configuration:
+
+Developer IDE:
 
 VITE_DEVELOPER_IDE_URL=https://edusphere-ide.onrender.com
-For client-side routing, the Vercel deployment uses a rewrite to
-index.html.
 
-Backend --- Render
+The Vercel deployment uses a rewrite to index.html for client-side routing.
+
+Backend — Render
+
 The FastAPI backend runs as a Render web service.
 
-The application must listen on the Render-provided port and on:
+The application must listen on:
 
 0.0.0.0
+
 Production OAuth callback:
 
 https://edusphere-fovh.onrender.com/auth/google/callback
-Developer IDE --- Render
-The browser IDE runs as the separate:
+
+Developer IDE — Render
+
+The browser IDE runs as:
 
 edusphere-ide
-service.
 
-The container runs:
+The container includes:
 
 nginx
-code-server
-IDE API
-supervisor
-nginx exposes the public Render port and routes traffic internally to
-code-server and the IDE bridge.
 
-Database --- Aiven
+code-server
+
+IDE API
+
+supervisor
+
+Database — Aiven
+
 Production MySQL is hosted by Aiven.
 
-The backend connects using environment variables rather than hard-coded
-credentials.
+The backend connects using environment variables rather than hard-coded credentials.
 
-Security Architecture
-EduSphere is designed with several boundaries.
+🛡️ Security Architecture
 
-API authorization
+EduSphere is designed with multiple security boundaries.
+
+API Authorization
+
 Backend routes should validate:
 
 Authentication
@@ -758,7 +796,8 @@ Resource ownership
 
 Verification state where applicable
 
-Developer isolation
+Developer Isolation
+
 The browser IDE should not have direct access to:
 
 Production application source code
@@ -771,16 +810,15 @@ Deployment credentials
 
 The IDE communicates through a controlled bridge.
 
-Library security
-Library resources are intended to use private storage and signed URLs
-rather than exposing storage objects publicly.
+Library Security
 
-Marketplace security
-Payment state should be confirmed server-side through payment-provider
-mechanisms/webhooks rather than trusting frontend payment status.
+Library resources are intended to use private storage and signed URLs rather than publicly exposing storage objects.
 
-Project Structure
-A simplified project structure is:
+Marketplace Security
+
+Payment state should be confirmed server-side through payment-provider mechanisms and webhooks rather than trusting frontend payment status.
+
+📁 Project Structure
 
 EduSphere/
 ├── frontend/
@@ -802,7 +840,6 @@ EduSphere/
 │       ├── schemas/
 │       ├── middleware/
 │       └── ...
-│   
 │
 ├── developer-ide/
 │   ├── Dockerfile
@@ -814,13 +851,15 @@ EduSphere/
 │
 ├── docker-compose.developer-workspace.yml
 └── README.md
+
 The exact directory structure can evolve as the project grows.
 
-Development Workflow
-A typical feature workflow is:
+🔄 Development Workflow
+
+A typical feature workflow:
 
 1. Create / update database schema
-2. Update backend schema/service
+2. Update backend schema / service
 3. Add or update API route
 4. Update frontend API integration
 5. Build frontend
@@ -829,7 +868,8 @@ A typical feature workflow is:
 8. Push to GitHub
 9. Deploy
 10. Test production
-For developer-workspace features:
+
+For Developer Workspace features:
 
 Edit code in Browser IDE
         ↓
@@ -842,10 +882,13 @@ EduSphere DB copy updated
 Submit
         ↓
 Super Admin review
-Testing Checklist
-Before considering a production release, test:
+
+✅ Production Testing Checklist
+
+Before a production release, test the following areas.
 
 Authentication
+
 Google login
 
 OAuth callback
@@ -857,6 +900,7 @@ Logout
 Role-based routing
 
 Student
+
 Profile
 
 Dashboard
@@ -872,6 +916,7 @@ Results
 Library
 
 Professor
+
 Dashboard
 
 Assigned courses
@@ -885,6 +930,7 @@ Timetable
 Attendance
 
 Admin
+
 Student management
 
 Professor management
@@ -898,6 +944,7 @@ Timetable management
 Professor assignment
 
 Library
+
 Create resource
 
 Upload file
@@ -915,6 +962,7 @@ Update
 Re-upload after migration
 
 Marketplace
+
 Product creation
 
 Product listing
@@ -934,6 +982,7 @@ Seller payout
 Inventory
 
 Developer Workspace
+
 IDE health
 
 Open IDE
@@ -952,66 +1001,34 @@ Submit file
 
 Super Admin review
 
-Important Production Notes
-Render Free Services
-Render Free web services can spin down after inactivity. For workloads
-that require continuous availability, use an appropriate paid compute
-plan.
+⚠️ Production Notes
 
-This is particularly relevant for:
+Render Free Services
+
+Render Free web services can spin down after inactivity. Workloads requiring continuous availability should use an appropriate compute plan.
+
+This is particularly relevant to:
 
 edusphere-fovh
-
 edusphere-ide
 
 Database Availability
+
 The production application depends on Aiven MySQL being available.
 
-If the database service is powered off, the backend cannot perform
-normal database operations.
+If the database service is unavailable, the backend cannot perform normal database operations.
 
 IDE Persistence
-The code-server container filesystem should not be treated as the
-permanent source of truth.
 
-The application maintains an EduSphere-managed copy and synchronization
-mechanism for developer files.
+The code-server container filesystem should not be treated as the permanent source of truth.
 
-GitHub Repository Guidelines
-Do not commit:
+EduSphere maintains an application-managed copy and synchronization mechanism for developer files.
 
-.env
-.env.*
-*.pem
-*.key
-credentials.json
-service-account.json
-production secrets
-database dumps containing private data
-Use an .env.example file instead:
+🗺️ Roadmap
 
-DB_HOST=
-DB_PORT=
-DB_NAME=
-DB_USER=
-DB_PASSWORD=
-
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=
-
-CORS_ORIGINS=
-
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-SUPABASE_LIBRARY_BUCKET=library
-
-DEVELOPER_IDE_INTERNAL_URL=
-DEVELOPER_IDE_SHARED_SECRET=
-Roadmap
 Possible future improvements include:
 
-Stronger developer IDE authentication
+Stronger Developer Workspace authentication
 
 Automated code review
 
@@ -1037,10 +1054,11 @@ Automated testing and CI/CD
 
 Improved observability and audit logs
 
-Project Status
+📌 Project Status
+
 EduSphere is an actively developed full-stack platform.
 
-The system already includes the core architecture for:
+The current architecture includes the core foundation for:
 
 Authentication
 
@@ -1052,9 +1070,9 @@ Timetables
 
 Attendance
 
-Results
+Examination results
 
-Library
+Digital Library
 
 Marketplace
 
@@ -1062,41 +1080,41 @@ Developer Workspace
 
 Browser-based IDE
 
-StudyFlow AI integration
+EduSphere AI
 
 Cloud deployment
 
-Some production capabilities, especially payment-provider production
-onboarding, KYC/verification, billing tiers, and third-party service
-limits, depend on external provider requirements and account
-configuration.
+Some production capabilities — especially payment-provider production onboarding, KYC/verification, billing tiers, and third-party service limits — depend on external provider requirements and account configuration.
 
-Contributing
+🤝 Contributing
+
 Fork the repository.
 
 Create a feature branch.
 
 git checkout -b feature/my-feature
+
 Make your changes.
 
-Test the changes locally.
+Test the changes.
 
 Commit them.
 
 git add .
 git commit -m "Add my feature"
+
 Push the branch.
 
 git push origin feature/my-feature
+
 Open a Pull Request.
 
-License
-Add the project's chosen license here before publishing the repository
-publicly.
+# 📄 License
 
-EduSphere
-EduSphere x StudyFlow
+Copyright © 2026 EduSphere.
 
-A unified education platform connecting students, professors,
-administrators, developers, learning resources, marketplaces, and
-AI-assisted study workflows.
+All rights reserved.
+
+This project is currently not licensed for redistribution, modification,
+or commercial use without explicit permission from the project owner.
+
