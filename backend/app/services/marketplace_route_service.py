@@ -13,6 +13,7 @@ from app.database import get_connection
 from app.services.cashfree_easy_split_service import (
     create_refund,
     create_vendor,
+    get_split_and_settlement_details,
     get_vendor,
     transfer_vendor_balance,
 )
@@ -1170,6 +1171,372 @@ def cancel_marketplace_order(
 
 
 # ============================================================
+# REFUND FINALIZATION / CASHFREE RECONCILIATION
+# ============================================================
+
+
+def _finalize_fully_refunded_payment(
+    cursor,
+    payment: dict[str, Any],
+    refund_db_id: int | None = None,
+) -> None:
+    """
+    Apply the local state changes that belong to a fully processed
+    marketplace refund.
+
+    This helper is deliberately idempotent. Inventory is restored only
+    when the local refund row has not already been marked as restored.
+    That makes it safe to call after Cashfree reconciliation as well as
+    after a normal refund response/webhook.
+    """
+
+    if refund_db_id is not None:
+        cursor.execute(
+            """
+            SELECT inventory_restored
+            FROM marketplace_refunds
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (refund_db_id,),
+        )
+        refund_row = cursor.fetchone()
+
+        inventory_restored = bool(
+            refund_row
+            and refund_row.get("inventory_restored")
+        )
+    else:
+        inventory_restored = False
+
+    if not inventory_restored:
+        restore_order_inventory(
+            payment["order_id"],
+            cursor,
+        )
+
+        if refund_db_id is not None:
+            cursor.execute(
+                """
+                UPDATE marketplace_refunds
+                SET
+                    inventory_restored = TRUE,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                  AND inventory_restored = FALSE
+                """,
+                (refund_db_id,),
+            )
+
+    cursor.execute(
+        """
+        UPDATE marketplace_payments
+        SET
+            status = 'REFUNDED',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = %s
+          AND status = 'PAID'
+        """,
+        (payment["id"],),
+    )
+
+    cursor.execute(
+        """
+        UPDATE marketplace_seller_payout_transactions
+        SET
+            status = 'REFUNDED',
+            failure_reason = %s,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE order_id = %s
+          AND status <> 'REVERSED'
+        """,
+        (
+            "Marketplace refund fully processed",
+            payment["order_id"],
+        ),
+    )
+
+    cursor.execute(
+        """
+        UPDATE marketplace_orders
+        SET
+            status = 'REFUNDED',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = %s
+          AND status NOT IN ('CANCELLED', 'REFUNDED')
+        """,
+        (payment["order_id"],),
+    )
+
+
+def _reconcile_cashfree_refunds(
+    cursor,
+    payment: dict[str, Any],
+    created_by: int,
+) -> dict[str, Any]:
+    """
+    Reconcile refunds that Cashfree has already processed but that
+    may not yet exist, or may still be pending, in marketplace_refunds.
+
+    This is a fail-closed preflight check: if Cashfree cannot confirm
+    the current refund history, no new refund is submitted.
+    """
+
+    cashfree_order_id = payment.get("gateway_order_id")
+
+    if not cashfree_order_id:
+        raise BadRequestError(
+            "This payment has no Cashfree gateway order ID"
+        )
+
+    try:
+        details = get_split_and_settlement_details(
+            str(cashfree_order_id)
+        )
+    except Exception as exc:
+        raise BadRequestError(
+            "Unable to verify existing Cashfree refunds. "
+            "The refund was NOT submitted. "
+            f"Cashfree verification error: {exc}"
+        ) from exc
+
+    if not isinstance(details, dict):
+        raise BadRequestError(
+            "Cashfree returned an invalid refund verification response. "
+            "The refund was NOT submitted."
+        )
+
+    cashfree_refunds = details.get("refunds") or []
+
+    if not isinstance(cashfree_refunds, list):
+        cashfree_refunds = []
+
+    reconciled_refund_ids: list[str] = []
+
+    for external_refund in cashfree_refunds:
+        if not isinstance(external_refund, dict):
+            continue
+
+        gateway_status = str(
+            external_refund.get("refund_status")
+            or ""
+        ).upper()
+
+        if gateway_status not in {
+            "SUCCESS",
+            "PROCESSED",
+        }:
+            continue
+
+        provider_refund_id = external_refund.get(
+            "cf_refund_id"
+        )
+        merchant_refund_id = external_refund.get(
+            "refund_id"
+        )
+
+        if not provider_refund_id and not merchant_refund_id:
+            continue
+
+        refund_amount = round(
+            float(external_refund.get("refund_amount") or 0),
+            2,
+        )
+
+        if refund_amount <= 0:
+            continue
+
+        provider_refund_id = (
+            str(provider_refund_id)
+            if provider_refund_id
+            else None
+        )
+        merchant_refund_id = (
+            str(merchant_refund_id)
+            if merchant_refund_id
+            else None
+        )
+
+        refund_identifier = (
+            provider_refund_id
+            or merchant_refund_id
+        )
+
+        refund_arn = external_refund.get(
+            "refund_arn"
+        )
+
+        refund_splits = (
+            external_refund.get("refund_splits")
+            or []
+        )
+
+        # The current schema has one Cashfree refund-ID column. During
+        # a refund request it may temporarily contain EduSphere's
+        # merchant refund ID; after Cashfree responds it contains the
+        # provider cf_refund_id. Match either form so a delayed webhook
+        # or reconciliation can recover the same local row.
+        cursor.execute(
+            """
+            SELECT
+                id,
+                status,
+                inventory_restored
+            FROM marketplace_refunds
+            WHERE payment_id = %s
+              AND (
+                    (%s IS NOT NULL AND cashfree_refund_id = %s)
+                 OR (%s IS NOT NULL AND cashfree_refund_id = %s)
+              )
+            ORDER BY id DESC
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (
+                payment["id"],
+                provider_refund_id,
+                provider_refund_id,
+                merchant_refund_id,
+                merchant_refund_id,
+            ),
+        )
+
+        local_refund = cursor.fetchone()
+
+        if local_refund:
+            cursor.execute(
+                """
+                UPDATE marketplace_refunds
+                SET
+                    amount = %s,
+                    cashfree_refund_id = %s,
+                    cashfree_refund_arn = %s,
+                    cashfree_refund_splits = %s,
+                    status = 'PROCESSED',
+                    failure_reason = NULL,
+                    processed_at = COALESCE(
+                        processed_at,
+                        CURRENT_TIMESTAMP
+                    ),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (
+                    refund_amount,
+                    refund_identifier,
+                    refund_arn,
+                    json.dumps(refund_splits),
+                    local_refund["id"],
+                ),
+            )
+
+            reconciled_refund_ids.append(
+                refund_identifier
+            )
+            continue
+
+        cursor.execute(
+            """
+            INSERT INTO marketplace_refunds
+                (
+                    order_id,
+                    payment_id,
+                    buyer_id,
+                    amount,
+                    reverse_transfers,
+                    cashfree_refund_id,
+                    cashfree_refund_arn,
+                    cashfree_refund_splits,
+                    status,
+                    created_by,
+                    processed_at
+                )
+            VALUES
+                (
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    'PROCESSED',
+                    %s,
+                    CURRENT_TIMESTAMP
+                )
+            """,
+            (
+                payment["order_id"],
+                payment["id"],
+                payment["buyer_id"],
+                refund_amount,
+                bool(refund_splits),
+                refund_identifier,
+                refund_arn,
+                json.dumps(refund_splits),
+                created_by,
+            ),
+        )
+
+        reconciled_refund_ids.append(
+            refund_identifier
+        )
+
+    cursor.execute(
+        """
+        SELECT
+            COALESCE(SUM(amount), 0) AS refunded
+        FROM marketplace_refunds
+        WHERE payment_id = %s
+          AND status = 'PROCESSED'
+        """,
+        (payment["id"],),
+    )
+
+    total_refunded = float(
+        cursor.fetchone()["refunded"] or 0
+    )
+
+    fully_refunded = (
+        total_refunded
+        >= float(payment["amount"]) - 0.0001
+    )
+
+    if fully_refunded:
+        # Prefer the newest processed local refund row for the
+        # inventory-restored marker. If none exists, finalization
+        # still remains idempotent at the payment/order level.
+        cursor.execute(
+            """
+            SELECT id
+            FROM marketplace_refunds
+            WHERE payment_id = %s
+              AND status = 'PROCESSED'
+            ORDER BY id DESC
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (payment["id"],),
+        )
+        latest_refund = cursor.fetchone()
+
+        _finalize_fully_refunded_payment(
+            cursor,
+            payment,
+            latest_refund["id"]
+            if latest_refund
+            else None,
+        )
+
+    return {
+        "total_refunded": total_refunded,
+        "fully_refunded": fully_refunded,
+        "reconciled_refund_ids": reconciled_refund_ids,
+    }
+
+
+# ============================================================
 # REFUND PAYMENT
 # ============================================================
 
@@ -1243,6 +1610,47 @@ def refund_payment(
             )
 
         # ========================================================
+        # CASHFREE PREFLIGHT RECONCILIATION
+        #
+        # Cashfree can already contain a successful refund even when
+        # the local request previously failed/timed out. Always verify
+        # Cashfree before creating another online refund.
+        # ========================================================
+
+        reconciliation = None
+
+        if not is_cod:
+            reconciliation = _reconcile_cashfree_refunds(
+                cursor,
+                payment,
+                created_by,
+            )
+
+            if reconciliation["fully_refunded"]:
+                connection.commit()
+
+                reconciled_ids = reconciliation[
+                    "reconciled_refund_ids"
+                ]
+
+                return {
+                    "success": True,
+                    "refund_id": (
+                        reconciled_ids[-1]
+                        if reconciled_ids
+                        else None
+                    ),
+                    "refund_db_id": None,
+                    "amount": float(payment["amount"]),
+                    "reverse_all": reverse_all,
+                    "gateway": "CASHFREE",
+                    "refund_mode": "CASHFREE_EASY_SPLIT",
+                    "fully_refunded": True,
+                    "already_refunded": True,
+                    "refund_splits": [],
+                }
+
+        # ========================================================
         # PREVIOUS PROCESSED REFUNDS
         # ========================================================
 
@@ -1261,9 +1669,54 @@ def refund_payment(
             cursor.fetchone()["refunded"] or 0
         )
 
+        # ========================================================
+        # EXISTING PENDING REFUND
+        #
+        # A previous request may already have created a local refund
+        # intent and committed it before calling Cashfree. Do not create
+        # another refund while that one is awaiting confirmation.
+        # ========================================================
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                amount,
+                status
+            FROM marketplace_refunds
+            WHERE payment_id = %s
+              AND status = 'PENDING'
+            ORDER BY id DESC
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (payment_db_id,),
+        )
+
+        pending_refund = cursor.fetchone()
+
+        if pending_refund:
+            raise ConflictError(
+                "A Cashfree refund is already being processed "
+                f"for this payment (refund #{pending_refund['id']}). "
+                "Wait for the refund status to be confirmed."
+            )
+
+        remaining_refundable = round(
+            float(payment["amount"]) - refunded,
+            2,
+        )
+
+        if remaining_refundable <= 0:
+            # This should normally have been caught by Cashfree
+            # reconciliation, but keep a local safety guard as well.
+            raise ConflictError(
+                "This payment has already been fully refunded."
+            )
+
         if (
-            refunded + refund_amount
-            > float(payment["amount"]) + 0.0001
+            refund_amount
+            > remaining_refundable + 0.0001
         ):
             raise ConflictError(
                 "Refund amount exceeds the remaining refundable amount"
@@ -1665,58 +2118,10 @@ def refund_payment(
             # Partial refunds must not restore the entire order
             # inventory or mark the payment/order as fully refunded.
             if fully_refunded:
-                restore_order_inventory(
-                    payment["order_id"],
+                _finalize_fully_refunded_payment(
                     cursor,
-                )
-
-                cursor.execute(
-                    """
-                    UPDATE marketplace_refunds
-                    SET inventory_restored = TRUE
-                    WHERE id = %s
-                    """,
-                    (refund_db_id,),
-                )
-
-                cursor.execute(
-                    """
-                    UPDATE marketplace_payments
-                    SET
-                        status = 'REFUNDED',
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = %s
-                      AND status = 'PAID'
-                    """,
-                    (payment_db_id,),
-                )
-
-                cursor.execute(
-                    """
-                    UPDATE marketplace_seller_payout_transactions
-                    SET
-                        status = 'REFUNDED',
-                        failure_reason = %s,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE order_id = %s
-                      AND status <> 'REVERSED'
-                    """,
-                    (
-                        "Marketplace refund fully processed",
-                        payment["order_id"],
-                    ),
-                )
-
-                cursor.execute(
-                    """
-                    UPDATE marketplace_orders
-                    SET
-                        status = 'REFUNDED',
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = %s
-                      AND status NOT IN ('CANCELLED', 'REFUNDED')
-                    """,
-                    (payment["order_id"],),
+                    payment,
+                    refund_db_id,
                 )
 
         connection.commit()
