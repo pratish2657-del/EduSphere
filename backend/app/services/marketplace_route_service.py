@@ -664,7 +664,7 @@ def list_payouts(
                         SELECT 1
                         FROM marketplace_payout_reversals r
                         WHERE r.payout_transaction_id = pt.id
-                          AND r.status = 'PENDING'
+                          AND r.status IN ('PENDING', 'PROCESSED')
                     )
 
                     THEN 'REVERSE'
@@ -823,10 +823,13 @@ def reverse_payout(
 
         cursor.execute(
             """
-            SELECT id
+            SELECT
+                id,
+                status,
+                cashfree_transfer_id
             FROM marketplace_payout_reversals
             WHERE payout_transaction_id = %s
-              AND status = 'PENDING'
+              AND status IN ('PENDING', 'PROCESSED')
             ORDER BY id DESC
             LIMIT 1
             FOR UPDATE
@@ -834,11 +837,11 @@ def reverse_payout(
             (payout_transaction_id,),
         )
 
-        pending_reversal = cursor.fetchone()
+        active_reversal = cursor.fetchone()
 
-        if pending_reversal:
+        if active_reversal:
             raise ConflictError(
-                "A reversal is already pending for this payout"
+                "A reversal has already been submitted for this payout"
             )
 
         requested = round(
