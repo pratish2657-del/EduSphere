@@ -219,6 +219,14 @@ async def cashfree_webhook(request: Request):
         )
 
     except BadRequestError as error:
+        print(
+            "CASHFREE WEBHOOK 400 DEBUG:",
+            {
+                "error": str(error),
+                "error_type": type(error).__name__,
+            },
+            flush=True,
+        )
         raise HTTPException(
             status_code=400,
             detail=str(error),
@@ -235,7 +243,6 @@ async def cashfree_webhook(request: Request):
             status_code=409,
             detail=str(error),
         ) from error
-
 
 
 
