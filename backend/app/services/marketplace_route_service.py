@@ -855,6 +855,12 @@ def reverse_payout(
 
         # ========================================================
         # REVERSAL RECORD
+        #
+        # Cashfree vendor-balance transfers are asynchronous.
+        # A transfer ID means the reversal request was accepted;
+        # it does NOT prove that the reversal has completed.
+        #
+        # Keep the original payout settlement state untouched.
         # ========================================================
 
         cursor.execute(
@@ -864,9 +870,9 @@ def reverse_payout(
                     payout_transaction_id,
                     amount,
                     cashfree_transfer_id,
+                    cashfree_reversal_status,
                     status,
-                    created_by,
-                    processed_at
+                    created_by
                 )
 
             VALUES
@@ -874,9 +880,9 @@ def reverse_payout(
                     %s,
                     %s,
                     %s,
-                    'PROCESSED',
-                    %s,
-                    CURRENT_TIMESTAMP
+                    'PENDING',
+                    'PENDING',
+                    %s
                 )
             """,
             (
@@ -886,6 +892,16 @@ def reverse_payout(
                 created_by,
             ),
         )
+
+        connection.commit()
+
+        return {
+            "success": True,
+            "transfer_id": transfer_id,
+            "amount": requested,
+            "reversal_status": "PENDING",
+        }
+        
 
         # ========================================================
         # UPDATE PAYOUT
