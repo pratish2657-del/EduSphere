@@ -75,6 +75,15 @@ type CartResponse = {
   total: number | string;
 };
 
+type MarketplaceDigitalFile = {
+  attachment_id: number;
+  product_id: number;
+  product_name: string;
+  file_name: string;
+  file_type: string | null;
+  file_size: number | null;
+};
+
 type MarketplaceOrder = {
   order_id: number;
   institution_id: number;
@@ -82,6 +91,10 @@ type MarketplaceOrder = {
   status: string;
   created_at: string;
   updated_at: string;
+  payment_method?: string | null;
+  payment_status?: string | null;
+  shipping_address?: string | null;
+  digital_files?: MarketplaceDigitalFile[];
 };
 
 type OrdersResponse = {
@@ -644,16 +657,98 @@ export default function AdminMarketplace() {
             </div>
           ) : (
             <div className="admin-marketplace-order-list">
-              {orders.orders.map((order) => (
-                <div className="admin-marketplace-order" key={order.order_id}>
-                  <div>
-                    <span>ORDER #{order.order_id}</span>
-                    <strong>{money(order.total_amount)}</strong>
-                    <small>{dateTime(order.created_at)}</small>
+              {orders.orders.map((order) => {
+                const digitalFiles = order.digital_files || [];
+                const canDownload = ["CONFIRMED", "PROCESSING", "COMPLETED"].includes(
+                  String(order.status || "").toUpperCase()
+                );
+
+                return (
+                  <div className="admin-marketplace-order" key={order.order_id}>
+                    <div>
+                      <span>ORDER #{order.order_id}</span>
+                      <strong>{money(order.total_amount)}</strong>
+                      <small>
+                        {dateTime(order.created_at)}
+                        {order.payment_method
+                          ? ` · Payment: ${order.payment_method}`
+                          : ""}
+                      </small>
+
+                      {canDownload && digitalFiles.length > 0 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 8,
+                            marginTop: 10,
+                          }}
+                        >
+                          <span
+                            style={{
+                              color: "#a5b4fc",
+                              fontSize: 11,
+                              fontWeight: 800,
+                              letterSpacing: "0.08em",
+                            }}
+                          >
+                            DIGITAL FILES — READY TO DOWNLOAD
+                          </span>
+
+                          {digitalFiles.map((file) => (
+                            <a
+                              key={file.attachment_id}
+                              href={`${API_BASE_URL}/marketplace/attachments/${file.attachment_id}/download`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 8,
+                                width: "fit-content",
+                                maxWidth: "100%",
+                                border: "1px solid #334155",
+                                borderRadius: 9,
+                                padding: "8px 11px",
+                                background: "#0f172a",
+                                color: "#e2e8f0",
+                                textDecoration: "none",
+                                fontSize: 12,
+                                fontWeight: 700,
+                              }}
+                            >
+                              <Download size={14} />
+                              <span
+                                style={{
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                Download {file.file_name}
+                              </span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+
+                      {canDownload && digitalFiles.length === 0 && (
+                        <span
+                          style={{
+                            display: "block",
+                            marginTop: 10,
+                            color: "#94a3b8",
+                            fontSize: 11,
+                          }}
+                        >
+                          Digital file is not available yet.
+                        </span>
+                      )}
+                    </div>
+                    <b>{order.status}</b>
                   </div>
-                  <b>{order.status}</b>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

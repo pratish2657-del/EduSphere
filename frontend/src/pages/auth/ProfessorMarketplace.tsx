@@ -450,15 +450,51 @@ export default function ProfessorMarketplace() {
       // Cashfree checkout can close before the server has finalized the order.
       // The backend remains authoritative; the buyer can refresh orders if needed.
       try {
-        await apiGet("/marketplace/payments/verify", {
+        const verifyData = await apiGet<{
+          status?: string;
+          gateway_status?: string;
+          message?: string;
+        }>("/marketplace/payments/verify", {
           method: "POST",
           body: JSON.stringify({
             order_id: orderId,
             gateway_order_id: payment.gateway_order_id,
           }),
         });
-        setMarketplaceNotice(`Payment verification completed. Order #${orderId} is confirmed.`);
-        await Promise.all([loadMarketplaceCart(), loadMarketplaceOrders()]);
+
+        const verificationStatus = String(
+          verifyData?.status || ""
+        ).toUpperCase();
+        const gatewayStatus = String(
+          verifyData?.gateway_status || ""
+        ).toUpperCase();
+
+        if (
+          verificationStatus === "PAID" ||
+          verificationStatus === "SUCCESS"
+        ) {
+          setMarketplaceNotice(
+            `Payment verification completed. Order #${orderId} is confirmed.`
+          );
+          await Promise.all([
+            loadMarketplaceCart(),
+            loadMarketplaceOrders(),
+          ]);
+        } else if (
+          verificationStatus === "FAILED" ||
+          gatewayStatus === "FAILED"
+        ) {
+          setMarketplaceNotice(
+            `Payment failed. Order #${orderId} remains pending. You can retry the payment.`
+          );
+          await loadMarketplaceOrders();
+        } else {
+          setMarketplaceNotice(
+            verifyData?.message ||
+              `Payment is currently ${verificationStatus || "pending"}. Order #${orderId} remains pending.`
+          );
+          await loadMarketplaceOrders();
+        }
       } catch (err) {
         setMarketplaceNotice(
           err instanceof Error
