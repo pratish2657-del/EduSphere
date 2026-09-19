@@ -660,6 +660,13 @@ def list_payouts(
 
                     AND pt.cashfree_split_status = 'CREATED'
 
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM marketplace_payout_reversals r
+                        WHERE r.payout_transaction_id = pt.id
+                          AND r.status = 'PENDING'
+                    )
+
                     THEN 'REVERSE'
 
 
@@ -810,6 +817,30 @@ def reverse_payout(
                 "payouts can be reversed"
             )
 
+        # ========================================================
+        # DUPLICATE REVERSAL PROTECTION
+        # ========================================================
+
+        cursor.execute(
+            """
+            SELECT id
+            FROM marketplace_payout_reversals
+            WHERE payout_transaction_id = %s
+              AND status = 'PENDING'
+            ORDER BY id DESC
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (payout_transaction_id,),
+        )
+
+        pending_reversal = cursor.fetchone()
+
+        if pending_reversal:
+            raise ConflictError(
+                "A reversal is already pending for this payout"
+            )
+
         requested = round(
             (
                 amount
@@ -902,35 +933,6 @@ def reverse_payout(
             "reversal_status": "PENDING",
         }
         
-
-        # ========================================================
-        # UPDATE PAYOUT
-        # ========================================================
-
-        cursor.execute(
-            """
-            UPDATE marketplace_seller_payout_transactions
-
-            SET
-                status = 'REVERSED',
-                cashfree_transfer_id = %s,
-                failure_reason = NULL
-
-            WHERE id = %s
-            """,
-            (
-                transfer_id,
-                payout_transaction_id,
-            ),
-        )
-
-        connection.commit()
-
-        return {
-            "success": True,
-            "transfer_id": transfer_id,
-            "amount": requested,
-        }
 
     except Exception:
         connection.rollback()
