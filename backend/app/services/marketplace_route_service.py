@@ -1278,7 +1278,6 @@ def refund_payment(
             cashfree_refund_arn = None
             cashfree_refund_splits = []
             status = "PROCESSED"
-            processed_at = "CURRENT_TIMESTAMP"
 
             cursor.execute(
                 """
@@ -1381,6 +1380,7 @@ def refund_payment(
                         vendor_id = str(
                             row["cashfree_vendor_id"]
                         )
+
                         seller_amount = float(
                             row.get("seller_amount") or 0
                         )
@@ -1428,12 +1428,14 @@ def refund_payment(
             # IMPORTANT:
             #
             # Create the local refund intent BEFORE calling
-            # Cashfree. Store the merchant refund ID temporarily
-            # in cashfree_refund_id so a webhook that arrives during
+            # Cashfree.
+            #
+            # The merchant refund ID is temporarily stored in
+            # cashfree_refund_id so a webhook arriving during
             # the API call can locate this exact refund.
             #
-            # The field is replaced with Cashfree's cf_refund_id
-            # immediately after the API response.
+            # It is replaced with Cashfree's actual cf_refund_id
+            # when Cashfree returns one.
             # ----------------------------------------------------
 
             cursor.execute(
@@ -1481,8 +1483,8 @@ def refund_payment(
 
             refund_db_id = cursor.lastrowid
 
-            # Make the refund intent visible before the external API
-            # call so the webhook cannot outrun the local record.
+            # Make the refund intent visible before the external
+            # Cashfree API call so the webhook cannot outrun it.
             connection.commit()
 
             try:
@@ -1493,6 +1495,7 @@ def refund_payment(
                     reason,
                     refund_splits=refund_splits,
                 )
+
             except Exception as exc:
                 cursor.execute(
                     """
@@ -1508,8 +1511,13 @@ def refund_payment(
                         refund_db_id,
                     ),
                 )
+
                 connection.commit()
                 raise
+
+            # ----------------------------------------------------
+            # NORMALIZE CASHFREE RESPONSE
+            # ----------------------------------------------------
 
             first = (
                 payload[0]
@@ -1522,11 +1530,25 @@ def refund_payment(
                     "Cashfree returned an invalid refund response"
                 )
 
-            cashfree_refund_id = str(
-                first.get("cf_refund_id")
-                or first.get("refund_id")
-                or refund_id
+            # ----------------------------------------------------
+            # CASHFREE REFUND ID
+            #
+            # cf_refund_id = Cashfree's actual refund ID
+            # refund_id     = EduSphere merchant refund ID
+            #
+            # Prefer Cashfree's real ID whenever available.
+            # ----------------------------------------------------
+
+            cashfree_refund_id = first.get(
+                "cf_refund_id"
             )
+
+            if not cashfree_refund_id:
+                cashfree_refund_id = refund_id
+            else:
+                cashfree_refund_id = str(
+                    cashfree_refund_id
+                )
 
             cashfree_refund_arn = first.get(
                 "refund_arn"
@@ -1536,6 +1558,10 @@ def refund_payment(
                 first.get("refund_splits")
                 or refund_splits
             )
+
+            # ----------------------------------------------------
+            # CASHFREE REFUND STATUS
+            # ----------------------------------------------------
 
             gateway_status = str(
                 first.get("refund_status")
@@ -1554,13 +1580,24 @@ def refund_payment(
                     f"Cashfree refund failed: {first}"
                 )
 
+            # ----------------------------------------------------
+            # IMPORTANT:
+            #
+            # The refund creation API response is not treated as
+            # the final refund state for FAILED/CANCELLED.
+            #
+            # Cashfree can accept/process the refund asynchronously.
+            # Final status should come from the Cashfree webhook or
+            # reconciliation.
+            # ----------------------------------------------------
+
             status = {
                 "SUCCESS": "PROCESSED",
                 "PROCESSED": "PROCESSED",
                 "PENDING": "PENDING",
                 "ONHOLD": "PENDING",
-                "FAILED": "FAILED",
-                "CANCELLED": "FAILED",
+                "FAILED": "PENDING",
+                "CANCELLED": "PENDING",
             }.get(
                 gateway_status,
                 "PENDING",
