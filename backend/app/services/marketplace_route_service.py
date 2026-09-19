@@ -1456,6 +1456,37 @@ def _reconcile_cashfree_refunds(
             local_refund = None
 
         if local_refund:
+            # The database has a UNIQUE constraint on cashfree_refund_id.
+            # Therefore duplicates must be removed BEFORE changing the
+            # selected local row to the canonical Cashfree refund ID.
+            # Otherwise updating #9 from `1319877536` to
+            # `refund_1319877536` collides with duplicate row #10.
+            #
+            # Cashfree may represent the same refund as both IDs; they are
+            # one provider refund, not two refunds. Keep the row selected
+            # for reconciliation and remove other equivalent local rows.
+            if refund_id_variants:
+                placeholders = ", ".join(
+                    ["%s"] * len(refund_id_variants)
+                )
+
+                cursor.execute(
+                    f"""
+                    DELETE FROM marketplace_refunds
+                    WHERE payment_id = %s
+                      AND id <> %s
+                      AND ABS(amount - %s) < 0.0001
+                      AND cashfree_refund_id IN ({placeholders})
+                    """,
+                    [
+                        payment["id"],
+                        local_refund["id"],
+                        refund_amount,
+                        *refund_id_variants,
+                    ],
+                )
+
+            # Now it is safe to assign the canonical Cashfree refund ID.
             cursor.execute(
                 """
                 UPDATE marketplace_refunds
@@ -1481,37 +1512,6 @@ def _reconcile_cashfree_refunds(
                     local_refund["id"],
                 ),
             )
-
-            # Remove any other local row that represents the same
-            # Cashfree refund. Cashfree may expose the same refund as
-            # both `1319877536` and `refund_1319877536`; those are one
-            # provider refund, not two refunds.
-            #
-            # Keep the row we just reconciled and delete every older
-            # equivalent local duplicate. This makes the admin refund
-            # list show exactly one row for one real Cashfree refund and
-            # also prevents duplicate rows from affecting future refund
-            # operations.
-            if refund_id_variants:
-                placeholders = ", ".join(
-                    ["%s"] * len(refund_id_variants)
-                )
-
-                cursor.execute(
-                    f"""
-                    DELETE FROM marketplace_refunds
-                    WHERE payment_id = %s
-                      AND id <> %s
-                      AND ABS(amount - %s) < 0.0001
-                      AND cashfree_refund_id IN ({placeholders})
-                    """,
-                    [
-                        payment["id"],
-                        local_refund["id"],
-                        refund_amount,
-                        *refund_id_variants,
-                    ],
-                )
 
             reconciled_refund_ids.append(
                 refund_identifier
