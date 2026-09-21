@@ -1550,6 +1550,30 @@ def _reconcile_cashfree_refunds(
                 ),
             )
 
+            # Synchronize a post-settlement payout adjustment when the
+            # processed Cashfree refund is reconciled.
+            cursor.execute(
+                """
+                UPDATE marketplace_payout_reversals
+                SET
+                    cashfree_reversal_status = 'PROCESSED',
+                    status = 'PROCESSED',
+                    processed_at = COALESCE(
+                        processed_at,
+                        CURRENT_TIMESTAMP
+                    )
+                WHERE cashfree_refund_id IN (%s, %s)
+                """,
+                (
+                    str(provider_refund_id)
+                    if provider_refund_id
+                    else "",
+                    str(merchant_refund_id)
+                    if merchant_refund_id
+                    else "",
+                ),
+            )
+
             reconciled_refund_ids.append(
                 refund_identifier
             )
@@ -1597,6 +1621,23 @@ def _reconcile_cashfree_refunds(
                 json.dumps(refund_splits),
                 created_by,
             ),
+        )
+
+        # Synchronize a post-settlement payout adjustment when a processed
+        # Cashfree refund is discovered and a local reversal row exists.
+        cursor.execute(
+            """
+            UPDATE marketplace_payout_reversals
+            SET
+                cashfree_reversal_status = 'PROCESSED',
+                status = 'PROCESSED',
+                processed_at = COALESCE(
+                    processed_at,
+                    CURRENT_TIMESTAMP
+                )
+            WHERE cashfree_refund_id = %s
+            """,
+            (str(refund_identifier),),
         )
 
         reconciled_refund_ids.append(
