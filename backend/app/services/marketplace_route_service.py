@@ -1647,6 +1647,33 @@ def _reconcile_cashfree_refunds(
                 ),
             ),
         )
+        
+        # Sync payout reversal linked to this refund.
+        # Cashfree may return "refund_1319880442" while the
+        # payout reversal stores "1319880442".
+        normalized_refund_id = str(refund_identifier)
+
+        if normalized_refund_id.startswith("refund_"):
+            normalized_refund_id = normalized_refund_id[len("refund_"):]
+
+        cursor.execute(
+            """
+            UPDATE marketplace_payout_reversals
+            SET
+                cashfree_reversal_status = 'PROCESSED',
+                status = 'PROCESSED',
+                processed_at = COALESCE(
+                    processed_at,
+                    CURRENT_TIMESTAMP
+                )
+            WHERE cashfree_refund_id IN (%s, %s)
+                AND status = 'PENDING'
+            """,
+            (
+                str(refund_identifier),
+                normalized_refund_id,
+            ),
+        )
 
         reconciled_refund_ids.append(
             refund_identifier
