@@ -512,12 +512,22 @@ function LandingPage() {
         <p className="footer-description">
           One intelligent sphere connecting students, professors,
           administrators and academic resources.
-          <br/>
-          For Marketplace, EduSphere charge a 5% commission on each transaction.
-          <br/>
-          For any queries, please contact us at 
-          <br/>
-          support.edusphere.management@gmail.com 
+          <br />
+          For Marketplace, EduSphere charges a 5% commission on each transaction.
+          <br />
+          For any queries, please contact us at
+          <br />
+          support.edusphere.management@gmail.com
+          <br />
+          <br />
+
+          <strong>Legal & Contact Information</strong>
+          <br />
+          Legal Name: PRATISH KUMAR AGARWAL
+          <br />
+          Email: pratish2657@gmail.com
+          <br />
+          Phone: +91 8910161882
         </p>
 
         <div className="footer-links">
