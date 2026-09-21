@@ -516,6 +516,8 @@ function LandingPage() {
           For Marketplace, EduSphere charge a 5% commission on each transaction.
           <br/>
           For any queries, please contact us at 
+          <br/>
+          support.edusphere.management@gmail.com 
         </p>
 
         <div className="footer-links">
@@ -530,6 +532,13 @@ function LandingPage() {
           <button onClick={() => scrollToSection("about")}>
             About
           </button>
+          <a
+            href="https://pratish-portfolio-theta.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            About Creator
+          </a>
         </div>
       </div>
 

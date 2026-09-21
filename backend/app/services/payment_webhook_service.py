@@ -761,6 +761,42 @@ def _handle_refund_status_webhook(
                 refund["id"],
             ),
         )
+        
+        # ========================================================
+        # Synchronize post-settlement payout adjustment/reversal
+        # ========================================================
+        # A payout adjustment is implemented as a Cashfree refund
+        # split directed to the original vendor. Cashfree can mark
+        # the refund successful after the payout has already settled.
+        #
+        # Keep marketplace_payout_reversals synchronized using the
+        # same Cashfree refund ID. The original payout remains
+        # SETTLED because this is a post-settlement refund adjustment.
+        # ========================================================
+
+        cursor.execute(
+            """
+            UPDATE marketplace_payout_reversals
+            SET
+                cashfree_reversal_status = %s,
+                status = %s,
+                processed_at = CASE
+                    WHEN %s = 'PROCESSED'
+                    THEN COALESCE(
+                        processed_at,
+                        CURRENT_TIMESTAMP
+                    )
+                    ELSE processed_at
+                END
+            WHERE cashfree_refund_id = %s
+            """,
+            (
+                local_status,
+                local_status,
+                local_status,
+                str(cf_refund_id),
+            ),
+        )
 
         # ========================================================
         # 5. Full-refund finalization
