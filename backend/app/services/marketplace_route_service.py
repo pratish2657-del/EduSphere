@@ -1240,6 +1240,74 @@ def _cashfree_refund_id_variants(value: Any) -> list[str]:
 
 
 
+def _sync_payout_reversal_for_refund(
+    cursor,
+    refund_db_id: int,
+    refund_identifier: Any = None,
+) -> None:
+    """
+    Synchronize a local post-settlement payout reversal after its
+    Cashfree refund has been confirmed as PROCESSED.
+
+    Cashfree may represent the same refund using either:
+        1319880442
+        refund_1319880442
+
+    The local refund row and payout-reversal row can therefore contain
+    different representations of the same Cashfree refund.
+    """
+    cursor.execute(
+        """
+        SELECT
+            cashfree_refund_id,
+            status
+        FROM marketplace_refunds
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (refund_db_id,),
+    )
+
+    local_refund = cursor.fetchone()
+
+    if not local_refund:
+        return
+
+    if str(local_refund.get("status") or "").upper() != "PROCESSED":
+        return
+
+    refund_id_variants = _cashfree_refund_id_variants(
+        local_refund.get("cashfree_refund_id")
+    )
+    refund_id_variants.extend(
+        _cashfree_refund_id_variants(refund_identifier)
+    )
+    refund_id_variants = list(dict.fromkeys(refund_id_variants))
+
+    if not refund_id_variants:
+        return
+
+    placeholders = ", ".join(
+        ["%s"] * len(refund_id_variants)
+    )
+
+    cursor.execute(
+        f"""
+        UPDATE marketplace_payout_reversals
+        SET
+            cashfree_reversal_status = 'PROCESSED',
+            status = 'PROCESSED',
+            processed_at = COALESCE(
+                processed_at,
+                CURRENT_TIMESTAMP
+            )
+        WHERE cashfree_refund_id IN ({placeholders})
+          AND status = 'PENDING'
+        """,
+        refund_id_variants,
+    )
+
+
 def _finalize_fully_refunded_payment(
     cursor,
     payment: dict[str, Any],
@@ -1550,28 +1618,12 @@ def _reconcile_cashfree_refunds(
                 ),
             )
 
-            # Synchronize a post-settlement payout adjustment when the
-            # processed Cashfree refund is reconciled.
-            cursor.execute(
-                """
-                UPDATE marketplace_payout_reversals
-                SET
-                    cashfree_reversal_status = 'PROCESSED',
-                    status = 'PROCESSED',
-                    processed_at = COALESCE(
-                        processed_at,
-                        CURRENT_TIMESTAMP
-                    )
-                WHERE cashfree_refund_id IN (%s, %s)
-                """,
-                (
-                    str(provider_refund_id)
-                    if provider_refund_id
-                    else "",
-                    str(merchant_refund_id)
-                    if merchant_refund_id
-                    else "",
-                ),
+            # Synchronize any post-settlement payout adjustment linked
+            # to this processed local refund.
+            _sync_payout_reversal_for_refund(
+                cursor,
+                int(local_refund["id"]),
+                refund_identifier,
             )
 
             reconciled_refund_ids.append(
@@ -1624,55 +1676,12 @@ def _reconcile_cashfree_refunds(
         )
 
         # Synchronize any post-settlement payout adjustment linked
-        # to this reconciled local refund.
-        cursor.execute(
-            """
-            UPDATE marketplace_payout_reversals
-            SET
-                cashfree_reversal_status = 'PROCESSED',
-                status = 'PROCESSED',
-                processed_at = COALESCE(
-                    processed_at,
-                    CURRENT_TIMESTAMP
-                )
-            WHERE cashfree_refund_id = %s
-                OR cashfree_refund_id = %s
-            """,
-            (
-                str(refund_identifier),
-                (
-                    f"refund_{refund_identifier}"
-                    if not str(refund_identifier).startswith("refund_")
-                    else str(refund_identifier)[7:]
-                ),
-            ),
-        )
-        
-        # Sync payout reversal linked to this refund.
-        # Cashfree may return "refund_1319880442" while the
-        # payout reversal stores "1319880442".
-        normalized_refund_id = str(refund_identifier)
-
-        if normalized_refund_id.startswith("refund_"):
-            normalized_refund_id = normalized_refund_id[len("refund_"):]
-
-        cursor.execute(
-            """
-            UPDATE marketplace_payout_reversals
-            SET
-                cashfree_reversal_status = 'PROCESSED',
-                status = 'PROCESSED',
-                processed_at = COALESCE(
-                    processed_at,
-                    CURRENT_TIMESTAMP
-                )
-            WHERE cashfree_refund_id IN (%s, %s)
-                AND status = 'PENDING'
-            """,
-            (
-                str(refund_identifier),
-                normalized_refund_id,
-            ),
+        # to this newly reconciled local refund.
+        refund_db_id = cursor.lastrowid
+        _sync_payout_reversal_for_refund(
+            cursor,
+            int(refund_db_id),
+            refund_identifier,
         )
 
         reconciled_refund_ids.append(
