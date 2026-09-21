@@ -1623,8 +1623,8 @@ def _reconcile_cashfree_refunds(
             ),
         )
 
-        # Synchronize a post-settlement payout adjustment when a processed
-        # Cashfree refund is discovered and a local reversal row exists.
+        # Synchronize any post-settlement payout adjustment linked
+        # to this reconciled local refund.
         cursor.execute(
             """
             UPDATE marketplace_payout_reversals
@@ -1636,8 +1636,16 @@ def _reconcile_cashfree_refunds(
                     CURRENT_TIMESTAMP
                 )
             WHERE cashfree_refund_id = %s
+                OR cashfree_refund_id = %s
             """,
-            (str(refund_identifier),),
+            (
+                str(refund_identifier),
+                (
+                    f"refund_{refund_identifier}"
+                    if not str(refund_identifier).startswith("refund_")
+                    else str(refund_identifier)[7:]
+                ),
+            ),
         )
 
         reconciled_refund_ids.append(
