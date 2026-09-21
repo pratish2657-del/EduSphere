@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 
@@ -12,6 +13,7 @@ from app.core.exceptions import (
 # CASHFREE CONFIGURATION
 # ============================================================
 
+logger = logging.getLogger(__name__)
 CASHFREE_SANDBOX_URL = "https://sandbox.cashfree.com/pg"
 CASHFREE_PRODUCTION_URL = "https://api.cashfree.com/pg"
 
@@ -227,6 +229,12 @@ def create_gateway_order(
             error_data = response.json()
         except ValueError:
             error_data = response.text
+            
+        logger.error(
+            "Cashfree order creation failed | status=%s | response=%s",
+            response.status_code,
+            error_data,
+        )
 
         raise ServiceUnavailableError(
             f"Cashfree order creation failed: {error_data}"
