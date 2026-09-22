@@ -1,46 +1,146 @@
-from pydantic import BaseModel, Field
+from decimal import Decimal
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============================================================
-# CREATE PRODUCT
+# PRODUCT
 # ============================================================
 
 
 class MarketplaceProductCreate(BaseModel):
-    institution_id: int
+    model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(min_length=1, max_length=255)
+    institution_id: int = Field(gt=0)
 
-    description: str | None = Field(default=None, max_length=5000)
+    name: str = Field(
+        min_length=1,
+        max_length=255,
+    )
 
-    category: str = Field(min_length=1, max_length=100)
+    description: str | None = Field(
+        default=None,
+        max_length=5000,
+    )
 
-    product_type: str = Field(default="PHYSICAL", pattern="^(PHYSICAL|DIGITAL)$")
+    category: str | None = Field(
+        default=None,
+        max_length=100,
+    )
 
-    condition_type: str = Field(default="NEW", pattern="^(NEW|USED|DIGITAL)$")
+    product_type: Literal[
+        "PHYSICAL",
+        "DIGITAL",
+    ]
 
-    price: float = Field(ge=0)
+    condition_type: Literal[
+        "NEW",
+        "USED",
+        "DIGITAL",
+    ] = "NEW"
 
-    quantity: int = Field(ge=0)
+    price: Decimal = Field(
+        ge=0,
+        max_digits=12,
+        decimal_places=2,
+    )
 
-
-# ============================================================
-# UPDATE PRODUCT
-# ============================================================
+    quantity: int = Field(
+        default=0,
+        ge=0,
+    )
 
 
 class MarketplaceProductUpdate(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
+    model_config = ConfigDict(extra="forbid")
 
-    description: str | None = Field(default=None, max_length=5000)
+    name: str = Field(
+        min_length=1,
+        max_length=255,
+    )
 
-    category: str = Field(min_length=1, max_length=100)
+    description: str | None = Field(
+        default=None,
+        max_length=5000,
+    )
 
-    product_type: str = Field(pattern="^(PHYSICAL|DIGITAL)$")
+    category: str | None = Field(
+        default=None,
+        max_length=100,
+    )
 
-    condition_type: str = Field(pattern="^(NEW|USED|DIGITAL)$")
+    product_type: Literal[
+        "PHYSICAL",
+        "DIGITAL",
+    ]
 
-    price: float = Field(ge=0)
+    condition_type: Literal[
+        "NEW",
+        "USED",
+        "DIGITAL",
+    ]
 
-    quantity: int = Field(ge=0)
+    price: Decimal = Field(
+        ge=0,
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    quantity: int = Field(
+        ge=0,
+    )
 
     is_active: bool = True
+
+
+# ============================================================
+# CART
+# ============================================================
+
+
+class CartItemAdd(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    product_id: int = Field(gt=0)
+
+    quantity: int = Field(
+        default=1,
+        ge=1,
+    )
+
+
+class CartItemUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    quantity: int = Field(
+        ge=1,
+    )
+
+
+# ============================================================
+# CHECKOUT
+# ============================================================
+
+
+class MarketplaceCheckoutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    institution_id: int = Field(gt=0)
+
+    shipping_address: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+
+# ============================================================
+# CHECKOUT PRICE RESPONSE
+# ============================================================
+
+
+class MarketplacePriceBreakdown(BaseModel):
+    subtotal_amount: Decimal
+    tax_percent: Decimal
+    tax_amount: Decimal
+    total_amount: Decimal
+    currency: str = "INR"

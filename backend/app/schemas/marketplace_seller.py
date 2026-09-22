@@ -1,10 +1,54 @@
-from typing import Literal
+from pydantic import BaseModel, ConfigDict, Field
 
-from pydantic import BaseModel, Field
+# ============================================================
+# SELLER UPI DETAILS
+# ============================================================
 
 
-class SellerPayoutDetails(BaseModel):
-    enabled: bool = False
-    preferred_upi_app: Literal["GOOGLE_PAY", "PHONEPE", "PAYTM", "BHIM", "OTHER"] | None = None
-    upi_id: str | None = Field(default=None, max_length=255)
-    account_holder_name: str | None = Field(default=None, max_length=255)
+class MarketplaceSellerCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+
+    phone: str = Field(
+        min_length=7,
+        max_length=30,
+    )
+
+    upi_id: str = Field(
+        min_length=3,
+        max_length=255,
+    )
+
+
+class MarketplaceSellerUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+
+    phone: str = Field(
+        min_length=7,
+        max_length=30,
+    )
+
+    upi_id: str = Field(
+        min_length=3,
+        max_length=255,
+    )
+
+
+class MarketplaceSellerResponse(BaseModel):
+    id: int
+    user_id: int
+
+    name: str
+    phone: str
+    upi_id: str
+
+    status: str

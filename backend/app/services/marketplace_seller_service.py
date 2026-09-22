@@ -1,76 +1,560 @@
-from app.core.exceptions import BadRequestError
+from __future__ import annotations
+
+from app.core.exceptions import (
+    BadRequestError,
+    ConflictError,
+    NotFoundError,
+)
 from app.database import get_connection
 
+# ============================================================
+# SELLER PROFILE
+# ============================================================
 
-def get_seller_payout(user_id):
+def create_seller(
+    user_id: int,
+    name: str,
+    phone: str,
+    upi_id: str,
+):
+    """
+    Create a marketplace seller profile.
+
+    This stores only the seller's direct UPI details.
+
+    No:
+    - payment gateway onboarding
+    - payout account
+    - split payment
+    - gateway seller ID
+    - settlement account
+    """
+    name = name.strip()
+    phone = phone.strip()
+    upi_id = upi_id.strip()
+
+    if not name:
+        raise BadRequestError("Seller name is required.")
+
+    if not phone:
+        raise BadRequestError("Seller phone number is required.")
+
+    if not upi_id:
+        raise BadRequestError("Seller UPI ID is required.")
+
     connection = get_connection()
+
     try:
-        cursor = connection.cursor()
-        cursor.execute("""
-            SELECT user_id, enabled, preferred_upi_app, upi_id,
-                   account_holder_name, payout_status,
-                   cashfree_vendor_id, cashfree_vendor_status,
-                   cashfree_schedule_option, bank_account_last4, bank_ifsc,
-                   created_at, updated_at
-            FROM marketplace_seller_payouts
+        cursor = connection.cursor(dictionary=True)
+
+        # ----------------------------------------------------
+        # Check existing seller
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                user_id,
+                name,
+                phone,
+                upi_id,
+                status,
+                created_at,
+                updated_at
+            FROM marketplace_sellers
             WHERE user_id = %s
-        """, (user_id,))
-        row = cursor.fetchone()
-        if not row:
-            return {
-                "user_id": user_id,
-                "enabled": False,
-                "preferred_upi_app": None,
-                "upi_id": None,
-                "account_holder_name": None,
-                "payout_status": "NOT_CONFIGURED",
-                "cashfree_vendor_id": None,
-                "cashfree_vendor_status": None,
-                "cashfree_schedule_option": None,
-            }
-        return row
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+
+        existing = cursor.fetchone()
+
+        if existing:
+            raise ConflictError(
+                "Seller profile already exists."
+            )
+
+        # ----------------------------------------------------
+        # Create seller
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            INSERT INTO marketplace_sellers (
+                user_id,
+                name,
+                phone,
+                upi_id,
+                status
+            )
+            VALUES (
+                %s,
+                %s,
+                %s,
+                %s,
+                'ACTIVE'
+            )
+            """,
+            (
+                user_id,
+                name,
+                phone,
+                upi_id,
+            ),
+        )
+
+        seller_id = cursor.lastrowid
+
+        connection.commit()
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                user_id,
+                name,
+                phone,
+                upi_id,
+                status,
+                created_at,
+                updated_at
+            FROM marketplace_sellers
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (seller_id,),
+        )
+
+        seller = cursor.fetchone()
+
+        return seller
+
+    except Exception:
+        connection.rollback()
+        raise
+
     finally:
         connection.close()
 
 
-def save_seller_payout(user_id, data):
-    if data.enabled:
-        if not data.preferred_upi_app:
-            raise BadRequestError("Please select your preferred UPI app")
-        if not data.upi_id or not data.upi_id.strip():
-            raise BadRequestError("Please enter your UPI ID")
-        if not data.account_holder_name or not data.account_holder_name.strip():
-            raise BadRequestError("Please enter the account holder name")
+# ============================================================
+# GET SELLER
+# ============================================================
+
+def get_seller(
+    user_id: int,
+):
+    """
+    Get the authenticated user's seller profile.
+    """
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                user_id,
+                name,
+                phone,
+                upi_id,
+                status,
+                created_at,
+                updated_at
+            FROM marketplace_sellers
+            WHERE user_id = %s
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+
+        seller = cursor.fetchone()
+
+        if not seller:
+            raise NotFoundError(
+                "Seller profile not found."
+            )
+
+        return seller
+
+    finally:
+        connection.close()
+
+
+def get_seller_by_id(
+    seller_id: int,
+):
+    """
+    Get a seller by marketplace seller ID.
+
+    Intended for internal marketplace operations.
+    """
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                user_id,
+                name,
+                phone,
+                upi_id,
+                status,
+                created_at,
+                updated_at
+            FROM marketplace_sellers
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (seller_id,),
+        )
+
+        seller = cursor.fetchone()
+
+        if not seller:
+            raise NotFoundError(
+                "Seller profile not found."
+            )
+
+        return seller
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# UPDATE SELLER
+# ============================================================
+
+def update_seller(
+    user_id: int,
+    name: str,
+    phone: str,
+    upi_id: str,
+):
+    """
+    Update the authenticated user's seller profile.
+    """
+    name = name.strip()
+    phone = phone.strip()
+    upi_id = upi_id.strip()
+
+    if not name:
+        raise BadRequestError("Seller name is required.")
+
+    if not phone:
+        raise BadRequestError(
+            "Seller phone number is required."
+        )
+
+    if not upi_id:
+        raise BadRequestError(
+            "Seller UPI ID is required."
+        )
 
     connection = get_connection()
+
     try:
-        cursor = connection.cursor()
-        cursor.execute("""
-            INSERT INTO marketplace_seller_payouts
-                (user_id, enabled, preferred_upi_app, upi_id,
-                 account_holder_name, payout_status)
-            VALUES (%s, %s, %s, %s, %s, 'PENDING_VERIFICATION')
-            ON DUPLICATE KEY UPDATE
-                enabled = VALUES(enabled),
-                preferred_upi_app = VALUES(preferred_upi_app),
-                upi_id = VALUES(upi_id),
-                account_holder_name = VALUES(account_holder_name),
-                payout_status = CASE
-                    WHEN VALUES(enabled) = 0 THEN 'NOT_CONFIGURED'
-                    ELSE 'PENDING_VERIFICATION'
-                END,
-                updated_at = CURRENT_TIMESTAMP
-        """, (
-            user_id,
-            data.enabled,
-            data.preferred_upi_app,
-            data.upi_id.strip() if data.upi_id else None,
-            data.account_holder_name.strip() if data.account_holder_name else None,
-        ))
+        cursor = connection.cursor(dictionary=True)
+
+        # ----------------------------------------------------
+        # Check seller
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                user_id,
+                status
+            FROM marketplace_sellers
+            WHERE user_id = %s
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (user_id,),
+        )
+
+        seller = cursor.fetchone()
+
+        if not seller:
+            raise NotFoundError(
+                "Seller profile not found."
+            )
+
+        # ----------------------------------------------------
+        # Update
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            UPDATE marketplace_sellers
+            SET
+                name = %s,
+                phone = %s,
+                upi_id = %s
+            WHERE user_id = %s
+            """,
+            (
+                name,
+                phone,
+                upi_id,
+                user_id,
+            ),
+        )
+
         connection.commit()
-        return get_seller_payout(user_id)
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                user_id,
+                name,
+                phone,
+                upi_id,
+                status,
+                created_at,
+                updated_at
+            FROM marketplace_sellers
+            WHERE user_id = %s
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+
+        return cursor.fetchone()
+
     except Exception:
         connection.rollback()
         raise
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# ACTIVATE SELLER
+# ============================================================
+
+def activate_seller(
+    user_id: int,
+):
+    """
+    Activate the authenticated user's seller profile.
+    """
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                user_id,
+                name,
+                phone,
+                upi_id,
+                status
+            FROM marketplace_sellers
+            WHERE user_id = %s
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (user_id,),
+        )
+
+        seller = cursor.fetchone()
+
+        if not seller:
+            raise NotFoundError(
+                "Seller profile not found."
+            )
+
+        cursor.execute(
+            """
+            UPDATE marketplace_sellers
+            SET status = 'ACTIVE'
+            WHERE user_id = %s
+            """,
+            (user_id,),
+        )
+
+        connection.commit()
+
+        seller["status"] = "ACTIVE"
+
+        return seller
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# DEACTIVATE SELLER
+# ============================================================
+
+def deactivate_seller(
+    user_id: int,
+):
+    """
+    Deactivate the authenticated user's seller profile.
+
+    Existing products are not deleted.
+    """
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                user_id,
+                name,
+                phone,
+                upi_id,
+                status
+            FROM marketplace_sellers
+            WHERE user_id = %s
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (user_id,),
+        )
+
+        seller = cursor.fetchone()
+
+        if not seller:
+            raise NotFoundError(
+                "Seller profile not found."
+            )
+
+        # ----------------------------------------------------
+        # Do not deactivate if seller has reserved stock.
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS reserved_products
+            FROM marketplace_products
+            WHERE seller_id = %s
+              AND reserved_quantity > 0
+              AND is_active = TRUE
+            """,
+            (user_id,),
+        )
+
+        reserved = cursor.fetchone()
+
+        if reserved and reserved["reserved_products"] > 0:
+            raise ConflictError(
+                "Seller cannot be deactivated while products "
+                "have reserved inventory."
+            )
+
+        cursor.execute(
+            """
+            UPDATE marketplace_sellers
+            SET status = 'INACTIVE'
+            WHERE user_id = %s
+            """,
+            (user_id,),
+        )
+
+        connection.commit()
+
+        seller["status"] = "INACTIVE"
+
+        return seller
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# SELLER STATUS
+# ============================================================
+
+def is_active_seller(
+    user_id: int,
+) -> bool:
+    """
+    Check whether the user has an active seller profile.
+    """
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT 1
+            FROM marketplace_sellers
+            WHERE user_id = %s
+              AND status = 'ACTIVE'
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+
+        return cursor.fetchone() is not None
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# SELLER ID FOR USER
+# ============================================================
+
+def get_seller_id_for_user(
+    user_id: int,
+) -> int:
+    """
+    Return the marketplace seller ID belonging to a user.
+    """
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT id
+            FROM marketplace_sellers
+            WHERE user_id = %s
+              AND status = 'ACTIVE'
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+
+        row = cursor.fetchone()
+
+        if not row:
+            raise NotFoundError(
+                "Active seller profile not found."
+            )
+
+        return row[0]
+
     finally:
         connection.close()

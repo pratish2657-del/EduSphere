@@ -1,100 +1,203 @@
 from app.database import get_connection
 
+# ============================================================
+# FINALIZE INVENTORY
+#
+# Called ONLY after payment becomes PAID.
+#
+# reserved_quantity decreases
+# quantity decreases
+# ============================================================
 
-def finalize_order_inventory(order_id, cursor):
-    """Convert a pending reservation into a completed sale."""
-    cursor.execute("""
-        SELECT product_id, quantity
+
+def finalize_order_inventory(
+    order_id,
+    cursor,
+):
+    cursor.execute(
+        """
+        SELECT
+            product_id,
+            quantity
+
         FROM marketplace_order_items
+
         WHERE order_id = %s
+
         FOR UPDATE
-    """, (order_id,))
+        """,
+        (order_id,),
+    )
+
     items = cursor.fetchall()
+
     for item in items:
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE marketplace_products
+
             SET
                 quantity = quantity - %s,
-                reserved_quantity = reserved_quantity - %s
+                reserved_quantity =
+                    reserved_quantity - %s
+
             WHERE id = %s
+
               AND quantity >= %s
+
               AND reserved_quantity >= %s
-        """, (item['quantity'], item['quantity'], item['product_id'], item['quantity'], item['quantity']))
+            """,
+            (
+                item["quantity"],
+                item["quantity"],
+                item["product_id"],
+                item["quantity"],
+                item["quantity"],
+            ),
+        )
+
         if cursor.rowcount != 1:
             raise RuntimeError(
-                f"Inventory finalization failed for product {item['product_id']}"
+                "Inventory finalization failed for "
+                f"product {item['product_id']}"
             )
 
 
-def release_order_inventory(order_id, cursor):
-    """Release a pending reservation without changing physical stock."""
-    cursor.execute("""
-        SELECT product_id, quantity
+# ============================================================
+# RELEASE INVENTORY
+#
+# Used when a pending order expires or is cancelled.
+#
+# Physical quantity is NOT changed.
+# Only reservation is released.
+# ============================================================
+
+
+def release_order_inventory(
+    order_id,
+    cursor,
+):
+    cursor.execute(
+        """
+        SELECT
+            product_id,
+            quantity
+
         FROM marketplace_order_items
+
         WHERE order_id = %s
+
         FOR UPDATE
-    """, (order_id,))
+        """,
+        (order_id,),
+    )
+
     items = cursor.fetchall()
+
     for item in items:
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE marketplace_products
-            SET reserved_quantity = reserved_quantity - %s
+
+            SET reserved_quantity =
+                reserved_quantity - %s
+
             WHERE id = %s
+
               AND reserved_quantity >= %s
-        """, (item['quantity'], item['product_id'], item['quantity']))
+            """,
+            (
+                item["quantity"],
+                item["product_id"],
+                item["quantity"],
+            ),
+        )
+
         if cursor.rowcount != 1:
-            raise RuntimeError(f"Inventory release failed for product {item['product_id']}")
+            raise RuntimeError(
+                "Inventory release failed for "
+                f"product {item['product_id']}"
+            )
 
 
-def restore_order_inventory(order_id, cursor):
-    """Restore physical stock exactly once for a fully refunded order."""
-    cursor.execute("""
-        SELECT product_id, quantity
-        FROM marketplace_order_items
-        WHERE order_id = %s
-        FOR UPDATE
-    """, (order_id,))
-    items = cursor.fetchall()
-    for item in items:
-        cursor.execute("""
-            UPDATE marketplace_products
-            SET quantity = quantity + %s
-            WHERE id = %s
-        """, (item["quantity"], item["product_id"]))
+# ============================================================
+# EXPIRE PENDING ORDERS
+#
+# This releases stock reserved by abandoned checkouts.
+#
+# No gateway call.
+# ============================================================
 
 
 def expire_pending_orders():
-    """Release reservations for expired pending orders. Safe to run repeatedly."""
     connection = get_connection()
+
     try:
         cursor = connection.cursor()
-        cursor.execute("""
+
+        cursor.execute(
+            """
             SELECT id
+
             FROM marketplace_orders
+
             WHERE status = 'PENDING'
+
               AND expires_at IS NOT NULL
+
               AND expires_at <= CURRENT_TIMESTAMP
+
             FOR UPDATE
-        """)
+            """
+        )
+
         orders = cursor.fetchall()
+
         expired = []
+
         for order in orders:
-            release_order_inventory(order['id'], cursor)
-            cursor.execute("""
+            order_id = order["id"]
+
+            release_order_inventory(
+                order_id,
+                cursor,
+            )
+
+            cursor.execute(
+                """
                 UPDATE marketplace_payments
-                SET status = CASE WHEN status = 'PENDING' THEN 'FAILED' ELSE status END
-                WHERE order_id = %s AND status = 'PENDING'
-            """, (order['id'],))
-            cursor.execute("""
+
+                SET status = 'FAILED'
+
+                WHERE order_id = %s
+
+                  AND status = 'PENDING'
+                """,
+                (order_id,),
+            )
+
+            cursor.execute(
+                """
                 UPDATE marketplace_orders
+
                 SET status = 'CANCELLED'
-                WHERE id = %s AND status = 'PENDING'
-            """, (order['id'],))
-            expired.append(order['id'])
+
+                WHERE id = %s
+
+                  AND status = 'PENDING'
+                """,
+                (order_id,),
+            )
+
+            expired.append(order_id)
+
         connection.commit()
+
         return expired
+
     except Exception:
         connection.rollback()
         raise
+
     finally:
         connection.close()

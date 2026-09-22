@@ -1,156 +1,163 @@
-from decimal import Decimal
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from app.core.exceptions import (
     BadRequestError,
+    ConflictError,
     NotFoundError,
 )
 from app.database import get_connection
-from app.services.marketplace_inventory_service import finalize_order_inventory
+from app.schemas.marketplace import MarketplaceCheckoutRequest
 
 # ============================================================
-# INTERNAL — GET OR CREATE CART
+# CONFIG
 # ============================================================
 
+DEFAULT_TAX_PERCENT = Decimal("5.00")
+ORDER_EXPIRY_MINUTES = 15
 
-def _get_or_create_cart(cursor, buyer_id):
 
-    cursor.execute(
-        """
-        SELECT
-            id
-        FROM marketplace_carts
-        WHERE buyer_id = %s
-        """,
-        (buyer_id,),
+# ============================================================
+# HELPERS
+# ============================================================
+
+def _money(value: Decimal | float | str) -> Decimal:
+    """
+    Normalize monetary values to 2 decimal places.
+    """
+    return Decimal(str(value)).quantize(
+        Decimal("0.01"),
+        rounding=ROUND_HALF_UP,
     )
 
-    cart = cursor.fetchone()
 
-    if cart:
-        return cart["id"]
+def _get_tax_percent() -> Decimal:
+    """
+    Read marketplace tax percentage from environment.
 
-    cursor.execute(
-        """
-        INSERT INTO marketplace_carts (
-            buyer_id
-        )
-        VALUES (%s)
-        """,
-        (buyer_id,),
-    )
+    Falls back to 5% if the environment variable is missing
+    or invalid.
+    """
+    import os
 
-    return cursor.lastrowid
+    raw = os.getenv("MARKETPLACE_TAX_PERCENT")
+
+    if not raw:
+        return DEFAULT_TAX_PERCENT
+
+    try:
+        value = Decimal(raw)
+        if value < 0:
+            return DEFAULT_TAX_PERCENT
+        return value
+    except InvalidOperation:
+        return DEFAULT_TAX_PERCENT
 
 
 # ============================================================
-# GET CART
-# BUYER
+# CART
 # ============================================================
 
+def get_or_create_cart(user_id: int):
+    """
+    Get the user's marketplace cart.
 
-def get_cart(user_id):
-
+    Creates one when the user does not have a cart yet.
+    """
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
-
-        cart_id = _get_or_create_cart(cursor, user_id)
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
             SELECT
-                ci.id AS cart_item_id,
-                ci.product_id,
-                ci.quantity,
+                id,
+                user_id,
+                created_at,
+                updated_at
+            FROM marketplace_carts
+            WHERE user_id = %s
+            LIMIT 1
+            """,
+            (user_id,),
+        )
 
-                mp.seller_id,
-                seller.full_name AS seller_name,
+        cart = cursor.fetchone()
 
-                mp.name,
-                mp.description,
-                mp.category,
-                mp.product_type,
-                mp.condition_type,
-                mp.price,
-                (mp.quantity - mp.reserved_quantity) AS available_quantity,
-                mp.is_active,
+        if cart:
+            return cart
 
-                (
-                    mp.price * ci.quantity
-                ) AS subtotal
+        cursor.execute(
+            """
+            INSERT INTO marketplace_carts (user_id)
+            VALUES (%s)
+            """,
+            (user_id,),
+        )
 
-            FROM marketplace_cart_items ci
+        connection.commit()
 
-            INNER JOIN marketplace_products mp
-                ON ci.product_id = mp.id
+        cart_id = cursor.lastrowid
 
-            INNER JOIN users seller
-                ON mp.seller_id = seller.id
-
-            WHERE ci.cart_id = %s
-
-            ORDER BY ci.created_at DESC
+        cursor.execute(
+            """
+            SELECT
+                id,
+                user_id,
+                created_at,
+                updated_at
+            FROM marketplace_carts
+            WHERE id = %s
+            LIMIT 1
             """,
             (cart_id,),
         )
 
-        items = cursor.fetchall()
-
-        total = Decimal("0.00")
-
-        for item in items:
-            total += Decimal(str(item["subtotal"]))
-
-        return {
-            "cart_id": cart_id,
-            "count": len(items),
-            "items": items,
-            "total": total,
-        }
+        return cursor.fetchone()
 
     finally:
         connection.close()
 
 
-# ============================================================
-# ADD TO CART
-# BUYER
-# ============================================================
+def add_cart_item(
+    user_id: int,
+    product_id: int,
+    quantity: int = 1,
+):
+    """
+    Add a product to the user's cart.
 
-
-def add_to_cart(user_id, product_id, quantity):
-
+    If the product already exists in the cart, its quantity
+    is increased.
+    """
     if quantity < 1:
-        raise BadRequestError("Quantity must be at least 1")
+        raise BadRequestError("Quantity must be at least 1.")
 
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         # ----------------------------------------------------
-        # Get product
+        # Check product
         # ----------------------------------------------------
 
         cursor.execute(
             """
             SELECT
                 id,
-                seller_id,
                 institution_id,
                 name,
-                price,
-                quantity,
-                reserved_quantity,
                 product_type,
-                is_active
-
+                is_active,
+                quantity,
+                reserved_quantity
             FROM marketplace_products
-
             WHERE id = %s
-
-            FOR UPDATE
+            LIMIT 1
             """,
             (product_id,),
         )
@@ -158,35 +165,49 @@ def add_to_cart(user_id, product_id, quantity):
         product = cursor.fetchone()
 
         if not product:
-            raise NotFoundError("Marketplace product not found")
+            raise NotFoundError("Product not found.")
 
         if not product["is_active"]:
-            raise BadRequestError("This product is no longer available")
+            raise BadRequestError("This product is no longer available.")
+
+        available_quantity = (
+            product["quantity"] - product["reserved_quantity"]
+        )
+
+        if available_quantity < quantity:
+            raise ConflictError("Insufficient product quantity.")
 
         # ----------------------------------------------------
-        # Prevent buying own product
+        # Get/create cart
         # ----------------------------------------------------
 
-        if product["seller_id"] == user_id:
-            raise BadRequestError("You cannot purchase your own product")
+        cursor.execute(
+            """
+            SELECT id
+            FROM marketplace_carts
+            WHERE user_id = %s
+            LIMIT 1
+            """,
+            (user_id,),
+        )
 
-        # ----------------------------------------------------
-        # Check stock
-        # ----------------------------------------------------
+        cart = cursor.fetchone()
 
-        if (product["quantity"] - product["reserved_quantity"]) < quantity:
-            raise BadRequestError(
-                "Requested quantity is greater than available stock"
+        if cart:
+            cart_id = cart["id"]
+        else:
+            cursor.execute(
+                """
+                INSERT INTO marketplace_carts (user_id)
+                VALUES (%s)
+                """,
+                (user_id,),
             )
 
-        # ----------------------------------------------------
-        # Get cart
-        # ----------------------------------------------------
-
-        cart_id = _get_or_create_cart(cursor, user_id)
+            cart_id = cursor.lastrowid
 
         # ----------------------------------------------------
-        # Check existing cart item
+        # Check existing item
         # ----------------------------------------------------
 
         cursor.execute(
@@ -195,11 +216,9 @@ def add_to_cart(user_id, product_id, quantity):
                 id,
                 quantity
             FROM marketplace_cart_items
-
             WHERE cart_id = %s
               AND product_id = %s
-
-            FOR UPDATE
+            LIMIT 1
             """,
             (cart_id, product_id),
         )
@@ -209,22 +228,21 @@ def add_to_cart(user_id, product_id, quantity):
         if existing:
             new_quantity = existing["quantity"] + quantity
 
-            if new_quantity > (product["quantity"] - product["reserved_quantity"]):
-                raise BadRequestError(
-                    "Total requested quantity exceeds available stock"
+            if available_quantity < new_quantity:
+                raise ConflictError(
+                    "Requested quantity exceeds available stock."
                 )
 
             cursor.execute(
                 """
                 UPDATE marketplace_cart_items
-
-                SET
-                    quantity = %s
-
+                SET quantity = %s
                 WHERE id = %s
                 """,
                 (new_quantity, existing["id"]),
             )
+
+            item_id = existing["id"]
 
         else:
             cursor.execute(
@@ -234,20 +252,24 @@ def add_to_cart(user_id, product_id, quantity):
                     product_id,
                     quantity
                 )
-                VALUES (
-                    %s, %s, %s
-                )
+                VALUES (%s, %s, %s)
                 """,
                 (cart_id, product_id, quantity),
             )
 
+            item_id = cursor.lastrowid
+
         connection.commit()
 
         return {
-            "message": "Product added to cart",
+            "id": item_id,
             "cart_id": cart_id,
             "product_id": product_id,
-            "quantity_added": quantity,
+            "quantity": (
+                new_quantity
+                if existing
+                else quantity
+            ),
         }
 
     except Exception:
@@ -258,78 +280,72 @@ def add_to_cart(user_id, product_id, quantity):
         connection.close()
 
 
-# ============================================================
-# UPDATE CART ITEM
-# BUYER
-# ============================================================
-
-
-def update_cart_item(user_id, product_id, quantity):
-
+def update_cart_item(
+    user_id: int,
+    product_id: int,
+    quantity: int,
+):
+    """
+    Replace the quantity of an existing cart item.
+    """
     if quantity < 1:
-        raise BadRequestError("Quantity must be at least 1")
+        raise BadRequestError("Quantity must be at least 1.")
 
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
-
-        cart_id = _get_or_create_cart(cursor, user_id)
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
             SELECT
                 ci.id,
-                ci.quantity AS current_quantity,
-
-                (mp.quantity - mp.reserved_quantity) AS available_quantity,
-                mp.is_active,
-                mp.seller_id
-
+                ci.quantity,
+                p.quantity AS stock_quantity,
+                p.reserved_quantity,
+                p.is_active
             FROM marketplace_cart_items ci
-
-            INNER JOIN marketplace_products mp
-                ON ci.product_id = mp.id
-
-            WHERE ci.cart_id = %s
+            INNER JOIN marketplace_carts c
+                ON c.id = ci.cart_id
+            INNER JOIN marketplace_products p
+                ON p.id = ci.product_id
+            WHERE c.user_id = %s
               AND ci.product_id = %s
-
-            FOR UPDATE
+            LIMIT 1
             """,
-            (cart_id, product_id),
+            (user_id, product_id),
         )
 
         item = cursor.fetchone()
 
         if not item:
-            raise NotFoundError("Product is not in your cart")
+            raise NotFoundError("Cart item not found.")
 
         if not item["is_active"]:
-            raise BadRequestError("This product is no longer available")
+            raise BadRequestError("This product is no longer available.")
 
-        if item["seller_id"] == user_id:
-            raise BadRequestError("You cannot purchase your own product")
+        available_quantity = (
+            item["stock_quantity"] - item["reserved_quantity"]
+        )
 
-        if quantity > item["available_quantity"]:
-            raise BadRequestError("Requested quantity exceeds available stock")
+        if quantity > available_quantity:
+            raise ConflictError(
+                "Requested quantity exceeds available stock."
+            )
 
         cursor.execute(
             """
             UPDATE marketplace_cart_items
-
-            SET
-                quantity = %s
-
-            WHERE cart_id = %s
-              AND product_id = %s
+            SET quantity = %s
+            WHERE id = %s
             """,
-            (quantity, cart_id, product_id),
+            (quantity, item["id"]),
         )
 
         connection.commit()
 
         return {
-            "message": "Cart quantity updated",
+            "id": item["id"],
             "product_id": product_id,
             "quantity": quantity,
         }
@@ -342,39 +358,38 @@ def update_cart_item(user_id, product_id, quantity):
         connection.close()
 
 
-# ============================================================
-# REMOVE FROM CART
-# BUYER
-# ============================================================
-
-
-def remove_from_cart(user_id, product_id):
-
+def remove_cart_item(
+    user_id: int,
+    product_id: int,
+):
+    """
+    Remove a product from the user's cart.
+    """
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
-
-        cart_id = _get_or_create_cart(cursor, user_id)
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
-            DELETE FROM marketplace_cart_items
-
-            WHERE cart_id = %s
-              AND product_id = %s
+            DELETE ci
+            FROM marketplace_cart_items ci
+            INNER JOIN marketplace_carts c
+                ON c.id = ci.cart_id
+            WHERE c.user_id = %s
+              AND ci.product_id = %s
             """,
-            (cart_id, product_id),
+            (user_id, product_id),
         )
 
         if cursor.rowcount == 0:
-            raise NotFoundError("Product is not in your cart")
+            raise NotFoundError("Cart item not found.")
 
         connection.commit()
 
         return {
-            "message": "Product removed from cart",
             "product_id": product_id,
+            "removed": True,
         }
 
     except Exception:
@@ -385,54 +400,167 @@ def remove_from_cart(user_id, product_id):
         connection.close()
 
 
-# ============================================================
-# CHECKOUT
-# BUYER
-#
-# IMPORTANT:
-# This creates a PENDING order.
-# Payment will be handled in 36G.
-# ============================================================
-
-
-def checkout(user_id, institution_id, payment_method="ONLINE", shipping_address=None):
-
-    payment_method = str(payment_method or "ONLINE").strip().upper()
-    if payment_method not in {"ONLINE", "COD"}:
-        raise BadRequestError("Unsupported payment method. Choose ONLINE or COD.")
-
-    if payment_method == "COD" and (not shipping_address or len(shipping_address.strip()) < 10):
-        raise BadRequestError("A valid delivery address is required for Cash on Delivery.")
-
+def get_cart(user_id: int):
+    """
+    Return the complete cart with current product information
+    and calculated subtotal.
+    """
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
-
-        # ----------------------------------------------------
-        # Verify institution
-        # ----------------------------------------------------
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
             SELECT
-                id
-            FROM institutions
-            WHERE id = %s
+                c.id AS cart_id,
+                ci.id AS cart_item_id,
+                ci.product_id,
+                ci.quantity,
+                p.name,
+                p.description,
+                p.category,
+                p.product_type,
+                p.condition_type,
+                p.price,
+                p.quantity AS stock_quantity,
+                p.reserved_quantity,
+                p.preview_image_path,
+                p.is_active,
+                p.institution_id,
+                u.full_name AS seller_name
+            FROM marketplace_carts c
+            LEFT JOIN marketplace_cart_items ci
+                ON ci.cart_id = c.id
+            LEFT JOIN marketplace_products p
+                ON p.id = ci.product_id
+            LEFT JOIN users u
+                ON u.id = p.seller_id
+            WHERE c.user_id = %s
+            ORDER BY ci.created_at DESC
             """,
-            (institution_id,),
+            (user_id,),
         )
 
-        institution = cursor.fetchone()
+        rows = cursor.fetchall()
 
-        if not institution:
-            raise NotFoundError("Institution not found")
+        items = []
+        subtotal = Decimal("0.00")
+
+        cart_id = None
+
+        for row in rows:
+            if row["cart_id"]:
+                cart_id = row["cart_id"]
+
+            if not row["cart_item_id"]:
+                continue
+
+            price = _money(row["price"])
+            item_subtotal = _money(
+                price * row["quantity"]
+            )
+
+            subtotal += item_subtotal
+
+            available_quantity = (
+                row["stock_quantity"]
+                - row["reserved_quantity"]
+            )
+
+            items.append(
+                {
+                    "cart_item_id": row["cart_item_id"],
+                    "product_id": row["product_id"],
+                    "name": row["name"],
+                    "description": row["description"],
+                    "category": row["category"],
+                    "product_type": row["product_type"],
+                    "condition_type": row["condition_type"],
+                    "price": price,
+                    "quantity": row["quantity"],
+                    "subtotal": item_subtotal,
+                    "available_quantity": available_quantity,
+                    "preview_image_path": row["preview_image_path"],
+                    "is_active": bool(row["is_active"]),
+                    "institution_id": row["institution_id"],
+                    "seller_name": row["seller_name"],
+                }
+            )
+
+        subtotal = _money(subtotal)
+
+        tax_percent = _get_tax_percent()
+
+        tax_amount = _money(
+            subtotal * tax_percent / Decimal(100)
+        )
+
+        total_amount = _money(
+            subtotal + tax_amount
+        )
+
+        return {
+            "cart_id": cart_id,
+            "items": items,
+            "subtotal_amount": subtotal,
+            "tax_percent": tax_percent,
+            "tax_amount": tax_amount,
+            "total_amount": total_amount,
+            "currency": "INR",
+        }
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# CHECKOUT
+# ============================================================
+
+def checkout(
+    user_id: int,
+    data: MarketplaceCheckoutRequest,
+):
+    """
+    Create a marketplace order from the user's entire cart.
+
+    Important:
+    - Prices are read from the database.
+    - Tax is calculated server-side.
+    - Stock is reserved inside a transaction.
+    - No payment is considered successful here.
+    """
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor(dictionary=True)
 
         # ----------------------------------------------------
-        # Get cart
+        # Lock cart
         # ----------------------------------------------------
 
-        cart_id = _get_or_create_cart(cursor, user_id)
+        cursor.execute(
+            """
+            SELECT id
+            FROM marketplace_carts
+            WHERE user_id = %s
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (user_id,),
+        )
+
+        cart = cursor.fetchone()
+
+        if not cart:
+            raise BadRequestError("Your cart is empty.")
+
+        cart_id = cart["id"]
+
+        # ----------------------------------------------------
+        # Load cart products
+        # ----------------------------------------------------
 
         cursor.execute(
             """
@@ -441,170 +569,224 @@ def checkout(user_id, institution_id, payment_method="ONLINE", shipping_address=
                 ci.product_id,
                 ci.quantity,
 
-                mp.seller_id,
-                mp.institution_id AS product_institution_id,
-
-                mp.name,
-                mp.price,
-                (mp.quantity - mp.reserved_quantity) AS available_quantity,
-                mp.product_type,
-                mp.is_active
-
+                p.id,
+                p.seller_id,
+                p.institution_id,
+                p.name,
+                p.product_type,
+                p.condition_type,
+                p.price,
+                p.quantity AS stock_quantity,
+                p.reserved_quantity,
+                p.is_active
             FROM marketplace_cart_items ci
-
-            INNER JOIN marketplace_products mp
-                ON ci.product_id = mp.id
-
+            INNER JOIN marketplace_products p
+                ON p.id = ci.product_id
             WHERE ci.cart_id = %s
-
             FOR UPDATE
             """,
             (cart_id,),
         )
 
-        items = cursor.fetchall()
+        cart_items = cursor.fetchall()
 
-        if not items:
-            raise BadRequestError("Your cart is empty")
+        if not cart_items:
+            raise BadRequestError("Your cart is empty.")
 
         # ----------------------------------------------------
-        # Validate everything BEFORE creating order
+        # Validate institution
         # ----------------------------------------------------
 
-        has_physical = any(
-            str(item["product_type"]).upper() == "PHYSICAL" for item in items
-        )
-        if has_physical and (not shipping_address or len(shipping_address.strip()) < 10):
-            raise BadRequestError("A valid delivery address is required for physical products.")
+        for item in cart_items:
+            if item["institution_id"] != data.institution_id:
+                raise BadRequestError(
+                    "All products in a cart must belong to the "
+                    "same institution."
+                )
 
-        total = Decimal("0.00")
+        # ----------------------------------------------------
+        # Validate products and reserve inventory
+        # ----------------------------------------------------
 
-        for item in items:
+        subtotal = Decimal("0.00")
+        has_physical_product = False
+        order_items = []
+
+        for item in cart_items:
             if not item["is_active"]:
                 raise BadRequestError(
-                    f"Product '{item['name']}' is no longer available"
+                    f"Product '{item['name']}' is no longer available."
                 )
 
-            if item["seller_id"] == user_id:
+            quantity = int(item["quantity"])
+
+            if quantity < 1:
                 raise BadRequestError(
-                    f"You cannot purchase your own product: {item['name']}"
+                    "Cart contains an invalid quantity."
                 )
 
-            if item["quantity"] < 1:
-                raise BadRequestError("Invalid cart quantity")
+            available_quantity = (
+                item["stock_quantity"]
+                - item["reserved_quantity"]
+            )
 
-            if item["quantity"] > item["available_quantity"]:
-                raise BadRequestError(
-                    f"Insufficient stock for '{item['name']}'"
+            if available_quantity < quantity:
+                raise ConflictError(
+                    f"Insufficient stock for '{item['name']}'."
                 )
 
-            if payment_method == "COD" and item["product_type"] == "DIGITAL":
-                raise BadRequestError(
-                    "Cash on Delivery is available only for physical products. "
-                    "Please choose online payment for digital products."
-                )
+            if item["product_type"] == "PHYSICAL":
+                has_physical_product = True
 
             # ------------------------------------------------
-            # DIGITAL products must have a seller-uploaded file
-            # before they can be purchased.
+            # Digital product must have an attachment
             # ------------------------------------------------
 
             if item["product_type"] == "DIGITAL":
                 cursor.execute(
                     """
-                    SELECT 1
+                    SELECT id
                     FROM marketplace_attachments
                     WHERE product_id = %s
                     LIMIT 1
                     """,
                     (item["product_id"],),
                 )
-                if not cursor.fetchone():
+
+                attachment = cursor.fetchone()
+
+                if not attachment:
                     raise BadRequestError(
-                        f"Digital product '{item['name']}' is not available for purchase yet because its file has not been uploaded."
+                        f"Digital product '{item['name']}' "
+                        "does not have a downloadable file."
                     )
 
             # ------------------------------------------------
-            # Server-side price calculation
+            # Calculate item subtotal from DB price
             # ------------------------------------------------
 
-            unit_price = Decimal(str(item["price"]))
+            unit_price = _money(item["price"])
 
-            subtotal = unit_price * item["quantity"]
+            item_subtotal = _money(
+                unit_price * quantity
+            )
 
-            total += subtotal
+            subtotal += item_subtotal
 
-        total = total.quantize(Decimal("0.01"))
+            order_items.append(
+                {
+                    "product_id": item["product_id"],
+                    "seller_id": item["seller_id"],
+                    "product_name": item["name"],
+                    "unit_price": unit_price,
+                    "quantity": quantity,
+                    "subtotal": item_subtotal,
+                }
+            )
 
         # ----------------------------------------------------
-        # EduSphere marketplace fee
-        # Seller-funded: buyer pays the listed total, while
-        # 5% is deducted from seller earnings.
+        # Physical products require shipping address
         # ----------------------------------------------------
 
-        platform_fee_percent = Decimal("5.00")
-        platform_fee_amount = (
-            total * platform_fee_percent / Decimal(100)
-        ).quantize(Decimal("0.01"))
-        seller_net_amount = (
-            total - platform_fee_amount
-        ).quantize(Decimal("0.01"))
+        if has_physical_product and not data.shipping_address:
+                raise BadRequestError(
+                    "Shipping address is required for physical products."
+                )
+
+        # ----------------------------------------------------
+        # Calculate tax
+        # ----------------------------------------------------
+
+        subtotal = _money(subtotal)
+
+        tax_percent = _get_tax_percent()
+
+        tax_amount = _money(
+            subtotal * tax_percent / Decimal(100)
+        )
+
+        total_amount = _money(
+            subtotal + tax_amount
+        )
+
+        # ----------------------------------------------------
+        # Reserve inventory
+        # ----------------------------------------------------
+
+        for item in cart_items:
+            cursor.execute(
+                """
+                UPDATE marketplace_products
+                SET reserved_quantity = reserved_quantity + %s
+                WHERE id = %s
+                  AND is_active = TRUE
+                  AND quantity - reserved_quantity >= %s
+                """,
+                (
+                    item["quantity"],
+                    item["product_id"],
+                    item["quantity"],
+                ),
+            )
+
+            if cursor.rowcount != 1:
+                raise ConflictError(
+                    "Product stock changed while checking out. "
+                    "Please try again."
+                )
 
         # ----------------------------------------------------
         # Create order
         # ----------------------------------------------------
 
+        expires_at = (
+            datetime.now(timezone.utc).replace(tzinfo=None)
+            + timedelta(minutes=ORDER_EXPIRY_MINUTES)
+        )
         cursor.execute(
             """
             INSERT INTO marketplace_orders (
                 buyer_id,
                 institution_id,
+                subtotal_amount,
+                tax_percent,
+                tax_amount,
                 total_amount,
-                platform_fee_percent,
-                platform_fee_amount,
-                seller_net_amount,
                 shipping_address,
-                expires_at,
-                status
+                status,
+                expires_at
             )
             VALUES (
-                %s, %s, %s, %s, %s, %s, %s,
-                CASE WHEN %s = 'COD' THEN NULL ELSE DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 15 MINUTE) END,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                'PENDING',
                 %s
             )
             """,
             (
                 user_id,
-                institution_id,
-                total,
-                platform_fee_percent,
-                platform_fee_amount,
-                seller_net_amount,
-                shipping_address.strip() if has_physical else None,
-                payment_method,
-                "CONFIRMED" if payment_method == "COD" else "PENDING",
+                data.institution_id,
+                subtotal,
+                tax_percent,
+                tax_amount,
+                total_amount,
+                data.shipping_address,
+                expires_at,
             ),
         )
 
         order_id = cursor.lastrowid
 
         # ----------------------------------------------------
-        # Create order items + reserve stock
+        # Create order item snapshots
         # ----------------------------------------------------
 
-        seller_gross: dict[int, Decimal] = {}
-
-        for item in items:
-            unit_price = Decimal(str(item["price"]))
-
-            subtotal = unit_price * item["quantity"]
-
-            subtotal = subtotal.quantize(Decimal("0.01"))
-            seller_id = int(item["seller_id"])
-            seller_gross[seller_id] = seller_gross.get(
-                seller_id, Decimal("0.00")
-            ) + subtotal
-
+        for item in order_items:
             cursor.execute(
                 """
                 INSERT INTO marketplace_order_items (
@@ -617,119 +799,28 @@ def checkout(user_id, institution_id, payment_method="ONLINE", shipping_address=
                     subtotal
                 )
                 VALUES (
-                    %s, %s, %s, %s,
-                    %s, %s, %s
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s
                 )
                 """,
                 (
                     order_id,
                     item["product_id"],
                     item["seller_id"],
-                    item["name"],
-                    unit_price,
+                    item["product_name"],
+                    item["unit_price"],
                     item["quantity"],
-                    subtotal,
+                    item["subtotal"],
                 ),
             )
 
-            # ------------------------------------------------
-            # Reserve stock until payment succeeds/fails.
-            # quantity is the physical stock; reserved_quantity
-            # prevents two pending checkouts from claiming it.
-            # ------------------------------------------------
-
-            cursor.execute(
-                """
-                UPDATE marketplace_products
-
-                SET
-                    reserved_quantity = reserved_quantity + %s
-
-                WHERE id = %s
-                  AND (quantity - reserved_quantity) >= %s
-                  AND is_active = TRUE
-                """,
-                (
-                    item["quantity"],
-                    item["product_id"],
-                    item["quantity"],
-                ),
-            )
-
-            if cursor.rowcount != 1:
-                raise BadRequestError(
-                    f"Stock changed while checking out "
-                    f"'{item['name']}'. "
-                    "Please try again."
-                )
-
         # ----------------------------------------------------
-        # Create seller payout ledger entries.
-        # A seller with a verified Razorpay Route Linked Account
-        # can later receive the seller_amount automatically.
-        # ----------------------------------------------------
-
-        allocated_fee = Decimal("0.00")
-        seller_ids = list(seller_gross.keys())
-
-        for index, seller_id in enumerate(seller_ids):
-            gross = seller_gross[seller_id].quantize(Decimal("0.01"))
-
-            if index == len(seller_ids) - 1:
-                fee = (platform_fee_amount - allocated_fee).quantize(Decimal("0.01"))
-            else:
-                fee = (gross * platform_fee_percent / Decimal(100)).quantize(Decimal("0.01"))
-                allocated_fee += fee
-
-            seller_amount = (gross - fee).quantize(Decimal("0.01"))
-
-            cursor.execute(
-                """
-                INSERT INTO marketplace_seller_payout_transactions (
-                    order_id,
-                    seller_id,
-                    gross_amount,
-                    platform_fee_percent,
-                    platform_fee_amount,
-                    seller_amount,
-                    currency,
-                    status
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, 'INR', 'PENDING')
-                """,
-                (
-                    order_id,
-                    seller_id,
-                    gross,
-                    platform_fee_percent,
-                    fee,
-                    seller_amount,
-                ),
-            )
-
-        if payment_method == "COD":
-            # COD is a committed physical order: consume the reservation now,
-            # but keep the payment itself PENDING until staff confirms cash collection.
-            finalize_order_inventory(order_id, cursor)
-
-            cursor.execute(
-                """
-                INSERT INTO marketplace_payments (
-                    order_id,
-                    buyer_id,
-                    amount,
-                    currency,
-                    payment_method,
-                    gateway,
-                    status
-                )
-                VALUES (%s, %s, %s, 'INR', 'COD', 'COD', 'PENDING')
-                """,
-                (order_id, user_id, total),
-            )
-
-        # ----------------------------------------------------
-        # Clear cart
+        # Clear purchased cart items
         # ----------------------------------------------------
 
         cursor.execute(
@@ -743,15 +834,14 @@ def checkout(user_id, institution_id, payment_method="ONLINE", shipping_address=
         connection.commit()
 
         return {
-            "message": "COD order placed successfully" if payment_method == "COD" else "Order created successfully",
             "order_id": order_id,
-            "status": "CONFIRMED" if payment_method == "COD" else "PENDING",
-            "payment_method": payment_method,
-            "payment_required": payment_method == "ONLINE",
-            "total_amount": total,
-            "platform_fee_percent": platform_fee_percent,
-            "platform_fee_amount": platform_fee_amount,
-            "seller_net_amount": seller_net_amount,
+            "status": "PENDING",
+            "subtotal_amount": subtotal,
+            "tax_percent": tax_percent,
+            "tax_amount": tax_amount,
+            "total_amount": total_amount,
+            "currency": "INR",
+            "expires_at": expires_at.isoformat(),
         }
 
     except Exception:
@@ -763,134 +853,43 @@ def checkout(user_id, institution_id, payment_method="ONLINE", shipping_address=
 
 
 # ============================================================
-# GET BUYER ORDERS
+# ORDER RETRIEVAL
 # ============================================================
 
-
-def get_buyer_orders(user_id):
-
+def get_order(
+    user_id: int,
+    order_id: int,
+):
+    """
+    Get one order belonging to the buyer.
+    """
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
             SELECT
-                o.id AS order_id,
+                o.id,
+                o.buyer_id,
                 o.institution_id,
+                o.subtotal_amount,
+                o.tax_percent,
+                o.tax_amount,
                 o.total_amount,
-                o.status,
                 o.shipping_address,
-                mpay.payment_method,
-                mpay.status AS payment_status,
+                o.status,
+                o.expires_at,
                 o.created_at,
                 o.updated_at,
-                oi.product_id,
-                oi.product_name,
-                mp.product_type,
-                ma.id AS attachment_id,
-                ma.file_name,
-                ma.file_type,
-                ma.file_size
-
+                i.name AS institution_name
             FROM marketplace_orders o
-
-            LEFT JOIN marketplace_order_items oi
-                ON oi.order_id = o.id
-
-            LEFT JOIN marketplace_products mp
-                ON mp.id = oi.product_id
-
-            LEFT JOIN marketplace_attachments ma
-                ON ma.product_id = oi.product_id
-               AND mp.product_type = 'DIGITAL'
-               AND o.status IN ('CONFIRMED', 'PROCESSING', 'COMPLETED')
-
-            LEFT JOIN marketplace_payments mpay
-                ON mpay.order_id = o.id
-
-            WHERE o.buyer_id = %s
-
-            ORDER BY o.created_at DESC, oi.id ASC, ma.id ASC
-            """,
-            (user_id,),
-        )
-
-        rows = cursor.fetchall()
-        orders_by_id = {}
-
-        for row in rows:
-            order_id = row["order_id"]
-            order = orders_by_id.get(order_id)
-
-            if order is None:
-                order = {
-                    "order_id": order_id,
-                    "institution_id": row["institution_id"],
-                    "total_amount": row["total_amount"],
-                    "status": row["status"],
-                    "payment_method": row.get("payment_method"),
-                    "payment_status": row.get("payment_status"),
-                    "shipping_address": row.get("shipping_address"),
-                    "created_at": row["created_at"],
-                    "updated_at": row["updated_at"],
-                    "digital_files": [],
-                    "_digital_file_ids": set(),
-                }
-                orders_by_id[order_id] = order
-
-            attachment_id = row.get("attachment_id")
-            if attachment_id is not None and attachment_id not in order["_digital_file_ids"]:
-                order["digital_files"].append(
-                    {
-                        "attachment_id": attachment_id,
-                        "product_id": row["product_id"],
-                        "product_name": row["product_name"],
-                        "file_name": row["file_name"],
-                        "file_type": row["file_type"],
-                        "file_size": row["file_size"],
-                    }
-                )
-                order["_digital_file_ids"].add(attachment_id)
-
-        orders = list(orders_by_id.values())
-        for order in orders:
-            order.pop("_digital_file_ids", None)
-
-        return {"count": len(orders), "orders": orders}
-
-    finally:
-        connection.close()
-
-
-# ============================================================
-# GET SINGLE BUYER ORDER
-# ============================================================
-
-
-def get_buyer_order(order_id, user_id):
-
-    connection = get_connection()
-
-    try:
-        cursor = connection.cursor()
-
-        cursor.execute(
-            """
-            SELECT
-                id AS order_id,
-                buyer_id,
-                institution_id,
-                total_amount,
-                status,
-                created_at,
-                updated_at
-
-            FROM marketplace_orders
-
-            WHERE id = %s
-              AND buyer_id = %s
+            LEFT JOIN institutions i
+                ON i.id = o.institution_id
+            WHERE o.id = %s
+              AND o.buyer_id = %s
+            LIMIT 1
             """,
             (order_id, user_id),
         )
@@ -898,28 +897,20 @@ def get_buyer_order(order_id, user_id):
         order = cursor.fetchone()
 
         if not order:
-            raise NotFoundError("Order not found")
+            raise NotFoundError("Order not found.")
 
         cursor.execute(
             """
             SELECT
-                oi.id AS order_item_id,
+                oi.id,
                 oi.product_id,
                 oi.seller_id,
-                seller.full_name AS seller_name,
-
                 oi.product_name,
                 oi.unit_price,
                 oi.quantity,
                 oi.subtotal
-
             FROM marketplace_order_items oi
-
-            INNER JOIN users seller
-                ON oi.seller_id = seller.id
-
             WHERE oi.order_id = %s
-
             ORDER BY oi.id ASC
             """,
             (order_id,),
@@ -927,61 +918,93 @@ def get_buyer_order(order_id, user_id):
 
         items = cursor.fetchall()
 
-        return {"order": order, "items": items}
+        order["items"] = items
+
+        return order
 
     finally:
         connection.close()
 
 
-# ============================================================
-# GET SELLER ORDERS
-# ============================================================
-
-
-def get_seller_orders(user_id):
-
+def get_user_orders(
+    user_id: int,
+):
+    """
+    Return all marketplace orders belonging to a buyer.
+    """
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
             SELECT
-                oi.id AS order_item_id,
-                oi.order_id,
-
-                oi.product_id,
-                oi.product_name,
-
-                oi.unit_price,
-                oi.quantity,
-                oi.subtotal,
-
-                o.buyer_id,
-                buyer.full_name AS buyer_name,
-
-                o.status AS order_status,
-                o.created_at
-
-            FROM marketplace_order_items oi
-
-            INNER JOIN marketplace_orders o
-                ON oi.order_id = o.id
-
-            INNER JOIN users buyer
-                ON o.buyer_id = buyer.id
-
-            WHERE oi.seller_id = %s
-
+                o.id,
+                o.institution_id,
+                o.subtotal_amount,
+                o.tax_percent,
+                o.tax_amount,
+                o.total_amount,
+                o.status,
+                o.expires_at,
+                o.created_at,
+                i.name AS institution_name
+            FROM marketplace_orders o
+            LEFT JOIN institutions i
+                ON i.id = o.institution_id
+            WHERE o.buyer_id = %s
             ORDER BY o.created_at DESC
             """,
             (user_id,),
         )
 
-        orders = cursor.fetchall()
-
-        return {"count": len(orders), "orders": orders}
+        return cursor.fetchall()
 
     finally:
         connection.close()
+
+
+# ============================================================
+# ADMIN / INTERNAL ORDER ACCESS
+# ============================================================
+
+def get_order_for_update(
+    order_id: int,
+    cursor,
+):
+    """
+    Load an order with a row lock.
+
+    Intended for payment verification and other transactional
+    operations where the order must not change concurrently.
+    """
+    cursor.execute(
+        """
+        SELECT
+            id,
+            buyer_id,
+            institution_id,
+            subtotal_amount,
+            tax_percent,
+            tax_amount,
+            total_amount,
+            shipping_address,
+            status,
+            expires_at,
+            created_at,
+            updated_at
+        FROM marketplace_orders
+        WHERE id = %s
+        LIMIT 1
+        FOR UPDATE
+        """,
+        (order_id,),
+    )
+
+    order = cursor.fetchone()
+
+    if not order:
+        raise NotFoundError("Order not found.")
+
+    return order

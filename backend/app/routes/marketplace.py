@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import uuid
 
@@ -5,19 +7,28 @@ import aiofiles
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
+from app.core.exceptions import (
+    BadRequestError,
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+)
 from app.middleware.auth_guard import require_completed_profile
 from app.schemas.marketplace import (
+    CartItemAdd,
+    CartItemUpdate,
+    MarketplaceCheckoutRequest,
     MarketplaceProductCreate,
     MarketplaceProductUpdate,
 )
 from app.services.marketplace_order_service import (
-    add_to_cart,
+    add_cart_item,
     checkout,
-    get_buyer_order,
-    get_buyer_orders,
+    get_attachment_for_download,
     get_cart,
-    get_seller_orders,
-    remove_from_cart,
+    get_order,
+    get_user_orders,
+    remove_cart_item,
     update_cart_item,
 )
 from app.services.marketplace_service import (
@@ -29,7 +40,7 @@ from app.services.marketplace_service import (
     create_product,
     delete_product,
     delete_product_attachment,
-    get_marketplace_attachment_for_download,
+    get_attachment_for_download,
     get_product,
     get_product_attachment,
     get_product_preview,
@@ -38,6 +49,10 @@ from app.services.marketplace_service import (
     update_product,
 )
 
+# ============================================================
+# ROUTER
+# ============================================================
+
 router = APIRouter(
     prefix="/marketplace",
     tags=["Marketplace"],
@@ -45,39 +60,65 @@ router = APIRouter(
 
 
 # ============================================================
-# RUFF / APPLICATION EXCEPTION
-# ============================================================
-
-
-class MarketplaceRouteError(Exception):
-    """Base exception for marketplace route errors."""
-
-
-# ============================================================
 # FILE DEPENDENCY
-#
-# Defined at module level to satisfy Ruff B008.
 # ============================================================
-
 
 MARKETPLACE_UPLOAD_FILE = File(...)
 
 
 # ============================================================
-# LIST PRODUCTS
-#
-# GET /marketplace/
+# EXCEPTION HANDLER
+# ============================================================
+
+def _handle_marketplace_error(error: Exception) -> HTTPException:
+    if isinstance(error, NotFoundError):
+        return HTTPException(
+            status_code=404,
+            detail=str(error),
+        )
+
+    if isinstance(error, ForbiddenError):
+        return HTTPException(
+            status_code=403,
+            detail=str(error),
+        )
+
+    if isinstance(error, ConflictError):
+        return HTTPException(
+            status_code=409,
+            detail=str(error),
+        )
+
+    if isinstance(error, BadRequestError):
+        return HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    return HTTPException(
+        status_code=400,
+        detail=str(error),
+    )
+
+
+# ============================================================
+# PRODUCTS
 # ============================================================
 
 
 @router.get("/")
-async def list_products(
+async def list_marketplace_products(
     request: Request,
     institution_id: int | None = None,
     category: str | None = None,
     product_type: str | None = None,
     search: str | None = None,
 ):
+    """
+    GET /marketplace/
+
+    List active marketplace products.
+    """
 
     require_completed_profile(request)
 
@@ -90,24 +131,19 @@ async def list_products(
         )
 
     except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# CREATE PRODUCT
-#
-# POST /marketplace/
-# ============================================================
+        raise _handle_marketplace_error(error) from error
 
 
 @router.post("/")
-async def create_product_route(
+async def create_marketplace_product(
     request: Request,
     data: MarketplaceProductCreate,
 ):
+    """
+    POST /marketplace/
+
+    Create a product owned by the authenticated seller.
+    """
 
     user = require_completed_profile(request)
 
@@ -118,242 +154,17 @@ async def create_product_route(
         )
 
     except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# GET CART
-#
-# GET /marketplace/cart
-# ============================================================
-
-
-@router.get("/cart")
-async def get_cart_route(request: Request):
-
-    user = require_completed_profile(request)
-
-    try:
-        return get_cart(
-            user_id=user["id"],
-        )
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# ADD TO CART
-#
-# POST /marketplace/cart
-# ============================================================
-
-
-@router.post("/cart")
-async def add_to_cart_route(
-    request: Request,
-    product_id: int,
-    quantity: int = 1,
-):
-
-    user = require_completed_profile(request)
-
-    try:
-        return add_to_cart(
-            user_id=user["id"],
-            product_id=product_id,
-            quantity=quantity,
-        )
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# UPDATE CART ITEM
-#
-# PUT /marketplace/cart/items/{product_id}
-# ============================================================
-
-
-@router.put("/cart/items/{product_id}")
-async def update_cart_item_route(
-    product_id: int,
-    request: Request,
-    quantity: int,
-):
-
-    user = require_completed_profile(request)
-
-    try:
-        return update_cart_item(
-            user_id=user["id"],
-            product_id=product_id,
-            quantity=quantity,
-        )
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# REMOVE CART ITEM
-#
-# DELETE /marketplace/cart/items/{product_id}
-# ============================================================
-
-
-@router.delete("/cart/items/{product_id}")
-async def remove_from_cart_route(
-    product_id: int,
-    request: Request,
-):
-
-    user = require_completed_profile(request)
-
-    try:
-        return remove_from_cart(
-            user_id=user["id"],
-            product_id=product_id,
-        )
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# CHECKOUT
-#
-# POST /marketplace/checkout
-# ============================================================
-
-
-@router.post("/checkout")
-async def checkout_route(
-    request: Request,
-    institution_id: int,
-    payment_method: str = "ONLINE",
-    shipping_address: str | None = None,
-):
-
-    user = require_completed_profile(request)
-
-    try:
-        return checkout(
-            user_id=user["id"],
-            institution_id=institution_id,
-            payment_method=payment_method,
-            shipping_address=shipping_address,
-        )
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# BUYER ORDERS
-# ============================================================
-
-
-@router.get("/orders")
-async def buyer_orders_route(request: Request):
-
-    user = require_completed_profile(request)
-
-    try:
-        return get_buyer_orders(
-            user_id=user["id"],
-        )
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# SINGLE BUYER ORDER
-#
-# GET /marketplace/orders/{order_id}
-# ============================================================
-
-
-@router.get("/orders/{order_id}")
-async def buyer_order_route(
-    order_id: int,
-    request: Request,
-):
-
-    user = require_completed_profile(request)
-
-    try:
-        return get_buyer_order(
-            order_id=order_id,
-            user_id=user["id"],
-        )
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=404,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# SELLER ORDERS
-#
-# GET /marketplace/seller/orders
-# ============================================================
-
-
-@router.get("/seller/orders")
-async def seller_orders_route(request: Request):
-
-    user = require_completed_profile(request)
-
-    try:
-        return get_seller_orders(
-            user_id=user["id"],
-        )
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# PRODUCT DETAILS
-#
-# GET /marketplace/{product_id}
-# ============================================================
+        raise _handle_marketplace_error(error) from error
 
 
 @router.get("/{product_id}")
-async def product_details(
+async def get_marketplace_product(
     product_id: int,
     request: Request,
 ):
+    """
+    GET /marketplace/{product_id}
+    """
 
     require_completed_profile(request)
 
@@ -363,25 +174,20 @@ async def product_details(
         )
 
     except Exception as error:
-        raise HTTPException(
-            status_code=404,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# UPDATE OWN PRODUCT
-#
-# PUT /marketplace/{product_id}
-# ============================================================
+        raise _handle_marketplace_error(error) from error
 
 
 @router.put("/{product_id}")
-async def update_product_route(
+async def update_marketplace_product(
     product_id: int,
     request: Request,
     data: MarketplaceProductUpdate,
 ):
+    """
+    PUT /marketplace/{product_id}
+
+    Update own product.
+    """
 
     user = require_completed_profile(request)
 
@@ -393,24 +199,19 @@ async def update_product_route(
         )
 
     except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# DELETE OWN PRODUCT
-#
-# DELETE /marketplace/{product_id}
-# ============================================================
+        raise _handle_marketplace_error(error) from error
 
 
 @router.delete("/{product_id}")
-async def delete_product_route(
+async def delete_marketplace_product(
     product_id: int,
     request: Request,
 ):
+    """
+    DELETE /marketplace/{product_id}
+
+    Soft-delete own product.
+    """
 
     user = require_completed_profile(request)
 
@@ -421,81 +222,368 @@ async def delete_product_route(
         )
 
     except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
+        raise _handle_marketplace_error(error) from error
 
 
 # ============================================================
-# UPLOAD PRODUCT PREVIEW IMAGE
-#
-# POST /marketplace/{product_id}/preview
-#
-# Seller only.
-# Preview is separate from the protected digital attachment.
+# CART
 # ============================================================
 
 
-@router.post("/{product_id}/preview")
-async def upload_product_preview(
+@router.get("/cart")
+async def get_marketplace_cart(
+    request: Request,
+):
+    """
+    GET /marketplace/cart
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return get_cart(
+            user_id=user["id"],
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+
+@router.post("/cart")
+async def add_marketplace_cart_item(
+    request: Request,
+    data: CartItemAdd,
+):
+    """
+    POST /marketplace/cart
+
+    Add a product to the authenticated user's cart.
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return add_cart_item(
+            user_id=user["id"],
+            product_id=data.product_id,
+            quantity=data.quantity,
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+
+@router.put("/cart/items/{product_id}")
+async def update_marketplace_cart_item(
+    product_id: int,
+    request: Request,
+    data: CartItemUpdate,
+):
+    """
+    PUT /marketplace/cart/items/{product_id}
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return update_cart_item(
+            user_id=user["id"],
+            product_id=product_id,
+            quantity=data.quantity,
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+
+@router.delete("/cart/items/{product_id}")
+async def remove_marketplace_cart_item(
+    product_id: int,
+    request: Request,
+):
+    """
+    DELETE /marketplace/cart/items/{product_id}
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return remove_cart_item(
+            user_id=user["id"],
+            product_id=product_id,
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+
+# ============================================================
+# CHECKOUT
+# ============================================================
+
+
+@router.post("/checkout")
+async def marketplace_checkout(
+    request: Request,
+    data: MarketplaceCheckoutRequest,
+):
+    """
+    POST /marketplace/checkout
+
+    Creates a PENDING order.
+
+    This does NOT mark the order as paid.
+
+    The next step is local UPI payment + UTR submission.
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return checkout(
+            user_id=user["id"],
+            data=data,
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+
+# ============================================================
+# BUYER ORDERS
+# ============================================================
+
+
+@router.get("/orders")
+async def list_marketplace_orders(
+    request: Request,
+):
+    """
+    GET /marketplace/orders
+
+    Return the authenticated buyer's orders.
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return get_user_orders(
+            user_id=user["id"],
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+
+@router.get("/orders/{order_id}")
+async def get_marketplace_order(
+    order_id: int,
+    request: Request,
+):
+    """
+    GET /marketplace/orders/{order_id}
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return get_order(
+            user_id=user["id"],
+            order_id=order_id,
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+
+# ============================================================
+# PRODUCT ATTACHMENTS
+# ============================================================
+
+
+@router.post("/{product_id}/attachments")
+async def upload_marketplace_attachment(
     product_id: int,
     request: Request,
     file: UploadFile = MARKETPLACE_UPLOAD_FILE,
 ):
+    """
+    POST /marketplace/{product_id}/attachments
+
+    Seller uploads the actual digital product file.
+    """
 
     user = require_completed_profile(request)
 
     file_path = None
 
     try:
-        # ----------------------------------------------------
-        # Validate filename
-        # ----------------------------------------------------
-
         if not file.filename:
-            raise HTTPException(
-                status_code=400,
-                detail="Preview image filename is required",
+            raise BadRequestError(
+                "Filename is required."
             )
 
-        # ----------------------------------------------------
-        # Validate content type
-        # ----------------------------------------------------
-
-        if file.content_type not in ALLOWED_MARKETPLACE_PREVIEW_TYPES:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Preview image must be JPG, PNG or WEBP"
-                ),
+        if file.content_type not in ALLOWED_MARKETPLACE_FILE_TYPES:
+            raise BadRequestError(
+                "File type is not allowed. "
+                "Supported files: PDF, DOC, DOCX, PPT, PPTX, "
+                "JPG, PNG, WEBP and TXT."
             )
-
-        # ----------------------------------------------------
-        # Read file
-        # ----------------------------------------------------
 
         contents = await file.read()
 
         if not contents:
-            raise HTTPException(
-                status_code=400,
-                detail="Preview image cannot be empty",
+            raise BadRequestError(
+                "File cannot be empty."
             )
 
-        # ----------------------------------------------------
-        # Maximum 5 MB
-        # ----------------------------------------------------
+        if len(contents) > MAX_MARKETPLACE_FILE_SIZE:
+            raise BadRequestError(
+                "File size cannot exceed 10 MB."
+            )
+
+        upload_directory = os.path.join(
+            "private_uploads",
+            "marketplace",
+        )
+
+        os.makedirs(
+            upload_directory,
+            exist_ok=True,
+        )
+
+        extension = ""
+
+        if "." in file.filename:
+            extension = os.path.splitext(
+                file.filename
+            )[1].lower()
+
+        stored_name = (
+            f"{uuid.uuid4().hex}{extension}"
+        )
+
+        file_path = os.path.join(
+            upload_directory,
+            stored_name,
+        )
+
+        async with aiofiles.open(
+            file_path,
+            "wb",
+        ) as output_file:
+            await output_file.write(contents)
+
+        result = add_product_attachment(
+            product_id=product_id,
+            user_id=user["id"],
+            file_name=file.filename,
+            file_path=file_path,
+            file_type=file.content_type,
+            file_size=len(contents),
+        )
+
+        return result
+
+    except Exception as error:
+        if file_path and os.path.isfile(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+
+        raise _handle_marketplace_error(error) from error
+
+
+@router.get("/{product_id}/attachments")
+async def list_marketplace_attachments(
+    product_id: int,
+    request: Request,
+):
+    """
+    GET /marketplace/{product_id}/attachments
+
+    Seller can inspect their product's attachments.
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return get_product_attachment(
+            product_id=product_id,
+            user_id=user["id"],
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+
+@router.delete("/{product_id}/attachments/{attachment_id}")
+async def delete_marketplace_attachment(
+    product_id: int,
+    attachment_id: int,
+    request: Request,
+):
+    """
+    DELETE /marketplace/{product_id}/attachments/{attachment_id}
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return delete_product_attachment(
+            product_id=product_id,
+            attachment_id=attachment_id,
+            user_id=user["id"],
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+
+# ============================================================
+# PRODUCT PREVIEW
+# ============================================================
+
+
+@router.post("/{product_id}/preview")
+async def upload_marketplace_preview(
+    product_id: int,
+    request: Request,
+    file: UploadFile = MARKETPLACE_UPLOAD_FILE,
+):
+    """
+    POST /marketplace/{product_id}/preview
+
+    Upload a product preview image.
+    """
+
+    user = require_completed_profile(request)
+
+    file_path = None
+
+    try:
+        if not file.filename:
+            raise BadRequestError(
+                "Preview image filename is required."
+            )
+
+        if file.content_type not in ALLOWED_MARKETPLACE_PREVIEW_TYPES:
+            raise BadRequestError(
+                "Preview image must be JPG, PNG or WEBP."
+            )
+
+        contents = await file.read()
+
+        if not contents:
+            raise BadRequestError(
+                "Preview image cannot be empty."
+            )
 
         if len(contents) > MAX_MARKETPLACE_PREVIEW_SIZE:
-            raise HTTPException(
-                status_code=400,
-                detail="Preview image cannot exceed 5 MB",
+            raise BadRequestError(
+                "Preview image cannot exceed 5 MB."
             )
-
-        # ----------------------------------------------------
-        # Preview directory
-        # ----------------------------------------------------
 
         upload_directory = os.path.join(
             "private_uploads",
@@ -507,10 +595,6 @@ async def upload_product_preview(
             upload_directory,
             exist_ok=True,
         )
-
-        # ----------------------------------------------------
-        # Preserve image extension only
-        # ----------------------------------------------------
 
         extension = ""
 
@@ -527,10 +611,6 @@ async def upload_product_preview(
         }:
             extension = ".jpg"
 
-        # ----------------------------------------------------
-        # Random filename
-        # ----------------------------------------------------
-
         stored_name = (
             f"{uuid.uuid4().hex}{extension}"
         )
@@ -540,20 +620,11 @@ async def upload_product_preview(
             stored_name,
         )
 
-        # ----------------------------------------------------
-        # ASYNC FILE WRITE
-        # ----------------------------------------------------
-
         async with aiofiles.open(
             file_path,
             "wb",
         ) as output_file:
-
             await output_file.write(contents)
-
-        # ----------------------------------------------------
-        # Database update
-        # ----------------------------------------------------
 
         result = save_product_preview(
             product_id=product_id,
@@ -565,51 +636,26 @@ async def upload_product_preview(
 
         return result
 
-    except HTTPException:
-        # ----------------------------------------------------
-        # Cleanup physical file
-        # ----------------------------------------------------
-
-        if file_path and os.path.isfile(file_path):
-            try:
-                os.remove(file_path)
-            except OSError:
-                pass
-
-        raise
-
     except Exception as error:
-        # ----------------------------------------------------
-        # Cleanup if DB operation fails
-        # ----------------------------------------------------
-
         if file_path and os.path.isfile(file_path):
             try:
                 os.remove(file_path)
             except OSError:
                 pass
 
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# VIEW PRODUCT PREVIEW IMAGE
-#
-# GET /marketplace/{product_id}/preview
-#
-# Any authenticated completed-profile marketplace user
-# can view the preview.
-# ============================================================
+        raise _handle_marketplace_error(error) from error
 
 
 @router.get("/{product_id}/preview")
-async def view_product_preview(
+async def get_marketplace_preview(
     product_id: int,
     request: Request,
 ):
+    """
+    GET /marketplace/{product_id}/preview
+
+    Return the product preview image.
+    """
 
     require_completed_profile(request)
 
@@ -618,373 +664,69 @@ async def view_product_preview(
             product_id=product_id,
         )
 
-        file_path = preview["preview_image_path"]
-
-        if not file_path:
-            raise MarketplaceRouteError(
-                "Preview image is not available"
+        if not preview:
+            raise NotFoundError(
+                "Product preview not found."
             )
 
-        if not os.path.isfile(file_path):
-            raise MarketplaceRouteError(
-                "Preview image is no longer available"
+        file_path = preview.get("storage_path")
+
+        if not file_path or not os.path.isfile(file_path):
+            raise NotFoundError(
+                "Product preview file not found."
             )
-
-        # ----------------------------------------------------
-        # Determine image media type
-        # ----------------------------------------------------
-
-        extension = os.path.splitext(
-            file_path
-        )[1].lower()
-
-        media_types = {
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".png": "image/png",
-            ".webp": "image/webp",
-        }
-
-        media_type = media_types.get(
-            extension,
-            "application/octet-stream",
-        )
 
         return FileResponse(
             path=file_path,
-            media_type=media_type,
+            media_type=preview.get(
+                "file_type",
+                "application/octet-stream",
+            ),
+            filename=preview.get(
+                "file_name",
+            ),
         )
-
-    except MarketplaceRouteError as error:
-        raise HTTPException(
-            status_code=404,
-            detail=str(error),
-        ) from error
 
     except Exception as error:
-        raise HTTPException(
-            status_code=404,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# UPLOAD DIGITAL PRODUCT FILE
-#
-# POST /marketplace/{product_id}/attachments
-# ============================================================
-
-
-@router.post("/{product_id}/attachments")
-async def upload_product_attachment(
-    product_id: int,
-    request: Request,
-    file: UploadFile = MARKETPLACE_UPLOAD_FILE,
-):
-
-    user = require_completed_profile(request)
-
-    file_path = None
-
-    try:
-        # ----------------------------------------------------
-        # Validate filename
-        # ----------------------------------------------------
-
-        if not file.filename:
-            raise HTTPException(
-                status_code=400,
-                detail="Filename is required",
-            )
-
-        # ----------------------------------------------------
-        # Validate content type
-        # ----------------------------------------------------
-
-        if file.content_type not in ALLOWED_MARKETPLACE_FILE_TYPES:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "File type is not allowed. "
-                    "Supported files: PDF, DOC, DOCX, "
-                    "PPT, PPTX, JPG, PNG, WEBP and TXT."
-                ),
-            )
-
-        # ----------------------------------------------------
-        # Read file
-        # ----------------------------------------------------
-
-        contents = await file.read()
-
-        if not contents:
-            raise HTTPException(
-                status_code=400,
-                detail="File cannot be empty",
-            )
-
-        # ----------------------------------------------------
-        # Maximum 10 MB
-        # ----------------------------------------------------
-
-        if len(contents) > MAX_MARKETPLACE_FILE_SIZE:
-            raise HTTPException(
-                status_code=400,
-                detail="File size cannot exceed 10 MB",
-            )
-
-        # ----------------------------------------------------
-        # Private directory
-        # ----------------------------------------------------
-
-        upload_directory = os.path.join(
-            "private_uploads",
-            "marketplace",
-        )
-
-        os.makedirs(
-            upload_directory,
-            exist_ok=True,
-        )
-
-        # ----------------------------------------------------
-        # Preserve extension only
-        # ----------------------------------------------------
-
-        extension = ""
-
-        if "." in file.filename:
-            extension = os.path.splitext(
-                file.filename
-            )[1].lower()
-
-        # ----------------------------------------------------
-        # Random filename
-        # ----------------------------------------------------
-
-        stored_name = f"{uuid.uuid4().hex}{extension}"
-
-        file_path = os.path.join(
-            upload_directory,
-            stored_name,
-        )
-
-        # ----------------------------------------------------
-        # ASYNC FILE WRITE
-        # ----------------------------------------------------
-
-        async with aiofiles.open(
-            file_path,
-            "wb",
-        ) as output_file:
-
-            await output_file.write(contents)
-
-        # ----------------------------------------------------
-        # Database record
-        # ----------------------------------------------------
-
-        result = add_product_attachment(
-            product_id=product_id,
-            user_id=user["id"],
-            file_name=file.filename,
-            file_path=file_path,
-            file_type=file.content_type,
-            file_size=len(contents),
-        )
-
-        return result
-
-    except HTTPException:
-        # ----------------------------------------------------
-        # Cleanup physical file
-        # ----------------------------------------------------
-
-        if file_path and os.path.isfile(file_path):
-            try:
-                os.remove(file_path)
-            except OSError:
-                pass
-
-        raise
-
-    except Exception as error:
-        # ----------------------------------------------------
-        # Cleanup if DB operation fails
-        # ----------------------------------------------------
-
-        if file_path and os.path.isfile(file_path):
-            try:
-                os.remove(file_path)
-            except OSError:
-                pass
-
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# DELETE PRODUCT ATTACHMENT
-#
-# DELETE /marketplace/attachments/{attachment_id}
-# ============================================================
-
-
-@router.delete("/attachments/{attachment_id}")
-async def delete_product_attachment_route(
-    attachment_id: int,
-    request: Request,
-):
-
-    user = require_completed_profile(request)
-
-    try:
-        result = delete_product_attachment(
-            attachment_id=attachment_id,
-            user_id=user["id"],
-        )
-
-        file_path = result.get("file_path")
-
-        if file_path and os.path.isfile(file_path):
-            try:
-                os.remove(file_path)
-            except OSError:
-                pass
-
-        result.pop("file_path", None)
-
-        return result
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# GET ATTACHMENT INFORMATION
-#
-# GET /marketplace/attachments/{attachment_id}
-# ============================================================
-
-
-@router.get("/attachments/{attachment_id}")
-async def get_attachment_route(
-    attachment_id: int,
-    request: Request,
-):
-
-    user = require_completed_profile(request)
-
-    try:
-        attachment = get_product_attachment(
-            attachment_id=attachment_id,
-        )
-
-        # ----------------------------------------------------
-        # Seller can access own attachment.
-        # ----------------------------------------------------
-
-        if attachment["seller_id"] == user["id"]:
-            pass
-
-        else:
-            # ------------------------------------------------
-            # Buyer must have purchase access.
-            # ------------------------------------------------
-
-            try:
-                get_marketplace_attachment_for_download(
-                    attachment_id=attachment_id,
-                    user_id=user["id"],
-                )
-
-            except Exception as error:
-                raise HTTPException(
-                    status_code=403,
-                    detail="You do not have access to this attachment",
-                ) from error
-
-        # ----------------------------------------------------
-        # Never expose filesystem path.
-        # ----------------------------------------------------
-
-        attachment.pop("file_path", None)
-
-        return attachment
-
-    except HTTPException:
-        raise
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=404,
-            detail=str(error),
-        ) from error
-
-
-# ============================================================
-# DOWNLOAD DIGITAL PRODUCT
-#
-# GET /marketplace/attachments/{attachment_id}/download
-# ============================================================
-
-
+        raise _handle_marketplace_error(error) from error
+    
 @router.get("/attachments/{attachment_id}/download")
 async def download_marketplace_attachment(
     attachment_id: int,
     request: Request,
 ):
+    """
+    GET /marketplace/attachments/{attachment_id}/download
+
+    Protected digital download.
+
+    Requirements:
+        - authenticated buyer
+        - attachment belongs to a purchased product
+        - order is CONFIRMED
+        - payment is PAID
+    """
 
     user = require_completed_profile(request)
 
     try:
-        attachment = get_marketplace_attachment_for_download(
-            attachment_id=attachment_id,
+        attachment = get_attachment_for_download(
             user_id=user["id"],
+            attachment_id=attachment_id,
         )
 
-        file_path = attachment["file_path"]
+        file_path = attachment["storage_path"]
 
-        # ----------------------------------------------------
-        # Validate file path
-        # ----------------------------------------------------
-
-        if not file_path:
-            raise MarketplaceRouteError(
-                "File path is missing"
+        if not file_path or not os.path.isfile(file_path):
+            raise NotFoundError(
+                "Digital file is no longer available."
             )
-
-        if not os.path.isfile(file_path):
-            raise MarketplaceRouteError(
-                "File is no longer available"
-            )
-
-        # ----------------------------------------------------
-        # Return private file
-        # ----------------------------------------------------
 
         return FileResponse(
             path=file_path,
+            media_type=attachment["file_type"],
             filename=attachment["file_name"],
-            media_type=(
-                attachment["file_type"]
-                or "application/octet-stream"
-            ),
         )
 
-    except MarketplaceRouteError as error:
-        raise HTTPException(
-            status_code=404,
-            detail=str(error),
-        ) from error
-
     except Exception as error:
-        raise HTTPException(
-            status_code=403,
-            detail=str(error),
-        ) from error
+        raise _handle_marketplace_error(error) from error

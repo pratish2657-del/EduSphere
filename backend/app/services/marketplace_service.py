@@ -8,31 +8,22 @@ from app.core.exceptions import (
 from app.database import get_connection
 
 # ============================================================
-# MARKETPLACE FILE RULES
+# FILE RULES
 # ============================================================
 
 ALLOWED_MARKETPLACE_FILE_TYPES = {
-    # PDF
     "application/pdf",
-    # Word
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    # PowerPoint
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    # Images
     "image/jpeg",
     "image/png",
     "image/webp",
-    # Text / notes
     "text/plain",
 }
 
 MAX_MARKETPLACE_FILE_SIZE = 10 * 1024 * 1024
-
-# ============================================================
-# MARKETPLACE PREVIEW IMAGE RULES
-# ============================================================
 
 ALLOWED_MARKETPLACE_PREVIEW_TYPES = {
     "image/jpeg",
@@ -45,13 +36,6 @@ MAX_MARKETPLACE_PREVIEW_SIZE = 5 * 1024 * 1024
 
 # ============================================================
 # LIST PRODUCTS
-#
-# ALL AUTHENTICATED / COMPLETED USERS
-#
-# Student     BUY + SELL
-# Professor   BUY + SELL
-# Admin       BUY + SELL
-# SuperAdmin  BUY + SELL
 # ============================================================
 
 
@@ -69,7 +53,6 @@ def get_products(
         query = """
             SELECT
                 mp.id AS product_id,
-
                 mp.seller_id,
                 seller.full_name AS seller_name,
 
@@ -84,6 +67,7 @@ def get_products(
                 mp.condition_type,
                 mp.price,
                 mp.quantity,
+                mp.reserved_quantity,
                 mp.is_active,
 
                 mp.created_at,
@@ -92,10 +76,10 @@ def get_products(
             FROM marketplace_products mp
 
             INNER JOIN users seller
-                ON mp.seller_id = seller.id
+                ON seller.id = mp.seller_id
 
             INNER JOIN institutions i
-                ON mp.institution_id = i.id
+                ON i.id = mp.institution_id
 
             WHERE mp.is_active = TRUE
         """
@@ -108,19 +92,19 @@ def get_products(
             """
             params.append(institution_id)
 
-        if category is not None:
+        if category:
             query += """
                 AND LOWER(mp.category) = LOWER(%s)
             """
-            params.append(category)
+            params.append(category.strip())
 
-        if product_type is not None:
+        if product_type:
             query += """
                 AND mp.product_type = %s
             """
-            params.append(product_type)
+            params.append(product_type.upper())
 
-        if search is not None:
+        if search:
             query += """
                 AND (
                     LOWER(mp.name) LIKE LOWER(%s)
@@ -128,9 +112,8 @@ def get_products(
                 )
             """
 
-            search_value = f"%{search}%"
-            params.append(search_value)
-            params.append(search_value)
+            value = f"%{search.strip()}%"
+            params.extend([value, value])
 
         query += """
             ORDER BY mp.created_at DESC
@@ -150,7 +133,7 @@ def get_products(
 
 
 # ============================================================
-# GET SINGLE PRODUCT
+# GET PRODUCT
 # ============================================================
 
 
@@ -179,6 +162,7 @@ def get_product(product_id):
                 mp.condition_type,
                 mp.price,
                 mp.quantity,
+                mp.reserved_quantity,
                 mp.is_active,
 
                 mp.created_at,
@@ -187,10 +171,10 @@ def get_product(product_id):
             FROM marketplace_products mp
 
             INNER JOIN users seller
-                ON mp.seller_id = seller.id
+                ON seller.id = mp.seller_id
 
             INNER JOIN institutions i
-                ON mp.institution_id = i.id
+                ON i.id = mp.institution_id
 
             WHERE mp.id = %s
             """,
@@ -204,37 +188,7 @@ def get_product(product_id):
                 "Marketplace product not found"
             )
 
-        # ----------------------------------------------------
-        # Product attachments
-        #
-        # IMPORTANT:
-        # Do NOT expose file_path here.
-        # ----------------------------------------------------
-
-        cursor.execute(
-            """
-            SELECT
-                id AS attachment_id,
-                file_name,
-                file_type,
-                file_size,
-                created_at
-
-            FROM marketplace_attachments
-
-            WHERE product_id = %s
-
-            ORDER BY created_at ASC
-            """,
-            (product_id,),
-        )
-
-        attachments = cursor.fetchall()
-
-        return {
-            "product": product,
-            "attachments": attachments,
-        }
+        return product
 
     finally:
         connection.close()
@@ -242,13 +196,6 @@ def get_product(product_id):
 
 # ============================================================
 # CREATE PRODUCT
-#
-# ANY COMPLETED USER CAN SELL
-#
-# Student     SELL
-# Professor   SELL
-# Admin       SELL
-# SuperAdmin  SELL
 # ============================================================
 
 
@@ -259,113 +206,45 @@ def create_product(user_id, data):
         cursor = connection.cursor()
 
         # ----------------------------------------------------
-        # Verify seller
-        # ----------------------------------------------------
-
-        cursor.execute(
-            """
-            SELECT
-                id,
-                is_active
-            FROM users
-            WHERE id = %s
-            """,
-            (user_id,),
-        )
-
-        user = cursor.fetchone()
-
-        if not user:
-            raise NotFoundError("User not found")
-
-        if not user["is_active"]:
-            raise ForbiddenError(
-                "User account is inactive"
-            )
-
-        # ----------------------------------------------------
         # Verify institution
         # ----------------------------------------------------
 
         cursor.execute(
             """
-            SELECT
-                id,
-                name
+            SELECT id
             FROM institutions
             WHERE id = %s
+            LIMIT 1
             """,
             (data.institution_id,),
         )
 
-        institution = cursor.fetchone()
-
-        if not institution:
+        if not cursor.fetchone():
             raise NotFoundError(
                 "Institution not found"
             )
 
         # ----------------------------------------------------
-        # Validate product type
+        # Validate product
         # ----------------------------------------------------
 
-        if data.product_type not in {
-            "DIGITAL",
-            "PHYSICAL",
-        }:
-            raise BadRequestError(
-                "Product type must be DIGITAL or PHYSICAL"
-            )
-
-        # ----------------------------------------------------
-        # DIGITAL product rules
-        # ----------------------------------------------------
-
-        if (
-            data.product_type == "DIGITAL"
-            and data.condition_type != "DIGITAL"
-        ):
-            raise BadRequestError(
-                "Digital products must use DIGITAL condition"
-            )
-
-        # ----------------------------------------------------
-        # PHYSICAL product rules
-        # ----------------------------------------------------
-
-        if (
-            data.product_type == "PHYSICAL"
-            and data.quantity < 0
-        ):
-            raise BadRequestError(
-                "Quantity cannot be negative"
-            )
-
-        # ----------------------------------------------------
-        # Price
-        # ----------------------------------------------------
+        if data.product_type == "DIGITAL":
+            condition_type = "DIGITAL"
+        else:
+            condition_type = data.condition_type
 
         if data.price < 0:
             raise BadRequestError(
                 "Price cannot be negative"
             )
 
-        # ----------------------------------------------------
-        # DIGITAL products
-        #
-        # Quantity can represent available licenses/copies.
-        # ----------------------------------------------------
-
-        if (
-            data.product_type == "DIGITAL"
-            and data.quantity < 0
-        ):
+        if data.quantity < 0:
             raise BadRequestError(
                 "Quantity cannot be negative"
             )
 
         # ----------------------------------------------------
-        # Create product
+        # Create
         # ----------------------------------------------------
 
         cursor.execute(
@@ -380,29 +259,30 @@ def create_product(user_id, data):
                 condition_type,
                 price,
                 quantity,
+                reserved_quantity,
                 is_active
             )
             VALUES (
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                TRUE
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, 0, TRUE
             )
             """,
             (
                 user_id,
                 data.institution_id,
-                data.name,
-                data.description,
-                data.category,
+                data.name.strip(),
+                (
+                    data.description.strip()
+                    if data.description
+                    else None
+                ),
+                (
+                    data.category.strip()
+                    if data.category
+                    else None
+                ),
                 data.product_type,
-                data.condition_type,
+                condition_type,
                 data.price,
                 data.quantity,
             ),
@@ -413,17 +293,8 @@ def create_product(user_id, data):
         connection.commit()
 
         return {
-            "message": (
-                "Marketplace product created successfully"
-            ),
+            "message": "Marketplace product created successfully",
             "product_id": product_id,
-            "seller_id": user_id,
-            "institution_id": data.institution_id,
-            "name": data.name,
-            "category": data.category,
-            "product_type": data.product_type,
-            "price": data.price,
-            "quantity": data.quantity,
         }
 
     except Exception:
@@ -436,33 +307,27 @@ def create_product(user_id, data):
 
 # ============================================================
 # UPDATE PRODUCT
-#
-# SELLER — OWN PRODUCT ONLY
 # ============================================================
 
 
-def update_product(product_id, user_id, data):
+def update_product(
+    product_id,
+    user_id,
+    data,
+):
     connection = get_connection()
 
     try:
         cursor = connection.cursor()
-
-        # ----------------------------------------------------
-        # Find product
-        # ----------------------------------------------------
 
         cursor.execute(
             """
             SELECT
                 id,
                 seller_id,
-                product_type,
-                quantity,
-                price
+                reserved_quantity
             FROM marketplace_products
-
             WHERE id = %s
-
             FOR UPDATE
             """,
             (product_id,),
@@ -480,56 +345,20 @@ def update_product(product_id, user_id, data):
                 "You can only update your own products"
             )
 
-        # ----------------------------------------------------
-        # Validate product type
-        # ----------------------------------------------------
-
-        if data.product_type not in {
-            "DIGITAL",
-            "PHYSICAL",
-        }:
+        if data.quantity < product["reserved_quantity"]:
             raise BadRequestError(
-                "Product type must be DIGITAL or PHYSICAL"
+                "Quantity cannot be lower than currently reserved stock"
             )
 
-        # ----------------------------------------------------
-        # DIGITAL validation
-        # ----------------------------------------------------
-
-        if (
-            data.product_type == "DIGITAL"
-            and data.condition_type != "DIGITAL"
-        ):
-            raise BadRequestError(
-                "Digital products must use DIGITAL condition"
-            )
-
-        # ----------------------------------------------------
-        # Price
-        # ----------------------------------------------------
-
-        if data.price < 0:
-            raise BadRequestError(
-                "Price cannot be negative"
-            )
-
-        # ----------------------------------------------------
-        # Quantity
-        # ----------------------------------------------------
-
-        if data.quantity < 0:
-            raise BadRequestError(
-                "Quantity cannot be negative"
-            )
-
-        # ----------------------------------------------------
-        # Update
-        # ----------------------------------------------------
+        condition_type = (
+            "DIGITAL"
+            if data.product_type == "DIGITAL"
+            else data.condition_type
+        )
 
         cursor.execute(
             """
             UPDATE marketplace_products
-
             SET
                 name = %s,
                 description = %s,
@@ -539,15 +368,22 @@ def update_product(product_id, user_id, data):
                 price = %s,
                 quantity = %s,
                 is_active = %s
-
             WHERE id = %s
             """,
             (
-                data.name,
-                data.description,
-                data.category,
+                data.name.strip(),
+                (
+                    data.description.strip()
+                    if data.description
+                    else None
+                ),
+                (
+                    data.category.strip()
+                    if data.category
+                    else None
+                ),
                 data.product_type,
-                data.condition_type,
+                condition_type,
                 data.price,
                 data.quantity,
                 data.is_active,
@@ -558,9 +394,7 @@ def update_product(product_id, user_id, data):
         connection.commit()
 
         return {
-            "message": (
-                "Marketplace product updated successfully"
-            ),
+            "message": "Marketplace product updated successfully",
             "product_id": product_id,
         }
 
@@ -574,10 +408,6 @@ def update_product(product_id, user_id, data):
 
 # ============================================================
 # DELETE PRODUCT
-#
-# SELLER — OWN PRODUCT ONLY
-#
-# SOFT DELETE
 # ============================================================
 
 
@@ -591,11 +421,10 @@ def delete_product(product_id, user_id):
             """
             SELECT
                 id,
-                seller_id
+                seller_id,
+                reserved_quantity
             FROM marketplace_products
-
             WHERE id = %s
-
             FOR UPDATE
             """,
             (product_id,),
@@ -613,17 +442,15 @@ def delete_product(product_id, user_id):
                 "You can only delete your own products"
             )
 
-        # ----------------------------------------------------
-        # Soft delete
-        # ----------------------------------------------------
+        if product["reserved_quantity"] > 0:
+            raise BadRequestError(
+                "This product cannot be removed while stock is reserved"
+            )
 
         cursor.execute(
             """
             UPDATE marketplace_products
-
-            SET
-                is_active = FALSE
-
+            SET is_active = FALSE
             WHERE id = %s
             """,
             (product_id,),
@@ -632,9 +459,7 @@ def delete_product(product_id, user_id):
         connection.commit()
 
         return {
-            "message": (
-                "Marketplace product removed successfully"
-            ),
+            "message": "Marketplace product removed successfully",
             "product_id": product_id,
         }
 
@@ -647,12 +472,7 @@ def delete_product(product_id, user_id):
 
 
 # ============================================================
-# ADD PRODUCT ATTACHMENT
-#
-# SELLER — OWN PRODUCT ONLY
-#
-# Files are physically stored by the route.
-# This function only creates the DB record.
+# ADD ATTACHMENT
 # ============================================================
 
 
@@ -669,18 +489,10 @@ def add_product_attachment(
     try:
         cursor = connection.cursor()
 
-        # ----------------------------------------------------
-        # Validate file type
-        # ----------------------------------------------------
-
         if file_type not in ALLOWED_MARKETPLACE_FILE_TYPES:
             raise BadRequestError(
                 "File type is not allowed"
             )
-
-        # ----------------------------------------------------
-        # Validate file size
-        # ----------------------------------------------------
 
         if file_size <= 0:
             raise BadRequestError(
@@ -692,22 +504,14 @@ def add_product_attachment(
                 "File size cannot exceed 10 MB"
             )
 
-        # ----------------------------------------------------
-        # Find product
-        # ----------------------------------------------------
-
         cursor.execute(
             """
             SELECT
                 id,
                 seller_id,
-                product_type,
-                is_active
-
+                product_type
             FROM marketplace_products
-
             WHERE id = %s
-
             FOR UPDATE
             """,
             (product_id,),
@@ -720,73 +524,35 @@ def add_product_attachment(
                 "Marketplace product not found"
             )
 
-        # ----------------------------------------------------
-        # Only DIGITAL products can have files
-        # ----------------------------------------------------
+        if product["seller_id"] != user_id:
+            raise ForbiddenError(
+                "You can only upload files for your own products"
+            )
 
         if product["product_type"] != "DIGITAL":
             raise BadRequestError(
-                "Attachments can only be uploaded "
-                "to DIGITAL products"
+                "Attachments are only allowed for digital products"
             )
-
-        # ----------------------------------------------------
-        # Product must be active
-        # ----------------------------------------------------
-
-        if not product["is_active"]:
-            raise BadRequestError(
-                "Cannot upload files to an inactive product"
-            )
-
-        # ----------------------------------------------------
-        # Seller ownership
-        # ----------------------------------------------------
-
-        if product["seller_id"] != user_id:
-            raise ForbiddenError(
-                "You can only upload files to your own products"
-            )
-
-        # ----------------------------------------------------
-        # Validate path
-        # ----------------------------------------------------
-
-        if not file_path:
-            raise BadRequestError(
-                "File path is required"
-            )
-
-        # ----------------------------------------------------
-        # Insert attachment
-        # ----------------------------------------------------
 
         cursor.execute(
             """
             INSERT INTO marketplace_attachments (
                 product_id,
                 file_name,
-                file_path,
                 file_type,
                 file_size,
-                uploaded_by
+                storage_path
             )
             VALUES (
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s
+                %s, %s, %s, %s, %s
             )
             """,
             (
                 product_id,
                 file_name,
-                file_path,
                 file_type,
                 file_size,
-                user_id,
+                file_path,
             ),
         )
 
@@ -795,14 +561,8 @@ def add_product_attachment(
         connection.commit()
 
         return {
-            "message": (
-                "Marketplace attachment uploaded successfully"
-            ),
+            "message": "Product attachment uploaded successfully",
             "attachment_id": attachment_id,
-            "product_id": product_id,
-            "file_name": file_name,
-            "file_type": file_type,
-            "file_size": file_size,
         }
 
     except Exception:
@@ -815,14 +575,13 @@ def add_product_attachment(
 
 # ============================================================
 # GET PRODUCT ATTACHMENT
-#
-# INTERNAL / SELLER USE
-#
-# Does NOT grant buyer download access.
 # ============================================================
 
 
-def get_product_attachment(attachment_id):
+def get_product_attachment(
+    attachment_id,
+    user_id=None,
+):
     connection = get_connection()
 
     try:
@@ -831,24 +590,18 @@ def get_product_attachment(attachment_id):
         cursor.execute(
             """
             SELECT
-                ma.id AS attachment_id,
+                ma.id,
                 ma.product_id,
-
                 ma.file_name,
-                ma.file_path,
                 ma.file_type,
                 ma.file_size,
-
-                ma.uploaded_by,
-
-                mp.seller_id,
-                mp.product_type,
-                mp.is_active
+                ma.storage_path,
+                mp.seller_id
 
             FROM marketplace_attachments ma
 
             INNER JOIN marketplace_products mp
-                ON ma.product_id = mp.id
+                ON mp.id = ma.product_id
 
             WHERE ma.id = %s
             """,
@@ -859,7 +612,15 @@ def get_product_attachment(attachment_id):
 
         if not attachment:
             raise NotFoundError(
-                "Marketplace attachment not found"
+                "Attachment not found"
+            )
+
+        if (
+            user_id is not None
+            and attachment["seller_id"] != user_id
+        ):
+            raise ForbiddenError(
+                "You do not have permission to access this attachment"
             )
 
         return attachment
@@ -870,8 +631,6 @@ def get_product_attachment(attachment_id):
 
 # ============================================================
 # DELETE ATTACHMENT
-#
-# SELLER — OWN PRODUCT ONLY
 # ============================================================
 
 
@@ -887,16 +646,14 @@ def delete_product_attachment(
         cursor.execute(
             """
             SELECT
-                ma.id AS attachment_id,
-                ma.file_path,
-
-                mp.seller_id,
-                mp.product_type
+                ma.id,
+                ma.storage_path,
+                mp.seller_id
 
             FROM marketplace_attachments ma
 
             INNER JOIN marketplace_products mp
-                ON ma.product_id = mp.id
+                ON mp.id = ma.product_id
 
             WHERE ma.id = %s
 
@@ -909,19 +666,17 @@ def delete_product_attachment(
 
         if not attachment:
             raise NotFoundError(
-                "Marketplace attachment not found"
+                "Attachment not found"
             )
 
         if attachment["seller_id"] != user_id:
             raise ForbiddenError(
-                "You can only delete attachments "
-                "from your own products"
+                "You can only delete your own attachment"
             )
 
         cursor.execute(
             """
             DELETE FROM marketplace_attachments
-
             WHERE id = %s
             """,
             (attachment_id,),
@@ -930,11 +685,8 @@ def delete_product_attachment(
         connection.commit()
 
         return {
-            "message": (
-                "Marketplace attachment deleted successfully"
-            ),
-            "attachment_id": attachment_id,
-            "file_path": attachment["file_path"],
+            "message": "Attachment deleted successfully",
+            "file_path": attachment["storage_path"],
         }
 
     except Exception:
@@ -946,168 +698,7 @@ def delete_product_attachment(
 
 
 # ============================================================
-# BUYER / SELLER DOWNLOAD
-#
-# SELLER:
-#   Can download own DIGITAL product files.
-#
-# BUYER:
-#   Must have a CONFIRMED / PROCESSING / COMPLETED order.
-#
-# IMPORTANT:
-#   private_uploads is NEVER mounted as StaticFiles.
-# ============================================================
-
-
-def get_marketplace_attachment_for_download(
-    attachment_id,
-    user_id,
-):
-    connection = get_connection()
-
-    try:
-        cursor = connection.cursor()
-
-        # ----------------------------------------------------
-        # Get attachment and product
-        # ----------------------------------------------------
-
-        cursor.execute(
-            """
-            SELECT
-                ma.id AS attachment_id,
-                ma.product_id,
-
-                ma.file_name,
-                ma.file_path,
-                ma.file_type,
-                ma.file_size,
-
-                mp.name AS product_name,
-                mp.product_type,
-                mp.seller_id,
-                mp.is_active
-
-            FROM marketplace_attachments ma
-
-            INNER JOIN marketplace_products mp
-                ON mp.id = ma.product_id
-
-            WHERE ma.id = %s
-
-            LIMIT 1
-            """,
-            (attachment_id,),
-        )
-
-        attachment = cursor.fetchone()
-
-        if not attachment:
-            raise NotFoundError(
-                "Marketplace attachment not found"
-            )
-
-        # ----------------------------------------------------
-        # DIGITAL products only
-        # ----------------------------------------------------
-
-        if attachment["product_type"] != "DIGITAL":
-            raise BadRequestError(
-                "This product does not contain "
-                "a downloadable digital file"
-            )
-
-        # ----------------------------------------------------
-        # SELLER ACCESS
-        # ----------------------------------------------------
-
-        if attachment["seller_id"] == user_id:
-            file_path = attachment["file_path"]
-
-            if not file_path:
-                raise BadRequestError(
-                    "File path is missing"
-                )
-
-            if not os.path.isfile(file_path):
-                raise NotFoundError(
-                    "File is no longer available"
-                )
-
-            return attachment
-
-        # ----------------------------------------------------
-        # BUYER ACCESS
-        #
-        # Payment must have resulted in a valid marketplace
-        # order status.
-        # ----------------------------------------------------
-
-        cursor.execute(
-            """
-            SELECT
-                mo.id AS order_id,
-                mo.status AS order_status
-
-            FROM marketplace_orders mo
-
-            INNER JOIN marketplace_order_items moi
-                ON moi.order_id = mo.id
-
-            WHERE mo.buyer_id = %s
-
-              AND moi.product_id = %s
-
-              AND mo.status IN (
-                  'CONFIRMED',
-                  'PROCESSING',
-                  'COMPLETED'
-              )
-
-            LIMIT 1
-            """,
-            (
-                user_id,
-                attachment["product_id"],
-            ),
-        )
-
-        order = cursor.fetchone()
-
-        if not order:
-            raise ForbiddenError(
-                "You must purchase this digital product "
-                "before downloading its files"
-            )
-
-        # ----------------------------------------------------
-        # Verify physical file exists
-        # ----------------------------------------------------
-
-        file_path = attachment["file_path"]
-
-        if not file_path:
-            raise BadRequestError(
-                "File path is missing"
-            )
-
-        if not os.path.isfile(file_path):
-            raise NotFoundError(
-                "File is no longer available"
-            )
-
-        return attachment
-
-    finally:
-        connection.close()
-        
-# ============================================================
-# SAVE MARKETPLACE PRODUCT PREVIEW IMAGE
-#
-# SELLER — OWN PRODUCT ONLY
-#
-# The route physically stores the file.
-# This function only validates ownership and saves the path.
+# SAVE PREVIEW IMAGE
 # ============================================================
 
 
@@ -1115,53 +706,19 @@ def save_product_preview(
     product_id,
     user_id,
     file_path,
-    file_type,
-    file_size,
 ):
     connection = get_connection()
 
     try:
         cursor = connection.cursor()
 
-        # ----------------------------------------------------
-        # Validate file type
-        # ----------------------------------------------------
-
-        if file_type not in ALLOWED_MARKETPLACE_PREVIEW_TYPES:
-            raise BadRequestError(
-                "Preview image must be JPG, PNG or WEBP"
-            )
-
-        # ----------------------------------------------------
-        # Validate file size
-        # ----------------------------------------------------
-
-        if file_size <= 0:
-            raise BadRequestError(
-                "Preview image cannot be empty"
-            )
-
-        if file_size > MAX_MARKETPLACE_PREVIEW_SIZE:
-            raise BadRequestError(
-                "Preview image cannot exceed 5 MB"
-            )
-
-        # ----------------------------------------------------
-        # Find product
-        # ----------------------------------------------------
-
         cursor.execute(
             """
             SELECT
                 id,
-                seller_id,
-                is_active,
-                preview_image_path
-
+                seller_id
             FROM marketplace_products
-
             WHERE id = %s
-
             FOR UPDATE
             """,
             (product_id,),
@@ -1174,45 +731,15 @@ def save_product_preview(
                 "Marketplace product not found"
             )
 
-        # ----------------------------------------------------
-        # Product must be active
-        # ----------------------------------------------------
-
-        if not product["is_active"]:
-            raise BadRequestError(
-                "Cannot upload preview to an inactive product"
-            )
-
-        # ----------------------------------------------------
-        # Seller ownership
-        # ----------------------------------------------------
-
         if product["seller_id"] != user_id:
             raise ForbiddenError(
-                "You can only upload a preview to your own product"
+                "You can only update your own product"
             )
-
-        # ----------------------------------------------------
-        # Validate path
-        # ----------------------------------------------------
-
-        if not file_path:
-            raise BadRequestError(
-                "Preview image path is required"
-            )
-
-        # ----------------------------------------------------
-        # Save preview path
-        # ----------------------------------------------------
 
         cursor.execute(
             """
             UPDATE marketplace_products
-
-            SET
-                preview_image_path = %s,
-                updated_at = CURRENT_TIMESTAMP
-
+            SET preview_image_path = %s
             WHERE id = %s
             """,
             (
@@ -1224,13 +751,8 @@ def save_product_preview(
         connection.commit()
 
         return {
-            "message": (
-                "Marketplace preview image uploaded successfully"
-            ),
+            "message": "Product preview updated successfully",
             "product_id": product_id,
-            "preview_image_path": file_path,
-            "file_type": file_type,
-            "file_size": file_size,
         }
 
     except Exception:
@@ -1239,9 +761,10 @@ def save_product_preview(
 
     finally:
         connection.close()
-        
+
+
 # ============================================================
-# GET MARKETPLACE PRODUCT PREVIEW
+# GET PREVIEW
 # ============================================================
 
 
@@ -1253,12 +776,8 @@ def get_product_preview(product_id):
 
         cursor.execute(
             """
-            SELECT
-                id AS product_id,
-                preview_image_path
-
+            SELECT preview_image_path
             FROM marketplace_products
-
             WHERE id = %s
               AND is_active = TRUE
             """,
@@ -1272,12 +791,83 @@ def get_product_preview(product_id):
                 "Marketplace product not found"
             )
 
-        if not product["preview_image_path"]:
+        path = product["preview_image_path"]
+
+        if not path or not os.path.isfile(path):
             raise NotFoundError(
-                "Preview image is not available"
+                "Product preview not found"
             )
 
-        return product
+        return path
+
+    finally:
+        connection.close()
+        
+def get_attachment_for_download(
+    user_id: int,
+    attachment_id: int,
+):
+    """
+    Return a digital attachment only when the authenticated
+    buyer has a successfully paid and confirmed order
+    containing the attachment's product.
+    """
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+
+        cursor.execute(
+            """
+            SELECT
+                a.id AS attachment_id,
+                a.product_id,
+                a.file_name,
+                a.file_type,
+                a.file_size,
+                a.storage_path,
+
+                oi.order_id,
+
+                o.buyer_id,
+                o.status AS order_status,
+
+                p.status AS payment_status
+
+            FROM marketplace_attachments a
+
+            INNER JOIN marketplace_order_items oi
+                ON oi.product_id = a.product_id
+
+            INNER JOIN marketplace_orders o
+                ON o.id = oi.order_id
+
+            INNER JOIN marketplace_payments p
+                ON p.order_id = o.id
+
+            WHERE a.id = %s
+              AND o.buyer_id = %s
+              AND o.status = 'CONFIRMED'
+              AND p.status = 'PAID'
+
+            ORDER BY oi.id DESC
+
+            LIMIT 1
+            """,
+            (
+                attachment_id,
+                user_id,
+            ),
+        )
+
+        attachment = cursor.fetchone()
+
+        if not attachment:
+            raise ForbiddenError(
+                "You do not have access to this digital file."
+            )
+
+        return attachment
 
     finally:
         connection.close()
