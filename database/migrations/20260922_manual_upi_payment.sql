@@ -1,0 +1,11 @@
+-- EduSphere manual UPI payment migration
+-- Review against the current marketplace_payments schema before applying.
+-- Intended fields:
+--   payment_method / gateway -> UPI_MANUAL
+--   payer_upi_id
+--   payer_phone
+--   transaction_reference
+--   verified_at
+--   verified_by
+--   receipt_number
+-- This file is intentionally a reviewable migration template.
