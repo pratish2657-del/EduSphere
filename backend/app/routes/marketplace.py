@@ -24,7 +24,6 @@ from app.schemas.marketplace import (
 from app.services.marketplace_order_service import (
     add_cart_item,
     checkout,
-    get_attachment_for_download,
     get_cart,
     get_order,
     get_user_orders,
@@ -151,74 +150,6 @@ async def create_marketplace_product(
         return create_product(
             user_id=user["id"],
             data=data,
-        )
-
-    except Exception as error:
-        raise _handle_marketplace_error(error) from error
-
-
-@router.get("/{product_id}")
-async def get_marketplace_product(
-    product_id: int,
-    request: Request,
-):
-    """
-    GET /marketplace/{product_id}
-    """
-
-    require_completed_profile(request)
-
-    try:
-        return get_product(
-            product_id=product_id,
-        )
-
-    except Exception as error:
-        raise _handle_marketplace_error(error) from error
-
-
-@router.put("/{product_id}")
-async def update_marketplace_product(
-    product_id: int,
-    request: Request,
-    data: MarketplaceProductUpdate,
-):
-    """
-    PUT /marketplace/{product_id}
-
-    Update own product.
-    """
-
-    user = require_completed_profile(request)
-
-    try:
-        return update_product(
-            product_id=product_id,
-            user_id=user["id"],
-            data=data,
-        )
-
-    except Exception as error:
-        raise _handle_marketplace_error(error) from error
-
-
-@router.delete("/{product_id}")
-async def delete_marketplace_product(
-    product_id: int,
-    request: Request,
-):
-    """
-    DELETE /marketplace/{product_id}
-
-    Soft-delete own product.
-    """
-
-    user = require_completed_profile(request)
-
-    try:
-        return delete_product(
-            product_id=product_id,
-            user_id=user["id"],
         )
 
     except Exception as error:
@@ -730,3 +661,72 @@ async def download_marketplace_attachment(
 
     except Exception as error:
         raise _handle_marketplace_error(error) from error
+
+@router.get("/{product_id}")
+async def get_marketplace_product(
+    product_id: int,
+    request: Request,
+):
+    """
+    GET /marketplace/{product_id}
+    """
+
+    require_completed_profile(request)
+
+    try:
+        return get_product(
+            product_id=product_id,
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+
+@router.put("/{product_id}")
+async def update_marketplace_product(
+    product_id: int,
+    request: Request,
+    data: MarketplaceProductUpdate,
+):
+    """
+    PUT /marketplace/{product_id}
+
+    Update own product.
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return update_product(
+            product_id=product_id,
+            user_id=user["id"],
+            data=data,
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+
+@router.delete("/{product_id}")
+async def delete_marketplace_product(
+    product_id: int,
+    request: Request,
+):
+    """
+    DELETE /marketplace/{product_id}
+
+    Soft-delete own product.
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return delete_product(
+            product_id=product_id,
+            user_id=user["id"],
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+

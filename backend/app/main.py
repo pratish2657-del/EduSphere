@@ -29,7 +29,9 @@ logger = logging.getLogger(__name__)
 SESSION_SECRET = os.getenv("SESSION_SECRET")
 
 if not SESSION_SECRET:
-    raise RuntimeError("SESSION_SECRET is missing from backend/.env")
+    raise RuntimeError(
+        "SESSION_SECRET is missing from backend/.env"
+    )
 
 # ============================================================
 # CREATE FASTAPI APPLICATION
@@ -57,15 +59,15 @@ app.add_middleware(
 # CORS
 # ============================================================
 
-# ============================================================
-# CORS
-# ============================================================
-
 CORS_ORIGINS = [
     origin.strip().rstrip("/")
     for origin in os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,https://edusphere-rho-sable.vercel.app",
+        (
+            "http://localhost:5173,"
+            "http://127.0.0.1:5173,"
+            "https://edusphere-rho-sable.vercel.app"
+        ),
     ).split(",")
     if origin.strip()
 ]
@@ -101,7 +103,10 @@ os.makedirs(
 # Import the actual APIRouter objects.
 # ============================================================
 
-from app.routes import admin_events, admin_marketplace_management, marketplace_route
+from app.routes import (
+    admin_events,
+    admin_marketplace_management,
+)
 from app.routes.admin import router as admin_router
 from app.routes.admin_profile import router as admin_profile_router
 from app.routes.ai import router as ai_router
@@ -109,18 +114,30 @@ from app.routes.attendance import router as attendance_router
 from app.routes.auth import router as auth_router
 from app.routes.course import router as course_router
 from app.routes.dashboard import router as dashboard_router
-from app.routes.developer_library import router as developer_library_router
-from app.routes.developer_profile import router as developer_profile_router
-from app.routes.developer_verification import router as developer_verification_router
-from app.routes.developer_workspace import router as developer_workspace_router
+from app.routes.developer_library import (
+    router as developer_library_router,
+)
+from app.routes.developer_profile import (
+    router as developer_profile_router,
+)
+from app.routes.developer_verification import (
+    router as developer_verification_router,
+)
+from app.routes.developer_workspace import (
+    router as developer_workspace_router,
+)
 from app.routes.event import router as event_router
 from app.routes.institution import router as institution_router
 from app.routes.library import router as library_router
-from app.routes.marketplace import router as marketplace_router
+from app.routes.marketplace import (
+    router as marketplace_router,
+)
 from app.routes.marketplace_payment import (
     router as marketplace_payment_router,
 )
-from app.routes.marketplace_seller import router as marketplace_seller_router
+from app.routes.marketplace_seller import (
+    router as marketplace_seller_router,
+)
 from app.routes.professor import router as professor_router
 from app.routes.professor_dashboard import (
     router as professor_dashboard_router,
@@ -137,13 +154,21 @@ from app.routes.protected import router as protected_router
 from app.routes.result import router as result_router
 from app.routes.section import router as section_router
 from app.routes.student import router as student_router
-from app.routes.student_profile_options import router as student_profile_options_router
-from app.routes.super_admin_activity import router as super_admin_activity_router
-from app.routes.super_admin_courses import router as super_admin_courses_router
+from app.routes.student_profile_options import (
+    router as student_profile_options_router,
+)
+from app.routes.super_admin_activity import (
+    router as super_admin_activity_router,
+)
+from app.routes.super_admin_courses import (
+    router as super_admin_courses_router,
+)
 from app.routes.super_admin_dashboard_summary import (
     router as super_admin_dashboard_summary_router,
 )
-from app.routes.super_admin_library import router as super_admin_library_router
+from app.routes.super_admin_library import (
+    router as super_admin_library_router,
+)
 from app.routes.super_admin_marketplace import (
     router as super_admin_marketplace_router,
 )
@@ -160,81 +185,205 @@ from app.routes.users import router as users_router
 app.include_router(auth_router)
 app.include_router(users_router)
 
-# Student profile endpoints:
+# ============================================================
+# STUDENT PROFILE
+# ============================================================
 #
 # POST /profile/student
 # PUT  /profile/student
 # GET  /profile/student
 #
+# ============================================================
+
 app.include_router(profile_router)
+
 app.include_router(admin_profile_router)
+
 app.include_router(
     student_profile_options_router
 )
+
 app.include_router(protected_router)
+
 app.include_router(dashboard_router)
+
 app.include_router(ai_router)
+
 app.include_router(timetable_router)
-app.include_router(marketplace_router)
-app.include_router(marketplace_payment_router)
-app.include_router(marketplace_seller_router)
-app.include_router(marketplace_route.router)
-app.include_router(professor_router)
-app.include_router(professor_dashboard_router)
-app.include_router(professor_verification_router)
-app.include_router(developer_profile_router)
-app.include_router(developer_workspace_router)
-app.include_router(developer_verification_router)
-app.include_router(developer_library_router)
-app.include_router(admin_router)
-app.include_router(student_router)
-app.include_router(course_router)
-app.include_router(event_router)
-app.include_router(result_router)
-app.include_router(attendance_router)
-app.include_router(program_router)
-app.include_router(section_router)
+
+# ============================================================
+# MARKETPLACE ROUTERS
+#
+# IMPORTANT:
+# Static marketplace prefixes must be registered BEFORE
+# generic marketplace routes such as:
+#
+# /marketplace/{product_id}
+#
+# This prevents paths such as:
+#
+# /marketplace/payments/...
+# /marketplace/seller/...
+#
+# from being interpreted as product IDs.
+# ============================================================
+
+app.include_router(
+    marketplace_payment_router
+)
+
+app.include_router(
+    marketplace_seller_router
+)
+
+app.include_router(
+    marketplace_router
+)
+
+# ============================================================
+# PROFESSOR
+# ============================================================
+
+app.include_router(
+    professor_router
+)
+
+app.include_router(
+    professor_dashboard_router
+)
+
+app.include_router(
+    professor_verification_router
+)
+
 app.include_router(
     professor_students_router
 )
+
+# ============================================================
+# DEVELOPER
+# ============================================================
+
 app.include_router(
-    admin_events.router,
+    developer_profile_router
 )
+
 app.include_router(
-    admin_marketplace_management.router,
+    developer_workspace_router
 )
+
 app.include_router(
-    institution_router,
+    developer_verification_router
 )
-app.include_router(library_router)
-app.include_router(super_admin_library_router)
+
 app.include_router(
-    super_admin_courses_router,
+    developer_library_router
 )
+
+# ============================================================
+# ADMIN
+# ============================================================
+
 app.include_router(
-    super_admin_activity_router,
+    admin_router
 )
+
 app.include_router(
-    super_admin_dashboard_summary_router,
+    admin_events.router
 )
+
 app.include_router(
-    super_admin_marketplace_router,
+    admin_marketplace_management.router
 )
+
+# ============================================================
+# ACADEMIC
+# ============================================================
+
 app.include_router(
-    super_admin_marketplace_shared_router,
+    student_router
+)
+
+app.include_router(
+    course_router
+)
+
+app.include_router(
+    event_router
+)
+
+app.include_router(
+    result_router
+)
+
+app.include_router(
+    attendance_router
+)
+
+app.include_router(
+    program_router
+)
+
+app.include_router(
+    section_router
+)
+
+app.include_router(
+    institution_router
+)
+
+# ============================================================
+# LIBRARY
+# ============================================================
+
+app.include_router(
+    library_router
+)
+
+# ============================================================
+# SUPER ADMIN
+# ============================================================
+
+app.include_router(
+    super_admin_library_router
+)
+
+app.include_router(
+    super_admin_courses_router
+)
+
+app.include_router(
+    super_admin_activity_router
+)
+
+app.include_router(
+    super_admin_dashboard_summary_router
+)
+
+app.include_router(
+    super_admin_marketplace_router
+)
+
+app.include_router(
+    super_admin_marketplace_shared_router
 )
 
 # ============================================================
 # PUBLIC UPLOADS
 # ============================================================
-Path("uploads/profile_photos").mkdir(
+
+Path(
+    "uploads/profile_photos"
+).mkdir(
     parents=True,
     exist_ok=True,
 )
 
 app.mount(
     "/uploads",
-    StaticFiles(directory="uploads"),
+    StaticFiles(
+        directory="uploads"
+    ),
     name="uploads",
 )
 
@@ -268,15 +417,30 @@ def health():
 # This is intentionally placed after all routers.
 # ============================================================
 
-logger.info("Registered API routes:")
+logger.info(
+    "Registered API routes:"
+)
 
 for route in app.routes:
-    path = getattr(route, "path", None)
-    methods = getattr(route, "methods", None)
+    path = getattr(
+        route,
+        "path",
+        None,
+    )
+
+    methods = getattr(
+        route,
+        "methods",
+        None,
+    )
 
     if path:
         logger.info(
             "%s %s",
-            ",".join(sorted(methods or [])),
+            ",".join(
+                sorted(
+                    methods or []
+                )
+            ),
             path,
         )

@@ -1,8 +1,4 @@
-from __future__ import annotations
-
-import os
 from datetime import datetime, timezone
-from decimal import Decimal
 
 from app.core.exceptions import (
     BadRequestError,
@@ -11,38 +7,44 @@ from app.core.exceptions import (
 )
 from app.database import get_connection
 from app.services.marketplace_inventory_service import (
+    expire_pending_orders,
     finalize_order_inventory,
+)
+from app.services.marketplace_receipt_service import (
+    create_receipt_for_payment,
 )
 
 # ============================================================
 # CONFIG
 # ============================================================
 
-PAYMENT_METHOD = "UPI"
-CURRENCY = "INR"
 
+def _payment_config():
+    import os
 
-# ============================================================
-# HELPERS
-# ============================================================
-
-def _payment_config() -> dict:
-    """
-    Return the marketplace's direct UPI payment details.
-    """
-    upi_id = os.getenv("MARKETPLACE_UPI_ID")
+    upi_id = os.getenv("MARKETPLACE_UPI_ID", "").strip()
     payment_name = os.getenv(
         "MARKETPLACE_PAYMENT_NAME",
-        "EduSphere Marketplace",
-    )
+        "",
+    ).strip()
     payment_phone = os.getenv(
         "MARKETPLACE_PAYMENT_PHONE",
         "",
-    )
+    ).strip()
 
     if not upi_id:
         raise BadRequestError(
-            "Marketplace UPI payment is not configured."
+            "Marketplace UPI ID is not configured"
+        )
+
+    if not payment_name:
+        raise BadRequestError(
+            "Marketplace payment name is not configured"
+        )
+
+    if not payment_phone:
+        raise BadRequestError(
+            "Marketplace payment phone is not configured"
         )
 
     return {
@@ -52,66 +54,26 @@ def _payment_config() -> dict:
     }
 
 
-def _serialize_payment(
-    payment: dict,
-    include_config: bool = True,
-) -> dict:
-    """
-    Convert a database payment row into an API-safe response.
-    """
-    result = {
-        "payment_id": payment["id"],
-        "order_id": payment["order_id"],
-        "payment_method": payment["payment_method"],
-        "status": payment["status"],
-        "amount": Decimal(str(payment["amount"])),
-        "currency": payment["currency"],
-        "utr_number": payment.get("utr_number"),
-        "payer_upi_id": payment.get("payer_upi_id"),
-        "payer_phone": payment.get("payer_phone"),
-        "submitted_at": (
-            payment["submitted_at"].isoformat()
-            if payment.get("submitted_at")
-            else None
-        ),
-        "verified_at": (
-            payment["verified_at"].isoformat()
-            if payment.get("verified_at")
-            else None
-        ),
-    }
-
-    if include_config:
-        config = _payment_config()
-
-        result.update(
-            {
-                "upi_id": config["upi_id"],
-                "payment_name": config["payment_name"],
-                "payment_phone": config["payment_phone"],
-            }
-        )
-
-    return result
-
-
 # ============================================================
 # CREATE PAYMENT
+# BUYER
+#
+# Creates a LOCAL PENDING UPI payment.
+#
+# NO PAYMENT GATEWAY.
+# NO CASHFREE.
+# NO RAZORPAY.
 # ============================================================
+
 
 def create_payment(
     user_id: int,
     order_id: int,
 ):
-    """
-    Create or return the local UPI payment record for an order.
+    # Release expired checkout reservations first.
+    expire_pending_orders()
 
-    No payment gateway is contacted here.
-
-    The payment remains PENDING until an administrator manually
-    verifies the submitted UTR.
-    """
-    _payment_config()
+    config = _payment_config()
 
     connection = get_connection()
 
@@ -119,7 +81,7 @@ def create_payment(
         cursor = connection.cursor(dictionary=True)
 
         # ----------------------------------------------------
-        # Lock order
+        # BUYER'S ORDER
         # ----------------------------------------------------
 
         cursor.execute(
@@ -127,47 +89,76 @@ def create_payment(
             SELECT
                 id,
                 buyer_id,
-                subtotal_amount,
-                tax_percent,
-                tax_amount,
                 total_amount,
                 status,
                 expires_at
+
             FROM marketplace_orders
+
             WHERE id = %s
-            LIMIT 1
+              AND buyer_id = %s
+
             FOR UPDATE
             """,
-            (order_id,),
+            (
+                order_id,
+                user_id,
+            ),
         )
 
         order = cursor.fetchone()
 
         if not order:
-            raise NotFoundError("Order not found.")
-
-        if order["buyer_id"] != user_id:
-            raise NotFoundError("Order not found.")
-
-        if order["status"] != "PENDING":
-            raise ConflictError(
-                "Payment cannot be created for this order."
+            raise NotFoundError(
+                "Order not found"
             )
 
         # ----------------------------------------------------
-        # Check expiry
+        # ORDER STATUS
         # ----------------------------------------------------
 
-        if (
-            order["expires_at"] is not None
-            and order["expires_at"] <= datetime.now(timezone.utc).replace(tzinfo=None)
+        if order["status"] in (
+            "CONFIRMED",
+            "PROCESSING",
+            "COMPLETED",
         ):
             raise ConflictError(
-                "This order has expired. Please create a new order."
+                "Order has already been confirmed"
+            )
+
+        if order["status"] == "CANCELLED":
+            raise BadRequestError(
+                "Payment cannot be created for a cancelled order"
             )
 
         # ----------------------------------------------------
-        # Existing payment
+        # EXPIRY
+        # ----------------------------------------------------
+
+        if order["expires_at"] is not None:
+            now = datetime.now(
+                timezone.utc
+            ).replace(tzinfo=None)
+
+            if order["expires_at"] <= now:
+                raise BadRequestError(
+                    "This checkout session has expired. "
+                    "Please create a new order."
+                )
+
+        # ----------------------------------------------------
+        # SERVER-CONTROLLED AMOUNT
+        # ----------------------------------------------------
+
+        amount = order["total_amount"]
+
+        if amount is None or amount <= 0:
+            raise BadRequestError(
+                "Order amount must be greater than zero"
+            )
+
+        # ----------------------------------------------------
+        # EXISTING PAYMENT
         # ----------------------------------------------------
 
         cursor.execute(
@@ -184,40 +175,63 @@ def create_payment(
                 payer_upi_id,
                 payer_phone,
                 submitted_at,
-                verified_at,
-                verified_by,
-                created_at,
-                updated_at
+                verified_at
+
             FROM marketplace_payments
+
             WHERE order_id = %s
-            LIMIT 1
+
             FOR UPDATE
             """,
             (order_id,),
         )
 
-        payment = cursor.fetchone()
+        existing_payment = cursor.fetchone()
 
-        if payment:
-            # ------------------------------------------------
-            # Existing PAID payment
-            # ------------------------------------------------
+        # ----------------------------------------------------
+        # ALREADY PAID
+        # ----------------------------------------------------
 
-            if payment["status"] == "PAID":
-                connection.commit()
-
-                return _serialize_payment(payment)
-
-            # ------------------------------------------------
-            # Existing payment
-            # ------------------------------------------------
+        if existing_payment:
+            if existing_payment["status"] == "PAID":
+                raise ConflictError(
+                    "Order has already been paid"
+                )
 
             connection.commit()
 
-            return _serialize_payment(payment)
+            return {
+                "message": "Payment already exists",
+                "payment_id": existing_payment["id"],
+                "order_id": order_id,
+                "payment_method": "UPI",
+                "status": existing_payment["status"],
+                "amount": existing_payment["amount"],
+                "currency": existing_payment["currency"],
+                **config,
+                "utr_number": existing_payment[
+                    "utr_number"
+                ],
+                "payer_upi_id": existing_payment[
+                    "payer_upi_id"
+                ],
+                "payer_phone": existing_payment[
+                    "payer_phone"
+                ],
+                "submitted_at": (
+                    existing_payment["submitted_at"].isoformat()
+                    if existing_payment["submitted_at"]
+                    else None
+                ),
+                "verified_at": (
+                    existing_payment["verified_at"].isoformat()
+                    if existing_payment["verified_at"]
+                    else None
+                ),
+            }
 
         # ----------------------------------------------------
-        # Create payment
+        # CREATE LOCAL PAYMENT
         # ----------------------------------------------------
 
         cursor.execute(
@@ -230,6 +244,7 @@ def create_payment(
                 amount,
                 currency
             )
+
             VALUES (
                 %s,
                 %s,
@@ -242,42 +257,29 @@ def create_payment(
             (
                 order_id,
                 user_id,
-                order["total_amount"],
+                amount,
             ),
         )
 
         payment_id = cursor.lastrowid
 
-        cursor.execute(
-            """
-            SELECT
-                id,
-                order_id,
-                buyer_id,
-                payment_method,
-                status,
-                amount,
-                currency,
-                utr_number,
-                payer_upi_id,
-                payer_phone,
-                submitted_at,
-                verified_at,
-                verified_by,
-                created_at,
-                updated_at
-            FROM marketplace_payments
-            WHERE id = %s
-            LIMIT 1
-            """,
-            (payment_id,),
-        )
-
-        payment = cursor.fetchone()
-
         connection.commit()
 
-        return _serialize_payment(payment)
+        return {
+            "message": "UPI payment created",
+            "payment_id": payment_id,
+            "order_id": order_id,
+            "payment_method": "UPI",
+            "status": "PENDING",
+            "amount": amount,
+            "currency": "INR",
+            **config,
+            "utr_number": None,
+            "payer_upi_id": None,
+            "payer_phone": None,
+            "submitted_at": None,
+            "verified_at": None,
+        }
 
     except Exception:
         connection.rollback()
@@ -289,16 +291,15 @@ def create_payment(
 
 # ============================================================
 # GET PAYMENT
+# BUYER — OWN PAYMENT ONLY
 # ============================================================
 
+
 def get_payment(
-    user_id: int,
     payment_id: int,
+    user_id: int,
 ):
-    """
-    Get a payment belonging to the authenticated buyer.
-    """
-    _payment_config()
+    config = _payment_config()
 
     connection = get_connection()
 
@@ -308,7 +309,7 @@ def get_payment(
         cursor.execute(
             """
             SELECT
-                id,
+                id AS payment_id,
                 order_id,
                 buyer_id,
                 payment_method,
@@ -319,75 +320,17 @@ def get_payment(
                 payer_upi_id,
                 payer_phone,
                 submitted_at,
-                verified_at,
-                verified_by,
-                created_at,
-                updated_at
+                verified_at
+
             FROM marketplace_payments
+
             WHERE id = %s
               AND buyer_id = %s
+
             LIMIT 1
             """,
             (
                 payment_id,
-                user_id,
-            ),
-        )
-
-        payment = cursor.fetchone()
-
-        if not payment:
-            raise NotFoundError("Payment not found.")
-
-        return _serialize_payment(payment)
-
-    finally:
-        connection.close()
-
-
-def get_order_payment(
-    user_id: int,
-    order_id: int,
-):
-    """
-    Get the payment associated with a buyer's order.
-    """
-    _payment_config()
-
-    connection = get_connection()
-
-    try:
-        cursor = connection.cursor(dictionary=True)
-
-        cursor.execute(
-            """
-            SELECT
-                p.id,
-                p.order_id,
-                p.buyer_id,
-                p.payment_method,
-                p.status,
-                p.amount,
-                p.currency,
-                p.utr_number,
-                p.payer_upi_id,
-                p.payer_phone,
-                p.submitted_at,
-                p.verified_at,
-                p.verified_by,
-                p.created_at,
-                p.updated_at
-            FROM marketplace_payments p
-            INNER JOIN marketplace_orders o
-                ON o.id = p.order_id
-            WHERE p.order_id = %s
-              AND p.buyer_id = %s
-              AND o.buyer_id = %s
-            LIMIT 1
-            """,
-            (
-                order_id,
-                user_id,
                 user_id,
             ),
         )
@@ -396,78 +339,148 @@ def get_order_payment(
 
         if not payment:
             raise NotFoundError(
-                "Payment has not been created for this order."
+                "Payment not found"
             )
 
-        return _serialize_payment(payment)
+        return {
+            **payment,
+            **config,
+            "submitted_at": (
+                payment["submitted_at"].isoformat()
+                if payment["submitted_at"]
+                else None
+            ),
+            "verified_at": (
+                payment["verified_at"].isoformat()
+                if payment["verified_at"]
+                else None
+            ),
+        }
 
     finally:
         connection.close()
 
 
 # ============================================================
-# UTR SUBMISSION
+# GET ORDER PAYMENT
+# BUYER — OWN ORDER ONLY
 # ============================================================
 
-def submit_utr(
+
+def get_order_payment(
+    order_id: int,
     user_id: int,
-    payment_id: int,
-    utr_number: str,
-    payer_upi_id: str,
-    payer_phone: str,
 ):
-    """
-    Submit proof of a direct UPI payment.
-
-    This DOES NOT mark the payment as PAID.
-
-    The status remains PENDING until an administrator verifies
-    the payment manually.
-    """
-    _payment_config()
-
-    utr_number = utr_number.strip()
-    payer_upi_id = payer_upi_id.strip()
-    payer_phone = payer_phone.strip()
-
-    if not utr_number:
-        raise BadRequestError("UTR number is required.")
-
-    if not payer_upi_id:
-        raise BadRequestError("Payer UPI ID is required.")
-
-    if not payer_phone:
-        raise BadRequestError("Payer phone number is required.")
+    config = _payment_config()
 
     connection = get_connection()
 
     try:
         cursor = connection.cursor(dictionary=True)
 
+        cursor.execute(
+            """
+            SELECT
+                mp.id AS payment_id,
+                mp.order_id,
+                mp.buyer_id,
+                mp.payment_method,
+                mp.status,
+                mp.amount,
+                mp.currency,
+                mp.utr_number,
+                mp.payer_upi_id,
+                mp.payer_phone,
+                mp.submitted_at,
+                mp.verified_at
+
+            FROM marketplace_payments mp
+
+            INNER JOIN marketplace_orders o
+                ON o.id = mp.order_id
+
+            WHERE mp.order_id = %s
+              AND o.buyer_id = %s
+
+            LIMIT 1
+            """,
+            (
+                order_id,
+                user_id,
+            ),
+        )
+
+        payment = cursor.fetchone()
+
+        if not payment:
+            raise NotFoundError(
+                "Payment not found"
+            )
+
+        return {
+            **payment,
+            **config,
+            "submitted_at": (
+                payment["submitted_at"].isoformat()
+                if payment["submitted_at"]
+                else None
+            ),
+            "verified_at": (
+                payment["verified_at"].isoformat()
+                if payment["verified_at"]
+                else None
+            ),
+        }
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# SUBMIT UTR
+# BUYER
+#
+# IMPORTANT:
+# This NEVER marks payment as PAID.
+# ============================================================
+
+
+def submit_utr(
+    payment_id: int,
+    user_id: int,
+    utr_number: str,
+    payer_upi_id: str,
+    payer_phone: str,
+):
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+
         # ----------------------------------------------------
-        # Lock payment
+        # PAYMENT + ORDER
         # ----------------------------------------------------
 
         cursor.execute(
             """
             SELECT
-                id,
-                order_id,
-                buyer_id,
-                payment_method,
-                status,
-                amount,
-                currency,
-                utr_number,
-                payer_upi_id,
-                payer_phone,
-                submitted_at,
-                verified_at,
-                verified_by
-            FROM marketplace_payments
-            WHERE id = %s
-              AND buyer_id = %s
-            LIMIT 1
+                mp.id,
+                mp.order_id,
+                mp.buyer_id,
+                mp.status,
+                mp.amount,
+
+                o.status AS order_status,
+                o.expires_at
+
+            FROM marketplace_payments mp
+
+            INNER JOIN marketplace_orders o
+                ON o.id = mp.order_id
+
+            WHERE mp.id = %s
+              AND mp.buyer_id = %s
+
             FOR UPDATE
             """,
             (
@@ -479,78 +492,71 @@ def submit_utr(
         payment = cursor.fetchone()
 
         if not payment:
-            raise NotFoundError("Payment not found.")
-
-        # ----------------------------------------------------
-        # Already paid
-        # ----------------------------------------------------
+            raise NotFoundError(
+                "Payment not found"
+            )
 
         if payment["status"] == "PAID":
             raise ConflictError(
-                "This payment has already been verified."
+                "Payment has already been verified"
+            )
+
+        if payment["status"] != "PENDING":
+            raise BadRequestError(
+                "This payment is no longer accepting UTR submission"
+            )
+
+        if payment["order_status"] != "PENDING":
+            raise BadRequestError(
+                "This order is no longer awaiting payment"
             )
 
         # ----------------------------------------------------
-        # Check order
+        # EXPIRY
+        # ----------------------------------------------------
+
+        if payment["expires_at"] is not None:
+            now = datetime.now(
+                timezone.utc
+            ).replace(tzinfo=None)
+
+            if payment["expires_at"] <= now:
+                raise BadRequestError(
+                    "This checkout session has expired"
+                )
+
+        utr_number = utr_number.strip()
+        payer_upi_id = payer_upi_id.strip()
+        payer_phone = payer_phone.strip()
+
+        if not utr_number:
+            raise BadRequestError(
+                "UTR number is required"
+            )
+
+        if not payer_upi_id:
+            raise BadRequestError(
+                "Payer UPI ID is required"
+            )
+
+        if not payer_phone:
+            raise BadRequestError(
+                "Payer phone is required"
+            )
+
+        # ----------------------------------------------------
+        # DUPLICATE UTR
         # ----------------------------------------------------
 
         cursor.execute(
             """
-            SELECT
-                id,
-                buyer_id,
-                status,
-                expires_at,
-                total_amount
-            FROM marketplace_orders
-            WHERE id = %s
-            LIMIT 1
-            FOR UPDATE
-            """,
-            (payment["order_id"],),
-        )
-
-        order = cursor.fetchone()
-
-        if not order:
-            raise NotFoundError("Order not found.")
-
-        if order["buyer_id"] != user_id:
-            raise NotFoundError("Order not found.")
-
-        if order["status"] != "PENDING":
-            raise ConflictError(
-                "UTR cannot be submitted for this order."
-            )
-
-        # ----------------------------------------------------
-        # Expired order
-        # ----------------------------------------------------
-
-        if (
-            order["expires_at"] is not None
-            and order["expires_at"] <= datetime.now(timezone.utc).replace(tzinfo=None)
-        ):
-            raise ConflictError(
-                "This order has expired."
-            )
-
-        # ----------------------------------------------------
-        # Prevent duplicate UTR
-        # ----------------------------------------------------
-
-        cursor.execute(
-            """
-            SELECT
-                id,
-                order_id,
-                buyer_id,
-                status
+            SELECT id
             FROM marketplace_payments
+
             WHERE utr_number = %s
-              AND id <> %s
+              AND id != %s
+
             LIMIT 1
-            FOR UPDATE
             """,
             (
                 utr_number,
@@ -562,72 +568,58 @@ def submit_utr(
 
         if duplicate:
             raise ConflictError(
-                "This UTR has already been submitted."
+                "This UTR has already been submitted"
             )
 
         # ----------------------------------------------------
-        # Verify amount consistency
-        # ----------------------------------------------------
-
-        payment_amount = Decimal(str(payment["amount"]))
-        order_amount = Decimal(str(order["total_amount"]))
-
-        if payment_amount != order_amount:
-            raise ConflictError(
-                "Payment amount does not match the order total."
-            )
-
-        # ----------------------------------------------------
-        # Submit UTR
+        # SAVE UTR
         # ----------------------------------------------------
 
         cursor.execute(
             """
             UPDATE marketplace_payments
+
             SET
-                status = 'PENDING',
                 utr_number = %s,
                 payer_upi_id = %s,
                 payer_phone = %s,
-                submitted_at = CURRENT_TIMESTAMP
+                submitted_at = CURRENT_TIMESTAMP,
+                status = 'PENDING'
+
             WHERE id = %s
+              AND buyer_id = %s
+              AND status = 'PENDING'
             """,
             (
                 utr_number,
                 payer_upi_id,
                 payer_phone,
                 payment_id,
+                user_id,
             ),
         )
 
-        cursor.execute(
-            """
-            SELECT
-                id,
-                order_id,
-                buyer_id,
-                payment_method,
-                status,
-                amount,
-                currency,
-                utr_number,
-                payer_upi_id,
-                payer_phone,
-                submitted_at,
-                verified_at,
-                verified_by
-            FROM marketplace_payments
-            WHERE id = %s
-            LIMIT 1
-            """,
-            (payment_id,),
-        )
-
-        updated_payment = cursor.fetchone()
+        if cursor.rowcount != 1:
+            raise ConflictError(
+                "Payment submission could not be saved"
+            )
 
         connection.commit()
 
-        return _serialize_payment(updated_payment)
+        return {
+            "message": (
+                "UPI payment details submitted. "
+                "Payment is awaiting admin verification."
+            ),
+            "payment_id": payment_id,
+            "order_id": payment["order_id"],
+            "status": "PENDING",
+            "amount": payment["amount"],
+            "currency": "INR",
+            "utr_number": utr_number,
+            "payer_upi_id": payer_upi_id,
+            "payer_phone": payer_phone,
+        }
 
     except Exception:
         connection.rollback()
@@ -638,160 +630,251 @@ def submit_utr(
 
 
 # ============================================================
-# ADMIN VERIFY
+# ADMIN — PENDING PAYMENTS
 # ============================================================
 
-def verify_payment(
-    payment_id: int,
+
+def get_pending_payments(
     admin_id: int,
 ):
-    """
-    Manually verify a direct UPI payment.
-
-    Transaction:
-
-        payment PENDING
-             ↓
-        verify UTR
-             ↓
-        payment PAID
-             ↓
-        finalize inventory
-             ↓
-        order CONFIRMED
-
-    Everything happens inside one database transaction.
-    """
-    _payment_config()
-
     connection = get_connection()
 
     try:
         cursor = connection.cursor(dictionary=True)
 
         # ----------------------------------------------------
-        # Lock payment
+        # ADMIN INSTITUTION
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            SELECT institution_id
+            FROM admin_profiles
+            WHERE user_id = %s
+            LIMIT 1
+            """,
+            (admin_id,),
+        )
+
+        admin = cursor.fetchone()
+
+        if not admin:
+            raise NotFoundError(
+                "Admin profile not found"
+            )
+
+        institution_id = admin["institution_id"]
+
+        # ----------------------------------------------------
+        # PAYMENTS WAITING FOR VERIFICATION
         # ----------------------------------------------------
 
         cursor.execute(
             """
             SELECT
-                id,
-                order_id,
-                buyer_id,
-                payment_method,
-                status,
-                amount,
-                currency,
-                utr_number,
-                payer_upi_id,
-                payer_phone,
-                submitted_at,
-                verified_at,
-                verified_by
-            FROM marketplace_payments
-            WHERE id = %s
+                mp.id AS payment_id,
+                mp.order_id,
+                mp.buyer_id,
+
+                bu.full_name AS buyer_name,
+                bu.email AS buyer_email,
+
+                mp.payment_method,
+                mp.status,
+                mp.amount,
+                mp.currency,
+
+                mp.utr_number,
+                mp.payer_upi_id,
+                mp.payer_phone,
+                mp.submitted_at,
+
+                o.status AS order_status,
+                o.subtotal_amount,
+                o.tax_percent,
+                o.tax_amount,
+                o.total_amount,
+                o.created_at AS order_created_at
+
+            FROM marketplace_payments mp
+
+            INNER JOIN marketplace_orders o
+                ON o.id = mp.order_id
+
+            LEFT JOIN users bu
+                ON bu.id = mp.buyer_id
+
+            WHERE o.institution_id = %s
+              AND mp.status = 'PENDING'
+              AND mp.utr_number IS NOT NULL
+              AND o.status = 'PENDING'
+
+            ORDER BY
+                mp.submitted_at ASC,
+                mp.id ASC
+            """,
+            (institution_id,),
+        )
+
+        return cursor.fetchall()
+
+    finally:
+        connection.close()
+
+
+# ============================================================
+# ADMIN — VERIFY PAYMENT
+#
+# THIS IS THE ONLY PLACE WHERE PAYMENT BECOMES PAID.
+# ============================================================
+
+
+def verify_payment(
+    payment_id: int,
+    admin_id: int,
+):
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+
+        # ----------------------------------------------------
+        # VERIFY ADMIN INSTITUTION
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            SELECT institution_id
+            FROM admin_profiles
+            WHERE user_id = %s
             LIMIT 1
+            """,
+            (admin_id,),
+        )
+
+        admin = cursor.fetchone()
+
+        if not admin:
+            raise NotFoundError(
+                "Admin profile not found"
+            )
+
+        institution_id = admin["institution_id"]
+
+        # ----------------------------------------------------
+        # LOCK PAYMENT + ORDER
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            SELECT
+                mp.id AS payment_id,
+                mp.order_id,
+                mp.buyer_id,
+                mp.status AS payment_status,
+                mp.amount,
+                mp.utr_number,
+                mp.payer_upi_id,
+                mp.payer_phone,
+
+                o.institution_id,
+                o.status AS order_status,
+                o.expires_at,
+                o.total_amount
+
+            FROM marketplace_payments mp
+
+            INNER JOIN marketplace_orders o
+                ON o.id = mp.order_id
+
+            WHERE mp.id = %s
+              AND o.institution_id = %s
+
             FOR UPDATE
             """,
-            (payment_id,),
+            (
+                payment_id,
+                institution_id,
+            ),
         )
 
         payment = cursor.fetchone()
 
         if not payment:
-            raise NotFoundError("Payment not found.")
+            raise NotFoundError(
+                "Payment not found"
+            )
 
         # ----------------------------------------------------
-        # Idempotent verification
+        # IDEMPOTENCY
         # ----------------------------------------------------
 
-        if payment["status"] == "PAID":
+        if payment["payment_status"] == "PAID":
             connection.commit()
 
-            return _serialize_payment(
-                payment,
-                include_config=True,
+            return {
+                "message": "Payment is already verified",
+                "payment_id": payment_id,
+                "order_id": payment["order_id"],
+                "payment_status": "PAID",
+                "order_status": payment["order_status"],
+            }
+
+        if payment["payment_status"] != "PENDING":
+            raise BadRequestError(
+                "Only PENDING payments can be verified"
             )
 
-        if payment["status"] != "PENDING":
+        if payment["order_status"] != "PENDING":
             raise ConflictError(
-                "Only pending payments can be verified."
+                "Order is not pending"
             )
+
+        # ----------------------------------------------------
+        # UTR REQUIRED
+        # ----------------------------------------------------
 
         if not payment["utr_number"]:
             raise BadRequestError(
-                "Buyer has not submitted a UTR yet."
+                "Buyer has not submitted a UTR"
             )
 
         # ----------------------------------------------------
-        # Lock order
+        # CHECK EXPIRY
         # ----------------------------------------------------
 
-        cursor.execute(
-            """
-            SELECT
-                id,
-                buyer_id,
-                subtotal_amount,
-                tax_percent,
-                tax_amount,
-                total_amount,
-                status,
-                expires_at
-            FROM marketplace_orders
-            WHERE id = %s
-            LIMIT 1
-            FOR UPDATE
-            """,
-            (payment["order_id"],),
-        )
+        if payment["expires_at"] is not None:
+            now = datetime.now(
+                timezone.utc
+            ).replace(tzinfo=None)
 
-        order = cursor.fetchone()
+            if payment["expires_at"] <= now:
+                raise BadRequestError(
+                    "This order has expired"
+                )
 
-        if not order:
-            raise NotFoundError("Order not found.")
+        # ----------------------------------------------------
+        # AMOUNT MUST MATCH ORDER
+        # ----------------------------------------------------
 
-        if order["status"] != "PENDING":
+        if payment["amount"] != payment["total_amount"]:
             raise ConflictError(
-                "This order is no longer pending."
+                "Payment amount does not match order total"
             )
 
         # ----------------------------------------------------
-        # Check payment/order amount
-        # ----------------------------------------------------
-
-        payment_amount = Decimal(str(payment["amount"]))
-        order_amount = Decimal(str(order["total_amount"]))
-
-        if payment_amount != order_amount:
-            raise ConflictError(
-                "Payment amount does not match the order total."
-            )
-
-        # ----------------------------------------------------
-        # Check expiry
-        # ----------------------------------------------------
-
-        if (
-            order["expires_at"] is not None
-            and order["expires_at"] <= datetime.now(timezone.utc).replace(tzinfo=None)
-        ):
-            raise ConflictError(
-                "This order has expired and cannot be verified."
-            )
-
-        # ----------------------------------------------------
-        # Mark payment PAID
+        # MARK PAYMENT PAID
         # ----------------------------------------------------
 
         cursor.execute(
             """
             UPDATE marketplace_payments
+
             SET
                 status = 'PAID',
                 verified_at = CURRENT_TIMESTAMP,
                 verified_by = %s
+
             WHERE id = %s
               AND status = 'PENDING'
             """,
@@ -803,13 +886,11 @@ def verify_payment(
 
         if cursor.rowcount != 1:
             raise ConflictError(
-                "Payment was changed by another process."
+                "Payment could not be verified"
             )
 
         # ----------------------------------------------------
-        # Finalize inventory
-        #
-        # Reserved stock becomes sold stock here.
+        # FINALIZE INVENTORY
         # ----------------------------------------------------
 
         finalize_order_inventory(
@@ -818,141 +899,59 @@ def verify_payment(
         )
 
         # ----------------------------------------------------
-        # Confirm order
+        # CONFIRM ORDER
         # ----------------------------------------------------
 
         cursor.execute(
             """
             UPDATE marketplace_orders
-            SET status = 'CONFIRMED'
+
+            SET
+                status = 'CONFIRMED'
+
             WHERE id = %s
+              AND institution_id = %s
               AND status = 'PENDING'
             """,
-            (payment["order_id"],),
+            (
+                payment["order_id"],
+                institution_id,
+            ),
         )
 
         if cursor.rowcount != 1:
             raise ConflictError(
-                "Unable to confirm the order."
+                "Order could not be confirmed"
             )
 
         # ----------------------------------------------------
-        # Create receipt
-        #
-        # Import here to avoid circular imports because the
-        # receipt service may later use payment/order helpers.
+        # CREATE RECEIPT
         # ----------------------------------------------------
-
-        from app.services.marketplace_receipt_service import (
-            create_receipt_for_payment,
-        )
 
         receipt = create_receipt_for_payment(
             order_id=payment["order_id"],
             payment_id=payment_id,
-            amount=payment_amount,
+            amount=payment["amount"],
             cursor=cursor,
         )
 
-        # ----------------------------------------------------
-        # Return updated payment
-        # ----------------------------------------------------
-
-        cursor.execute(
-            """
-            SELECT
-                id,
-                order_id,
-                buyer_id,
-                payment_method,
-                status,
-                amount,
-                currency,
-                utr_number,
-                payer_upi_id,
-                payer_phone,
-                submitted_at,
-                verified_at,
-                verified_by
-            FROM marketplace_payments
-            WHERE id = %s
-            LIMIT 1
-            """,
-            (payment_id,),
-        )
-
-        updated_payment = cursor.fetchone()
-
         connection.commit()
 
-        result = _serialize_payment(updated_payment)
-
-        result["order_status"] = "CONFIRMED"
-        result["receipt"] = receipt
-
-        return result
+        return {
+            "message": (
+                "Payment verified and order confirmed"
+            ),
+            "payment_id": payment_id,
+            "order_id": payment["order_id"],
+            "payment_status": "PAID",
+            "order_status": "CONFIRMED",
+            "utr_number": payment["utr_number"],
+            "receipt": receipt,
+        }
 
     except Exception:
         connection.rollback()
         raise
-
-    finally:
-        connection.close()
-
-
-# ============================================================
-# ADMIN PAYMENT LIST
-# ============================================================
-
-def get_pending_payments():
-    """
-    Return payments waiting for manual administrator
-    verification.
-    """
-    connection = get_connection()
-
-    try:
-        cursor = connection.cursor(dictionary=True)
-
-        cursor.execute(
-            """
-            SELECT
-                p.id AS payment_id,
-                p.order_id,
-                p.buyer_id,
-                u.full_name AS buyer_name,
-                p.payment_method,
-                p.status,
-                p.amount,
-                p.currency,
-                p.utr_number,
-                p.payer_upi_id,
-                p.payer_phone,
-                p.submitted_at,
-                p.created_at,
-
-                o.status AS order_status,
-                o.total_amount AS order_total,
-                o.created_at AS order_created_at
-
-            FROM marketplace_payments p
-
-            INNER JOIN marketplace_orders o
-                ON o.id = p.order_id
-
-            LEFT JOIN users u
-                ON u.id = p.buyer_id
-
-            WHERE p.status = 'PENDING'
-
-            ORDER BY
-                p.submitted_at IS NULL ASC,
-                p.submitted_at ASC,
-                p.created_at ASC
-            """
-        )
-
-        return cursor.fetchall()
 
     finally:
         connection.close()
