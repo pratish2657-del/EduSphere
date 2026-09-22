@@ -7,6 +7,7 @@ from app.core.exceptions import (
 )
 from app.database import get_connection
 
+
 # ============================================================
 # CONSTANTS
 # ============================================================
@@ -28,14 +29,6 @@ MARKETPLACE_ORDER_STATUSES = {
 def get_marketplace_summary() -> dict:
     """
     Return marketplace management statistics.
-
-    This service intentionally contains no:
-        - Cashfree
-        - Razorpay
-        - refunds
-        - payouts
-        - split payments
-        - gateway reconciliation
     """
 
     connection = get_connection()
@@ -1078,9 +1071,7 @@ def update_order_status(
         # CONFIRMED -> PROCESSING
         # CONFIRMED -> COMPLETED
         #
-        # CONFIRMED -> CANCELLED is intentionally blocked
-        # because there is no refund workflow in the new
-        # architecture.
+        # A confirmed order cannot be cancelled.
         #
 
         if current_status == "CONFIRMED":
@@ -1149,8 +1140,7 @@ def update_order_status(
             if normalized_status == "CANCELLED":
 
                 raise ConflictError(
-                    "A confirmed paid order cannot be cancelled "
-                    "because no refund workflow exists"
+                    "A confirmed paid order cannot be cancelled"
                 )
 
         # ----------------------------------------------------
@@ -1192,8 +1182,7 @@ def update_order_status(
             if normalized_status == "CANCELLED":
 
                 raise ConflictError(
-                    "A processing paid order cannot be cancelled "
-                    "because no refund workflow exists"
+                    "A processing paid order cannot be cancelled"
                 )
 
             if normalized_status == "PENDING":
