@@ -468,15 +468,12 @@ export default function AppPlaceholder() {
   const [marketplaceCart, setMarketplaceCart] =
     useState<MarketplaceCartResponse | null>(null);
   const [marketplaceCartOpen, setMarketplaceCartOpen] = useState(false);
+  // A pending payment may be stored for recovery, but it must NEVER
+  // automatically open a full-screen modal when the dashboard mounts.
+  // The modal is opened explicitly only after checkout creates a payment.
   const [pendingPayment, setPendingPayment] =
-    useState<MarketplacePaymentCreateResponse | null>(() =>
-      readPendingMarketplacePayment()
-    );
+    useState<MarketplacePaymentCreateResponse | null>(null);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-
-  useEffect(() => {
-    writePendingMarketplacePayment(pendingPayment);
-  }, [pendingPayment]);
 
 
   const [shippingAddress, setShippingAddress] = useState("");
@@ -1929,8 +1926,9 @@ export default function AppPlaceholder() {
             </div>
           </footer>
 
-          {pendingPayment &&
-            paymentModalOpen &&
+          {paymentModalOpen &&
+            pendingPayment &&
+            Number.isFinite(Number(pendingPayment.payment_id)) &&
             createPortal(
               <MarketplaceUPIPaymentModal
                 payment={pendingPayment}
