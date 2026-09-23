@@ -229,7 +229,6 @@ function dateTime(value: string) {
 
 export default function AdminMarketplace() {
   const navigate = useNavigate();
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [selectedInstitutionId, setSelectedInstitutionId] = useState<number | null>(null);
@@ -260,24 +259,6 @@ export default function AdminMarketplace() {
     payer_phone: "",
   });
 
-  const loadCurrentUser = useCallback(async () => {
-    try {
-      const data = await api<{
-        user_id?: number;
-        id?: number;
-      }>("/auth/me");
-
-      const userId = Number(data?.user_id ?? data?.id);
-
-      if (Number.isFinite(userId) && userId > 0) {
-        setCurrentUserId(userId);
-      }
-    } catch {
-      // Marketplace APIs still provide the authoritative validation.
-      setCurrentUserId(null);
-    }
-  }, []);
-
   const loadInstitutions = useCallback(async () => {
     const data = await api<{ count: number; institutions: Institution[] }>(
       "/super-admin/marketplace/institutions"
@@ -306,7 +287,18 @@ export default function AdminMarketplace() {
 
   const loadCart = useCallback(async () => {
     const data = await api<CartResponse>("/marketplace/cart");
-    setCart(data);
+    const items = Array.isArray(data?.items) ? data.items : [];
+
+    const itemCount = items.reduce(
+      (total, item) => total + Math.max(0, Number(item.quantity) || 0),
+      0
+    );
+
+    setCart({
+      ...data,
+      items,
+      count: itemCount,
+    });
   }, []);
 
   const loadOrders = useCallback(async () => {
@@ -324,7 +316,7 @@ export default function AdminMarketplace() {
     setError("");
 
     try {
-      await Promise.all([loadCurrentUser(), loadInstitutions(), loadProducts(), loadCart()]);
+      await Promise.all([loadInstitutions(), loadProducts(), loadCart()]);
     } catch (err) {
       setError(
         err instanceof Error
@@ -334,7 +326,7 @@ export default function AdminMarketplace() {
     } finally {
       setLoading(false);
     }
-  }, [loadCart, loadCurrentUser, loadInstitutions, loadProducts]);
+  }, [loadCart, loadInstitutions, loadProducts]);
 
   useEffect(() => {
     loadAll();
@@ -349,16 +341,8 @@ export default function AdminMarketplace() {
   );
 
   const addToCart = async (productId: number) => {
-    const product = products.find((item) => item.product_id === productId);
-
-    if (product && currentUserId !== null && Number(product.seller_id) === Number(currentUserId)) {
-      setNotice(`You cannot purchase your own product: ${product.name}.`);
-      return;
-    }
-
     setBusy(true);
     setNotice("");
-
     try {
       await api("/marketplace/cart", {
         method: "POST",
@@ -367,15 +351,10 @@ export default function AdminMarketplace() {
           quantity: 1,
         }),
       });
-
       await loadCart();
       setNotice("Added to cart.");
     } catch (err) {
-      setNotice(
-        err instanceof Error
-          ? err.message
-          : "Unable to add to cart."
-      );
+      setNotice(err instanceof Error ? err.message : "Unable to add to cart.");
     } finally {
       setBusy(false);
     }
@@ -423,19 +402,6 @@ export default function AdminMarketplace() {
       return;
     }
 
-    // The backend does not allow a user to purchase their own listing.
-    const ownItem = cart.items.find(
-      (item) =>
-        currentUserId !== null &&
-        Number(item.seller_id) === Number(currentUserId)
-    );
-    if (ownItem) {
-      setNotice(
-        `You cannot purchase your own product: ${ownItem.name}. Remove it from the cart or use another account.`
-      );
-      return;
-    }
-
     setBusy(true);
     setNotice("");
 
@@ -449,27 +415,22 @@ export default function AdminMarketplace() {
         total_amount?: number | string;
         currency?: string;
         expires_at?: string | null;
-      }>("/marketplace/checkout", {
-        method: "POST",
-        body: JSON.stringify({
-          institution_id: institutionId,
-          shipping_address: null,
-        }),
-      });
+      }>(
+        `/marketplace/checkout?institution_id=${institutionId}`,
+        { method: "POST" }
+      );
 
       const orderId = Number(checkoutData.order_id);
-
       if (!Number.isFinite(orderId)) {
         throw new Error("Marketplace order ID was not returned.");
       }
 
+      // Create a local pending UPI payment.
       const createdPayment = await api<PaymentResponse>(
         "/marketplace/payments/",
         {
           method: "POST",
-          body: JSON.stringify({
-            order_id: orderId,
-          }),
+          body: JSON.stringify({ order_id: orderId }),
         }
       );
 
@@ -481,14 +442,8 @@ export default function AdminMarketplace() {
       });
       setPaymentOpen(true);
       setCartOpen(false);
-
-      const amount =
-        createdPayment.amount ??
-        checkoutData.total_amount ??
-        cart.total;
-
       setNotice(
-        `Order #${orderId} created. Pay ${money(amount)} using UPI, then submit the UTR.`
+        `Order #${orderId} created. Pay ${money(createdPayment.amount)} using UPI, then submit the UTR.`
       );
     } catch (err) {
       setNotice(
@@ -577,9 +532,16 @@ export default function AdminMarketplace() {
     }
   };
 
+  const cartItemCount = Array.isArray(cart?.items)
+    ? cart.items.reduce(
+        (total, item) => total + Math.max(0, Number(item.quantity) || 0),
+        0
+      )
+    : 0;
+
   const stats = {
     listings: products.length,
-    cartItems: cart?.count ?? 0,
+    cartItems: cartItemCount,
     purchases: orders?.count ?? 0,
     sales: sales?.count ?? 0,
   };
@@ -763,18 +725,10 @@ export default function AdminMarketplace() {
                     <button
                       className="admin-marketplace-add"
                       onClick={() => addToCart(product.product_id)}
-                      disabled={
-                        busy ||
-                        product.quantity <= 0 ||
-                        currentUserId !== null && Number(product.seller_id) === Number(currentUserId)
-                      }
+                      disabled={busy || product.quantity <= 0}
                     >
                       <ShoppingCart size={15} />
-                      {currentUserId !== null && Number(product.seller_id) === Number(currentUserId)
-                        ? "Your listing"
-                        : product.quantity <= 0
-                          ? "Out of stock"
-                          : "Add to cart"}
+                      {product.quantity <= 0 ? "Out of stock" : "Add to cart"}
                     </button>
                   </article>
                 );
@@ -975,20 +929,11 @@ export default function AdminMarketplace() {
                 className="admin-marketplace-primary"
                 onClick={() => {
                   addToCart(selected.product_id);
-                  if (Number(selected.seller_id) !== Number(currentUserId)) {
-                    setSelected(null);
-                  }
+                  setSelected(null);
                 }}
-                disabled={
-                  busy ||
-                  selected.quantity <= 0 ||
-                  currentUserId !== null && Number(selected.seller_id) === Number(currentUserId)
-                }
+                disabled={busy || selected.quantity <= 0}
               >
-                <ShoppingCart size={16} />
-                {currentUserId !== null && Number(selected.seller_id) === Number(currentUserId)
-                  ? "Your listing"
-                  : "Add to cart"}
+                <ShoppingCart size={16} /> Add to cart
               </button>
             </div>
           </div>
@@ -1040,22 +985,11 @@ export default function AdminMarketplace() {
               )}
             </div>
 
-            {cart.items.some(
-              (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-            ) && (
-              <div className="marketplace-fee-note" style={{ margin: "12px 0" }}>
-                Physical products require a delivery address at checkout.
-              </div>
-            )}
-
             <div className="admin-marketplace-cart-footer">
               <div>
-                <span>Subtotal</span>
+                <span>Total</span>
                 <strong>{money(cart.total)}</strong>
-                <small className="marketplace-fee-note">
-                  5% tax is calculated by the server at checkout. Payment is
-                  made directly by UPI and verified manually by Super Admin.
-                </small>
+                <small className="marketplace-fee-note">5% tax is added to the buyer total. Payment is made directly by UPI and verified manually by Super Admin.</small>
               </div>
               <button
                 type="button"

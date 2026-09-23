@@ -43,6 +43,7 @@ type Product = {
 
 type Order = {
   id: number;
+  order_id?: number;
   buyer_id?: number;
   buyer_name?: string | null;
   buyer_email?: string | null;
@@ -162,7 +163,16 @@ export default function SuperAdminMarketplaceManagement() {
 
       setSummary(summaryResponse || {});
       setProducts(productsResponse?.products || []);
-      setOrders(ordersResponse?.orders || []);
+      setOrders(
+        (ordersResponse?.orders || [])
+          .map((order) => ({
+            ...order,
+            id: Number(order.id ?? order.order_id),
+          }))
+          .filter(
+            (order) => Number.isFinite(order.id) && order.id > 0,
+          ),
+      );
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Unable to load marketplace",
@@ -274,7 +284,16 @@ export default function SuperAdminMarketplaceManagement() {
   };
 
   const updateOrder = async (orderId: number, status: string) => {
-    if (!ORDER_STATUSES.includes(status as (typeof ORDER_STATUSES)[number])) {
+    if (!Number.isFinite(orderId) || orderId <= 0) {
+      setError("Invalid marketplace order ID.");
+      return;
+    }
+
+    if (
+      !ORDER_STATUSES.includes(
+        status as (typeof ORDER_STATUSES)[number],
+      )
+    ) {
       setError("Invalid marketplace order status.");
       return;
     }
@@ -293,7 +312,9 @@ export default function SuperAdminMarketplaceManagement() {
 
       setOrders((current) =>
         current.map((order) =>
-          order.id === orderId ? { ...order, status } : order,
+          order.id === orderId
+            ? { ...order, id: orderId, status }
+            : order,
         ),
       );
     } catch (err) {
