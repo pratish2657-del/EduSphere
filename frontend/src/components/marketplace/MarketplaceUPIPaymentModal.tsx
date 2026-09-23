@@ -160,7 +160,12 @@ export default function MarketplaceUPIPaymentModal({
   };
 
   return (
-    <div className="marketplace-upi-overlay" onClick={onClose}>
+    <div
+      className="marketplace-upi-overlay"
+      onClick={(event) => event.stopPropagation()}
+      role="dialog"      
+      aria-modal="true"    
+    >
       <div
         className="marketplace-upi-modal"
         onClick={(event) => event.stopPropagation()}
