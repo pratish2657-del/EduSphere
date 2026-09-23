@@ -78,7 +78,7 @@ def create_payment(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         # ----------------------------------------------------
         # BUYER'S ORDER
@@ -304,7 +304,7 @@ def get_payment(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
@@ -376,7 +376,7 @@ def get_order_payment(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
@@ -455,7 +455,7 @@ def submit_utr(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         # ----------------------------------------------------
         # PAYMENT + ORDER
@@ -643,7 +643,7 @@ def get_pending_payments():
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
@@ -715,7 +715,7 @@ def verify_payment(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         # ----------------------------------------------------
         # LOCK PAYMENT + ORDER

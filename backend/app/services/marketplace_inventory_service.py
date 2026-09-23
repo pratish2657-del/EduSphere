@@ -167,7 +167,7 @@ def expire_pending_orders():
                 """
                 UPDATE marketplace_payments
 
-                SET status = 'FAILED'
+                SET status = 'REJECTED'
 
                 WHERE order_id = %s
 

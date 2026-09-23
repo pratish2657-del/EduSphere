@@ -34,7 +34,7 @@ def get_marketplace_summary() -> dict:
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         # ----------------------------------------------------
         # TOTAL PRODUCTS
@@ -1038,7 +1038,7 @@ def update_order_status(
                 )
 
                 # If a pending UPI payment exists, keep it local
-                # and mark it failed so it cannot later be
+                # and mark it rejected so it cannot later be
                 # verified against a cancelled order.
 
                 cursor.execute(

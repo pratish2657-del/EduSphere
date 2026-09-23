@@ -706,17 +706,35 @@ def save_product_preview(
     product_id,
     user_id,
     file_path,
+    file_type,
+    file_size,
 ):
     connection = get_connection()
 
     try:
         cursor = connection.cursor()
 
+        if file_type not in ALLOWED_MARKETPLACE_PREVIEW_TYPES:
+            raise BadRequestError(
+                "Preview image must be JPG, PNG or WEBP"
+            )
+
+        if file_size <= 0:
+            raise BadRequestError(
+                "Preview image cannot be empty"
+            )
+
+        if file_size > MAX_MARKETPLACE_PREVIEW_SIZE:
+            raise BadRequestError(
+                "Preview image cannot exceed 5 MB"
+            )
+
         cursor.execute(
             """
             SELECT
                 id,
-                seller_id
+                seller_id,
+                is_active
             FROM marketplace_products
             WHERE id = %s
             FOR UPDATE
@@ -736,6 +754,16 @@ def save_product_preview(
                 "You can only update your own product"
             )
 
+        if not product["is_active"]:
+            raise BadRequestError(
+                "Cannot upload preview to an inactive product"
+            )
+
+        if not file_path:
+            raise BadRequestError(
+                "Preview image path is required"
+            )
+
         cursor.execute(
             """
             UPDATE marketplace_products
@@ -753,6 +781,9 @@ def save_product_preview(
         return {
             "message": "Product preview updated successfully",
             "product_id": product_id,
+            "preview_image_path": file_path,
+            "file_type": file_type,
+            "file_size": file_size,
         }
 
     except Exception:
@@ -776,7 +807,13 @@ def get_product_preview(product_id):
 
         cursor.execute(
             """
-            SELECT preview_image_path
+            SELECT
+                preview_image_path,
+                CASE
+                    WHEN preview_image_path IS NOT NULL THEN
+                        SUBSTRING_INDEX(preview_image_path, '/', -1)
+                    ELSE NULL
+                END AS file_name
             FROM marketplace_products
             WHERE id = %s
               AND is_active = TRUE
@@ -798,11 +835,24 @@ def get_product_preview(product_id):
                 "Product preview not found"
             )
 
-        return path
+        extension = os.path.splitext(path)[1].lower()
+        media_type = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp",
+        }.get(extension, "application/octet-stream")
+
+        return {
+            "storage_path": path,
+            "file_name": product["file_name"],
+            "file_type": media_type,
+        }
 
     finally:
         connection.close()
-        
+
+
 def get_attachment_for_download(
     user_id: int,
     attachment_id: int,
@@ -815,7 +865,7 @@ def get_attachment_for_download(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
