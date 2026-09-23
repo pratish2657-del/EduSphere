@@ -2413,6 +2413,15 @@ function MarketplaceView({
     return true;
   });
 
+  // Use the actual cart quantities for the header badge instead of relying
+  // only on the backend count field.
+  const cartItemCount = Array.isArray(cart?.items)
+    ? cart.items.reduce(
+        (total, item) => total + Math.max(0, Number(item.quantity) || 0),
+        0
+      )
+    : 0;
+
   return (
     <section>
       <div style={styles.timetableHeader} className="edusphere-timetable-header">
@@ -2451,7 +2460,7 @@ function MarketplaceView({
             <ShoppingCart size={16} />
             Cart
             <span style={styles.cartCount}>
-              {cart?.count ?? 0}
+              {cartItemCount}
             </span>
           </button>
         </div>
