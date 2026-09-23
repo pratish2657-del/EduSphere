@@ -45,7 +45,7 @@ def create_seller(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         # ----------------------------------------------------
         # Check existing seller
@@ -152,7 +152,7 @@ def get_seller(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -196,7 +196,7 @@ def get_seller_by_id(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -262,7 +262,7 @@ def update_seller(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         # ----------------------------------------------------
         # Check seller
@@ -353,7 +353,7 @@ def activate_seller(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -417,7 +417,7 @@ def deactivate_seller(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """

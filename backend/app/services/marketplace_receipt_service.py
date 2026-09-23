@@ -274,7 +274,7 @@ def get_receipt_for_order(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -373,7 +373,7 @@ def get_receipt_for_payment(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
