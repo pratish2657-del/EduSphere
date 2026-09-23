@@ -28,6 +28,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { useAuth } from "../../context/AuthContext";
 import StudentCube3D from "../../components/three/StudentCube3D";
 import AIChatbot from "../../components/ai/AIChatbot";
@@ -373,6 +374,58 @@ type MarketplacePaymentCreateResponse = {
 
 
 
+
+const MARKETPLACE_PENDING_PAYMENT_STORAGE_KEY =
+  "edusphere_marketplace_pending_upi_payment";
+
+function readPendingMarketplacePayment(): MarketplacePaymentCreateResponse | null {
+  try {
+    const raw = window.sessionStorage.getItem(
+      MARKETPLACE_PENDING_PAYMENT_STORAGE_KEY
+    );
+
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !Number.isFinite(Number(parsed.payment_id)) ||
+      !Number.isFinite(Number(parsed.order_id))
+    ) {
+      window.sessionStorage.removeItem(
+        MARKETPLACE_PENDING_PAYMENT_STORAGE_KEY
+      );
+      return null;
+    }
+
+    return parsed as MarketplacePaymentCreateResponse;
+  } catch {
+    return null;
+  }
+}
+
+function writePendingMarketplacePayment(
+  payment: MarketplacePaymentCreateResponse | null
+) {
+  try {
+    if (!payment) {
+      window.sessionStorage.removeItem(
+        MARKETPLACE_PENDING_PAYMENT_STORAGE_KEY
+      );
+      return;
+    }
+
+    window.sessionStorage.setItem(
+      MARKETPLACE_PENDING_PAYMENT_STORAGE_KEY,
+      JSON.stringify(payment)
+    );
+  } catch {
+    // Ignore storage restrictions; the in-memory state still works.
+  }
+}
+
 export default function AppPlaceholder() {
   const navigate = useNavigate();
   const { logout, user,  loading: authLoading, refreshUser } = useAuth();
@@ -415,7 +468,16 @@ export default function AppPlaceholder() {
   const [marketplaceCart, setMarketplaceCart] =
     useState<MarketplaceCartResponse | null>(null);
   const [marketplaceCartOpen, setMarketplaceCartOpen] = useState(false);
-  const [pendingPayment, setPendingPayment] = useState<MarketplacePaymentCreateResponse | null>(null);
+  const [pendingPayment, setPendingPayment] =
+    useState<MarketplacePaymentCreateResponse | null>(() =>
+      readPendingMarketplacePayment()
+    );
+
+  useEffect(() => {
+    writePendingMarketplacePayment(pendingPayment);
+  }, [pendingPayment]);
+
+
   const [shippingAddress, setShippingAddress] = useState("");
 
   const [marketplaceOrders, setMarketplaceOrders] =
@@ -887,7 +949,10 @@ export default function AppPlaceholder() {
           );
         }
 
-        setPendingPayment(paymentData as MarketplacePaymentCreateResponse);
+        const createdPayment =
+          paymentData as MarketplacePaymentCreateResponse;
+        writePendingMarketplacePayment(createdPayment);
+        setPendingPayment(createdPayment);
         setMarketplacePanel("orders");
         setShippingAddress("");
         await loadMarketplaceCart();
@@ -1862,17 +1927,30 @@ export default function AppPlaceholder() {
             </div>
           </footer>
 
-          {pendingPayment && (
-        <MarketplaceUPIPaymentModal
-          payment={pendingPayment}
-          onClose={() => setPendingPayment(null)}
-          onSubmitted={(data) =>
-            setPendingPayment((current) =>
-              current ? { ...current, ...(data as Partial<MarketplacePaymentCreateResponse>) } : current
-            )
-          }
-        />
-      )}
+          {pendingPayment &&
+            createPortal(
+              <MarketplaceUPIPaymentModal
+                payment={pendingPayment}
+                onClose={() => {
+                  writePendingMarketplacePayment(null);
+                  setPendingPayment(null);
+                }}
+                onSubmitted={(data) => {
+                  setPendingPayment((current) => {
+                    if (!current) return current;
+
+                    const updated = {
+                      ...current,
+                      ...(data as Partial<MarketplacePaymentCreateResponse>),
+                    };
+
+                    writePendingMarketplacePayment(updated);
+                    return updated;
+                  });
+                }}
+              />,
+              document.body
+            )}
 
       <AIChatbot />
         </main>
