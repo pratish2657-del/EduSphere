@@ -19,8 +19,6 @@ import {
   Save,
   ShieldCheck,
   UserRound,
-  WalletCards,
-  Smartphone,
   XCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -52,8 +50,6 @@ interface ProfessorProfile {
   profile_completed?: boolean;
   verification_status?: VerificationStatus;
 }
-
-interface SellerPayout { enabled: boolean; preferred_upi_app: string; upi_id: string; account_holder_name: string; payout_status?: string; }
 
 interface ProfessorDashboardProfessor
   extends ProfessorProfile {
@@ -323,10 +319,6 @@ export default function ProfessorProfile() {
   const [success, setSuccess] =
     useState("");
 
-  const [sellerPayout, setSellerPayout] = useState<SellerPayout>({ enabled: false, preferred_upi_app: "", upi_id: "", account_holder_name: "" });
-  const [sellerSaving, setSellerSaving] = useState(false);
-  const [sellerMessage, setSellerMessage] = useState("");
-
   /* ==========================================================
      LOAD PROFESSOR PROFILE
   ========================================================== */
@@ -363,7 +355,6 @@ export default function ProfessorProfile() {
   };
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/marketplace/seller/payout`, { credentials: "include" }).then(r => r.ok ? r.json() : null).then(data => { if (data) setSellerPayout({ enabled: Boolean(data.enabled), preferred_upi_app: data.preferred_upi_app || "", upi_id: data.upi_id || "", account_holder_name: data.account_holder_name || "", payout_status: data.payout_status }); }).catch(() => undefined);
     loadProfile();
   }, []);
 
@@ -490,18 +481,6 @@ export default function ProfessorProfile() {
   /* ==========================================================
      SUBMIT
   ========================================================== */
-
-  const saveSellerPayout = async () => {
-    setSellerSaving(true); setSellerMessage(""); setError("");
-    try {
-      const response = await fetch(`${API_BASE_URL}/marketplace/seller/payout`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sellerPayout) });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(String(data?.detail || "Unable to save payout details."));
-      setSellerPayout({ enabled: Boolean(data.enabled), preferred_upi_app: data.preferred_upi_app || "", upi_id: data.upi_id || "", account_holder_name: data.account_holder_name || "", payout_status: data.payout_status });
-      setSellerMessage(data.enabled ? "Payout details saved. Complete Cashfree Easy Split onboarding to verify your seller account." : "Seller account disabled.");
-    } catch (e) { setError(e instanceof Error ? e.message : "Unable to save payout details."); }
-    finally { setSellerSaving(false); }
-  };
 
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>,
@@ -1283,20 +1262,6 @@ export default function ProfessorProfile() {
           {/* ==================================================
               ACTIONS
           ================================================== */}
-
-          <section style={styles.card}>
-            <div style={styles.sectionHeader}><div style={styles.sectionIcon}><WalletCards size={19} /></div><div><h2 style={styles.sectionTitle}>Marketplace Seller &amp; Payout</h2><p style={styles.sectionDescription}>Optional seller settings for the shared EduSphere Marketplace.</p></div></div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 14 }}>
-              <label style={{ display: "flex", flexDirection: "column", gap: 7 }}><span style={{ color: "#cbd5e1", fontSize: 12, fontWeight: 700, display: "flex", gap: 6, alignItems: "center" }}>Seller account</span><select style={{ width: "100%", boxSizing: "border-box", background: "rgba(2,6,23,.52)", color: "#f8fafc", border: "1px solid rgba(148,163,184,.17)", borderRadius: 10, padding: "11px 12px", outline: "none", fontSize: 14 }} value={sellerPayout.enabled ? "YES" : "NO"} onChange={e => setSellerPayout(v => ({...v, enabled: e.target.value === "YES"}))}><option value="NO">I only want to buy</option><option value="YES">I want to sell on EduSphere</option></select></label>
-              {sellerPayout.enabled && <label style={{ display: "flex", flexDirection: "column", gap: 7 }}><span style={{ color: "#cbd5e1", fontSize: 12, fontWeight: 700, display: "flex", gap: 6, alignItems: "center" }}><Smartphone size={14}/> Preferred UPI app</span><select style={{ width: "100%", boxSizing: "border-box", background: "rgba(2,6,23,.52)", color: "#f8fafc", border: "1px solid rgba(148,163,184,.17)", borderRadius: 10, padding: "11px 12px", outline: "none", fontSize: 14 }} value={sellerPayout.preferred_upi_app} onChange={e => setSellerPayout(v => ({...v, preferred_upi_app: e.target.value}))}><option value="">Select app</option><option value="GOOGLE_PAY">Google Pay</option><option value="PHONEPE">PhonePe</option><option value="PAYTM">Paytm</option><option value="BHIM">BHIM</option><option value="OTHER">Other UPI app</option></select></label>}
-              {sellerPayout.enabled && <label style={{ display: "flex", flexDirection: "column", gap: 7 }}><span style={{ color: "#cbd5e1", fontSize: 12, fontWeight: 700, display: "flex", gap: 6, alignItems: "center" }}>UPI ID</span><input style={{ width: "100%", boxSizing: "border-box", background: "rgba(2,6,23,.52)", color: "#f8fafc", border: "1px solid rgba(148,163,184,.17)", borderRadius: 10, padding: "11px 12px", outline: "none", fontSize: 14 }} value={sellerPayout.upi_id} onChange={e => setSellerPayout(v => ({...v, upi_id: e.target.value}))} placeholder="yourname@upi" /></label>}
-              {sellerPayout.enabled && <label style={{ display: "flex", flexDirection: "column", gap: 7 }}><span style={{ color: "#cbd5e1", fontSize: 12, fontWeight: 700, display: "flex", gap: 6, alignItems: "center" }}>Account holder name</span><input style={{ width: "100%", boxSizing: "border-box", background: "rgba(2,6,23,.52)", color: "#f8fafc", border: "1px solid rgba(148,163,184,.17)", borderRadius: 10, padding: "11px 12px", outline: "none", fontSize: 14 }} value={sellerPayout.account_holder_name} onChange={e => setSellerPayout(v => ({...v, account_holder_name: e.target.value}))} placeholder="Name on payment account" /></label>}
-            </div>
-            {sellerMessage && <p style={{ color: "#86efac", fontSize: 12 }}>{sellerMessage}</p>}
-            {sellerPayout.payout_status && <p style={{ color: "#8f9ab3", fontSize: 11 }}>Payout status: {sellerPayout.payout_status.replaceAll("_", " ")}</p>}
-            <button type="button" onClick={saveSellerPayout} disabled={sellerSaving} style={styles.secondaryButton}>{sellerSaving ? "Saving..." : "Save payout details"}</button>
-              {sellerPayout.enabled && <button type="button" onClick={() => { window.location.href = "/app/marketplace/seller/easy-split-onboarding"; }} style={{ marginTop: 10, minHeight: 38, padding: "0 14px", border: "1px solid rgba(117,100,255,.35)", borderRadius: 10, color: "#c4b5fd", background: "rgba(117,100,255,.08)", fontWeight: 800, cursor: "pointer" }}>Complete Cashfree Easy Split onboarding</button>}
-          </section>
 
           <div className="professor-profile-actions" style={styles.actions}>
 

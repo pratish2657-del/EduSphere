@@ -11,8 +11,6 @@ import {
   MapPin,
   Phone,
   UserRound,
-  WalletCards,
-  Smartphone,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
@@ -32,13 +30,6 @@ interface StudentForm {
   admission_year: string;
 }
 
-interface SellerPayout {
-  enabled: boolean;
-  preferred_upi_app: string;
-  upi_id: string;
-  account_holder_name: string;
-  payout_status?: string;
-}
 
 interface InstitutionOption {
   id: number;
@@ -184,9 +175,6 @@ export default function StudentProfile() {
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sellerPayout, setSellerPayout] = useState<SellerPayout>({ enabled: false, preferred_upi_app: "", upi_id: "", account_holder_name: "" });
-  const [sellerSaving, setSellerSaving] = useState(false);
-  const [sellerMessage, setSellerMessage] = useState("");
 
   /*
    * Load institution, program and section reference data
@@ -251,13 +239,7 @@ export default function StudentProfile() {
         }
       }
     };
-
     loadOptions();
-
-    fetch(`${API_BASE_URL}/marketplace/seller/payout`, { credentials: "include" })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data) setSellerPayout({ enabled: Boolean(data.enabled), preferred_upi_app: data.preferred_upi_app || "", upi_id: data.upi_id || "", account_holder_name: data.account_holder_name || "", payout_status: data.payout_status }); })
-      .catch(() => undefined);
 
     return () => {
       mounted = false;
@@ -342,18 +324,6 @@ export default function StudentProfile() {
     }));
 
     setError(null);
-  };
-
-  const saveSellerPayout = async () => {
-    setSellerSaving(true); setSellerMessage(""); setError(null);
-    try {
-      const response = await fetch(`${API_BASE_URL}/marketplace/seller/payout`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sellerPayout) });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(String(data?.detail || "Unable to save payout details."));
-      setSellerPayout({ enabled: Boolean(data.enabled), preferred_upi_app: data.preferred_upi_app || "", upi_id: data.upi_id || "", account_holder_name: data.account_holder_name || "", payout_status: data.payout_status });
-      setSellerMessage(data.enabled ? "Payout details saved. Verification is pending." : "Seller account disabled.");
-    } catch (e) { setError(e instanceof Error ? e.message : "Unable to save payout details."); }
-    finally { setSellerSaving(false); }
   };
 
   const handleSubmit = async (
@@ -898,23 +868,6 @@ export default function StudentProfile() {
                   />
                 </label>
               </div>
-            </div>
-
-            <div className="profile-form-section">
-              <div className="profile-form-section-heading">
-                <WalletCards size={19} />
-                <div><h2>Marketplace seller &amp; payout</h2><p>Optional. Configure how you want to receive earnings from EduSphere Marketplace sales.</p></div>
-              </div>
-              <div className="profile-form-grid">
-                <label className="profile-form-field"><span><WalletCards size={16} /> Seller account</span><select value={sellerPayout.enabled ? "YES" : "NO"} onChange={(e) => setSellerPayout(v => ({ ...v, enabled: e.target.value === "YES" }))}><option value="NO">I only want to buy</option><option value="YES">I want to sell on EduSphere</option></select></label>
-                {sellerPayout.enabled && <label className="profile-form-field"><span><Smartphone size={16} /> Preferred UPI app</span><select value={sellerPayout.preferred_upi_app} onChange={(e) => setSellerPayout(v => ({ ...v, preferred_upi_app: e.target.value }))}><option value="">Select app</option><option value="GOOGLE_PAY">Google Pay</option><option value="PHONEPE">PhonePe</option><option value="PAYTM">Paytm</option><option value="BHIM">BHIM</option><option value="OTHER">Other UPI app</option></select></label>}
-                {sellerPayout.enabled && <label className="profile-form-field"><span>UPI ID</span><input value={sellerPayout.upi_id} onChange={(e) => setSellerPayout(v => ({ ...v, upi_id: e.target.value }))} placeholder="yourname@upi" /></label>}
-                {sellerPayout.enabled && <label className="profile-form-field"><span>Account holder name</span><input value={sellerPayout.account_holder_name} onChange={(e) => setSellerPayout(v => ({ ...v, account_holder_name: e.target.value }))} placeholder="Name on payment account" /></label>}
-              </div>
-              {sellerMessage && <div style={{ marginTop: 14, color: "#86efac", fontSize: 12 }}>{sellerMessage}</div>}
-              {sellerPayout.payout_status && <div style={{ marginTop: 8, color: "#8f9ab3", fontSize: 11 }}>Payout status: {sellerPayout.payout_status.replaceAll("_", " ")}</div>}
-              <button type="button" onClick={saveSellerPayout} disabled={sellerSaving} style={{ marginTop: 14, minHeight: 42, padding: "0 16px", border: 0, borderRadius: 11, color: "white", background: "linear-gradient(135deg,#7564ff,#4b8dff)", fontWeight: 800, cursor: sellerSaving ? "not-allowed" : "pointer", opacity: sellerSaving ? .6 : 1 }}>{sellerSaving ? "Saving..." : "Save payout details"}</button>
-              {sellerPayout.enabled && <button type="button" onClick={() => { window.location.href = "/app/marketplace/seller/route-onboarding"; }} style={{ marginTop: 10, minHeight: 38, padding: "0 14px", border: "1px solid rgba(117,100,255,.35)", borderRadius: 10, color: "#c4b5fd", background: "rgba(117,100,255,.08)", fontWeight: 800, cursor: "pointer" }}>Complete Cashfree Easy Split onboarding</button>}
             </div>
 
             <div className="profile-form-footer">

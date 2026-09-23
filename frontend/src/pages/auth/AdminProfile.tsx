@@ -15,15 +15,11 @@ import {
   Sparkles,
   UserRound,
   XCircle,
-  WalletCards,
-  Smartphone,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-
-type SellerPayout = { enabled: boolean; preferred_upi_app: string; upi_id: string; account_holder_name: string; payout_status?: string };
 
 type AdminProfileData = {
   id?: number | null;
@@ -200,9 +196,6 @@ export default function AdminProfile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [sellerPayout, setSellerPayout] = useState<SellerPayout>({ enabled: false, preferred_upi_app: "", upi_id: "", account_holder_name: "" });
-  const [sellerSaving, setSellerSaving] = useState(false);
-  const [sellerMessage, setSellerMessage] = useState("");
 
   const verificationStatus = (
     user as (typeof user & { verification_status?: string }) | null
@@ -240,8 +233,6 @@ export default function AdminProfile() {
   useEffect(() => {
     let mounted = true;
 
-    request<SellerPayout>("/marketplace/seller/payout").then((data) => setSellerPayout({ enabled: Boolean(data.enabled), preferred_upi_app: data.preferred_upi_app || "", upi_id: data.upi_id || "", account_holder_name: data.account_holder_name || "", payout_status: data.payout_status })).catch(() => undefined);
-
     request<AdminProfileData>("/profile/admin")
       .then((data) => {
         if (!mounted) return;
@@ -267,17 +258,6 @@ export default function AdminProfile() {
     setProfile((current) => ({ ...current, [key]: value }));
     setError("");
     setSuccess("");
-  };
-
-
-  const saveSellerPayout = async () => {
-    setSellerSaving(true); setSellerMessage(""); setError("");
-    try {
-      const data = await request<SellerPayout>("/marketplace/seller/payout", { method: "PUT", body: JSON.stringify(sellerPayout) });
-      setSellerPayout({ enabled: Boolean(data.enabled), preferred_upi_app: data.preferred_upi_app || "", upi_id: data.upi_id || "", account_holder_name: data.account_holder_name || "", payout_status: data.payout_status });
-      setSellerMessage(data.enabled ? "Payout details saved. Verification is pending." : "Seller account disabled.");
-    } catch (e) { setError(e instanceof Error ? e.message : "Unable to save payout details."); }
-    finally { setSellerSaving(false); }
   };
 
   const submit = async (event: FormEvent) => {
@@ -475,22 +455,14 @@ export default function AdminProfile() {
                   <Field full label="Responsibilities" value={profile.responsibilities} disabled={locked} area onChange={(value) => updateField("responsibilities", value)} placeholder="Describe your institutional responsibilities..." />
                 </div>
               </section>
-
               <section className="admin-profile-section">
                 <div className="admin-profile-section-heading">
                   <div className="admin-profile-section-number">03</div>
-                  <div><h3><WalletCards size={17} style={{ verticalAlign: "-3px", marginRight: 7 }} />Marketplace Seller &amp; Payout</h3><p>Optional payout preferences for selling on the shared EduSphere Marketplace.</p></div>
+                  <div>
+                    <h3>Marketplace Seller</h3>
+                    <p>Seller UPI details are managed from Marketplace Seller Mode. EduSphere stores direct UPI details only.</p>
+                  </div>
                 </div>
-                <div className="admin-profile-fields">
-                  <Field label="Seller Account" value={sellerPayout.enabled ? "YES" : "NO"} onChange={(value) => setSellerPayout(v => ({ ...v, enabled: value === "YES" }))} />
-                  {sellerPayout.enabled && <Field label="UPI ID" value={sellerPayout.upi_id} onChange={(value) => setSellerPayout(v => ({ ...v, upi_id: value }))} icon={<Smartphone size={16} />} placeholder="yourname@upi" />}
-                  {sellerPayout.enabled && <Field label="Account Holder Name" value={sellerPayout.account_holder_name} onChange={(value) => setSellerPayout(v => ({ ...v, account_holder_name: value }))} icon={<UserRound size={16} />} placeholder="Name on payment account" />}
-                  {sellerPayout.enabled && <label className="admin-profile-field"><span className="admin-profile-field-label">Preferred UPI App</span><div className="admin-profile-input-wrap"><Smartphone size={16}/><select value={sellerPayout.preferred_upi_app} onChange={e => setSellerPayout(v => ({ ...v, preferred_upi_app: e.target.value }))}><option value="">Select app</option><option value="GOOGLE_PAY">Google Pay</option><option value="PHONEPE">PhonePe</option><option value="PAYTM">Paytm</option><option value="BHIM">BHIM</option><option value="OTHER">Other UPI app</option></select></div></label>}
-                </div>
-                {sellerMessage && <div className="admin-profile-alert admin-profile-alert-success" style={{ marginTop: 14 }}>{sellerMessage}</div>}
-                {sellerPayout.payout_status && <p style={{ color: "#8f9ab3", fontSize: 11 }}>Payout status: {sellerPayout.payout_status.replaceAll("_", " ")}</p>}
-                <button type="button" onClick={saveSellerPayout} disabled={sellerSaving} className="admin-profile-submit" style={{ marginTop: 12 }}>{sellerSaving ? "Saving..." : "Save payout details"}</button>
-              {sellerPayout.enabled && <button type="button" onClick={() => { window.location.href = "/app/marketplace/seller/route-onboarding"; }} style={{ marginTop: 10, minHeight: 38, padding: "0 14px", border: "1px solid rgba(117,100,255,.35)", borderRadius: 10, color: "#c4b5fd", background: "rgba(117,100,255,.08)", fontWeight: 800, cursor: "pointer" }}>Complete Route onboarding &amp; KYC</button>}
               </section>
 
               <div className="admin-profile-submit-row">
