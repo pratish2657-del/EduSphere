@@ -52,6 +52,15 @@ export default function MarketplaceUPIPaymentModal({
     `&am=${encodeURIComponent(amount.toFixed(2))}` +
     `&cu=${encodeURIComponent(payment.currency || "INR")}`;
 
+  const openUpiApp = () => {
+    try {
+      // Trigger the UPI deep link without rendering a normal navigation link.
+      window.location.href = upiLink;
+    } catch {
+      setError("Unable to open the UPI app. Please use the UPI ID manually.");
+    }
+  };
+
   const copyUpiId = async () => {
     try {
       await navigator.clipboard.writeText(payment.upi_id);
@@ -176,10 +185,13 @@ export default function MarketplaceUPIPaymentModal({
             <Copy size={15} />
             {copied ? "Copied" : "Copy UPI ID"}
           </button>
-          <a href={upiLink}>
-            <ExternalLink size={15} />
+          <button
+            type="button"
+            onClick={openUpiApp}
+            className="marketplace-upi-open-button"
+          >
             Open UPI App
-          </a>
+          </button>
         </div>
 
         <div className="marketplace-upi-instruction">
