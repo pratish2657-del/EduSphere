@@ -69,7 +69,7 @@ def get_or_create_cart(user_id: int):
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -139,7 +139,7 @@ def add_cart_item(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         # ----------------------------------------------------
         # Check product
@@ -294,7 +294,7 @@ def update_cart_item(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -368,7 +368,7 @@ def remove_cart_item(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -408,7 +408,7 @@ def get_cart(user_id: int):
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -534,7 +534,7 @@ def checkout(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         # ----------------------------------------------------
         # Lock cart
@@ -866,7 +866,7 @@ def get_order(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -935,7 +935,7 @@ def get_user_orders(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -1026,7 +1026,7 @@ def get_seller_orders(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         cursor.execute(
             """
