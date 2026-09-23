@@ -1,4 +1,3 @@
-import { load as loadCashfree } from "@cashfreepayments/cashfree-js";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   BookOpen,
@@ -58,7 +57,6 @@ type MarketplaceProduct = {
   institution_name: string | null;
   name: string;
   description: string | null;
-  preview_image_path?: string | null;
   category: string | null;
   product_type: "DIGITAL" | "PHYSICAL" | string;
   condition_type: string | null;
@@ -144,19 +142,28 @@ type SellerOrdersResponse = {
   orders: SellerOrder[];
 };
 
-type MarketplacePaymentCreateResponse = {
+type MarketplacePaymentResponse = {
   message: string;
   payment_id: number;
   order_id: number;
-  gateway: string;
-  gateway_order_id: string;
+  payment_method: "UPI" | string;
+  status: "PENDING" | "PAID" | "REJECTED" | string;
   amount: number | string;
   currency: string;
-  status: string;
-  platform_fee_percent?: number | string;
-  platform_fee_amount?: number | string;
-  seller_net_amount?: number | string;
-  payment_session_id: string;
+  upi_id: string;
+  payment_name: string;
+  payment_phone: string;
+  utr_number?: string | null;
+  payer_upi_id?: string | null;
+  payer_phone?: string | null;
+  submitted_at?: string | null;
+  verified_at?: string | null;
+};
+
+type UPIFormState = {
+  utr_number: string;
+  payer_upi_id: string;
+  payer_phone: string;
 };
 
 type ProfessorDashboardResponse = {
@@ -185,9 +192,13 @@ export default function ProfessorMarketplace() {
   const [marketplaceType, setMarketplaceType] = useState("");
   const [marketplaceCart, setMarketplaceCart] = useState<MarketplaceCartResponse | null>(null);
   const [marketplaceCartOpen, setMarketplaceCartOpen] = useState(false);
-  const [checkoutPaymentMethod, setCheckoutPaymentMethod] =
-    useState<"ONLINE" | "COD">("ONLINE");
-  const [shippingAddress, setShippingAddress] = useState("");
+  const [payment] = useState<MarketplacePaymentResponse | null>(null);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentForm, setPaymentForm] = useState<UPIFormState>({
+    utr_number: "",
+    payer_upi_id: "",
+    payer_phone: "",
+  });
 
   const [marketplaceOrders, setMarketplaceOrders] = useState<MarketplaceOrdersResponse | null>(null);
   const [sellerOrders, setSellerOrders] = useState<SellerOrdersResponse | null>(null);
@@ -196,6 +207,8 @@ export default function ProfessorMarketplace() {
   const [showProductForm, setShowProductForm] = useState(false);
   const [marketplaceNotice, setMarketplaceNotice] = useState("");
   const [marketplaceBusy, setMarketplaceBusy] = useState(false);
+  const [pendingMarketplacePayment, setPendingMarketplacePayment] =
+    useState<MarketplacePaymentResponse | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<MarketplaceProduct | null>(null);
 
   const apiGet = useCallback(
@@ -277,18 +290,6 @@ export default function ProfessorMarketplace() {
     }
   }, [apiGet]);
 
-  useEffect(() => {
-    const items = marketplaceCart?.items ?? [];
-    const isAllPhysical =
-      items.length > 0 &&
-      items.every(
-        (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-      );
-
-    if (!isAllPhysical && checkoutPaymentMethod === "COD") {
-      setCheckoutPaymentMethod("ONLINE");
-    }
-  }, [checkoutPaymentMethod, marketplaceCart]);
 
   const loadMarketplaceOrders = useCallback(async () => {
     try {
@@ -366,150 +367,109 @@ export default function ProfessorMarketplace() {
     }
   }, [loadMarketplaceCart]);
 
-  const checkoutMarketplace = useCallback(async (paymentMethod: "ONLINE" | "COD", deliveryAddress: string) => {
+  const checkoutMarketplace = useCallback(async () => {
     const institutionId = dashboard?.professor?.institution_id;
+
     if (!institutionId) {
-      setMarketplaceNotice("Your institution information is not available yet.");
+      setMarketplaceNotice(
+        "Your institution information is not available yet."
+      );
       return;
     }
+
     if (!marketplaceCart?.items.length) {
       setMarketplaceNotice("Your cart is empty.");
       return;
     }
 
-    const hasDigital = marketplaceCart.items.some(
-      (item) => String(item.product_type).toUpperCase() === "DIGITAL"
-    );
-    if (paymentMethod === "COD" && hasDigital) {
-      setMarketplaceNotice(
-        "Cash on Delivery is available only when every cart item is physical."
-      );
-      return;
-    }
-    const hasPhysical = marketplaceCart.items.some(
-      (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-    );
-    if (hasPhysical && deliveryAddress.trim().length < 10) {
-      setMarketplaceNotice("Enter a valid delivery address for physical products.");
-      return;
-    }
-
     setMarketplaceBusy(true);
     setMarketplaceNotice("");
+
     try {
       const checkoutResponse = await fetch(
-        `${API_BASE_URL}/marketplace/checkout?institution_id=${encodeURIComponent(institutionId)}`,
-        { method: "POST", credentials: "include", headers: { Accept: "application/json" } }
+        `${API_BASE_URL}/marketplace/checkout?institution_id=${encodeURIComponent(
+          institutionId
+        )}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+          },
+        }
       );
+
       const checkoutData = await checkoutResponse.json().catch(() => null);
+
       if (!checkoutResponse.ok) {
-        throw new Error(getDisplayMessage(checkoutData?.detail ?? checkoutData?.message, "Unable to create marketplace order."));
+        throw new Error(
+          getDisplayMessage(
+            checkoutData?.detail ?? checkoutData?.message,
+            "Unable to create marketplace order."
+          )
+        );
       }
 
       const orderId = Number(checkoutData?.order_id);
-      if (!Number.isFinite(orderId)) throw new Error("Marketplace order ID was not returned.");
 
-      if (paymentMethod === "COD") {
-        setMarketplaceNotice(
-          `Cash on Delivery order #${orderId} placed successfully. Payment will remain pending until cash is collected.`
-        );
-        setMarketplacePanel("orders");
-        setCheckoutPaymentMethod("ONLINE");
-        setShippingAddress("");
-        await loadMarketplaceCart();
-        await loadMarketplaceOrders();
-        setMarketplaceBusy(false);
-        return;
+      if (!Number.isFinite(orderId)) {
+        throw new Error("Marketplace order ID was not returned.");
       }
 
-      const paymentResponse = await fetch(`${API_BASE_URL}/marketplace/payments/`, {
-        method: "POST",
-        credentials: "include",
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
-        body: JSON.stringify({ order_id: orderId }),
-      });
-      const paymentData = await paymentResponse.json().catch(() => null);
-      if (!paymentResponse.ok) {
-        throw new Error(getDisplayMessage(paymentData?.detail ?? paymentData?.message, "Unable to create Cashfree payment."));
-      }
-
-      const payment = paymentData as MarketplacePaymentCreateResponse;
-      if (!payment.payment_session_id) {
-        throw new Error("Cashfree payment session was not returned by the server.");
-      }
-
-      const cashfree = await loadCashfree({ mode: "sandbox" });
-      if (!cashfree) {
-        throw new Error("Cashfree checkout could not be loaded.");
-      }
-
-      await cashfree.checkout({
-        paymentSessionId: payment.payment_session_id,
-        redirectTarget: "_modal",
-      });
-
-      // Cashfree checkout can close before the server has finalized the order.
-      // The backend remains authoritative; the buyer can refresh orders if needed.
-      try {
-        const verifyData = await apiGet<{
-          status?: string;
-          gateway_status?: string;
-          message?: string;
-        }>("/marketplace/payments/verify", {
+      const paymentResponse = await fetch(
+        `${API_BASE_URL}/marketplace/payments/`,
+        {
           method: "POST",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({
             order_id: orderId,
-            gateway_order_id: payment.gateway_order_id,
           }),
-        });
-
-        const verificationStatus = String(
-          verifyData?.status || ""
-        ).toUpperCase();
-        const gatewayStatus = String(
-          verifyData?.gateway_status || ""
-        ).toUpperCase();
-
-        if (
-          verificationStatus === "PAID" ||
-          verificationStatus === "SUCCESS"
-        ) {
-          setMarketplaceNotice(
-            `Payment verification completed. Order #${orderId} is confirmed.`
-          );
-          await Promise.all([
-            loadMarketplaceCart(),
-            loadMarketplaceOrders(),
-          ]);
-        } else if (
-          verificationStatus === "FAILED" ||
-          gatewayStatus === "FAILED"
-        ) {
-          setMarketplaceNotice(
-            `Payment failed. Order #${orderId} remains pending. You can retry the payment.`
-          );
-          await loadMarketplaceOrders();
-        } else {
-          setMarketplaceNotice(
-            verifyData?.message ||
-              `Payment is currently ${verificationStatus || "pending"}. Order #${orderId} remains pending.`
-          );
-          await loadMarketplaceOrders();
         }
-      } catch (err) {
-        setMarketplaceNotice(
-          err instanceof Error
-            ? err.message
-            : "Payment verification is still pending. Please refresh your orders."
+      );
+
+      const paymentData = await paymentResponse.json().catch(() => null);
+
+      if (!paymentResponse.ok) {
+        throw new Error(
+          getDisplayMessage(
+            paymentData?.detail ?? paymentData?.message,
+            "Unable to create UPI payment."
+          )
         );
-      } finally {
-        setMarketplaceBusy(false);
       }
+
+      const payment = paymentData as MarketplacePaymentResponse;
+
+      setMarketplaceCartOpen(false);
+      setMarketplaceNotice(
+        `Order #${orderId} created. Complete the UPI payment and submit your UTR for verification.`
+      );
+
+      // The payment response is stored so the cart/modal can be opened
+      // by the manual-UPI payment UI in the marketplace component.
+      setPendingMarketplacePayment(payment);
+
+      await loadMarketplaceCart();
+      await loadMarketplaceOrders();
     } catch (err) {
-      setMarketplaceNotice(err instanceof Error ? err.message : "Unable to start marketplace payment.");
+      setMarketplaceNotice(
+        err instanceof Error
+          ? err.message
+          : "Unable to start marketplace payment."
+      );
+    } finally {
       setMarketplaceBusy(false);
     }
-  }, [dashboard, loadMarketplaceCart, loadMarketplaceOrders, marketplaceCart]);
+  }, [
+    dashboard,
+    marketplaceCart,
+    loadMarketplaceCart,
+    loadMarketplaceOrders,
+  ]);
 
   useEffect(() => {
     loadProfessorDashboard();
@@ -522,6 +482,39 @@ export default function ProfessorMarketplace() {
   useEffect(() => {
     loadMarketplaceCart();
   }, [loadMarketplaceCart]);
+
+  const submitUPIDetails = useCallback(async () => {
+    if (!payment) return;
+
+    const utr = paymentForm.utr_number.trim();
+    const payerUpi = paymentForm.payer_upi_id.trim();
+    const payerPhone = paymentForm.payer_phone.trim();
+
+    if (!utr || !payerUpi || !payerPhone) {
+      setMarketplaceNotice("Enter the UTR, payer UPI ID, and payer phone number.");
+      return;
+    }
+
+    setMarketplaceBusy(true);
+    try {
+      await apiGet(`/marketplace/payments/${payment.payment_id}/submit-utr`, {
+        method: "POST",
+        body: JSON.stringify({
+          utr_number: utr,
+          payer_upi_id: payerUpi,
+          payer_phone: payerPhone,
+        }),
+      });
+      setPaymentOpen(false);
+      setPaymentForm({ utr_number: "", payer_upi_id: "", payer_phone: "" });
+      setMarketplaceNotice("Payment details submitted for verification.");
+      await loadMarketplaceOrders();
+    } catch (err) {
+      setMarketplaceNotice(err instanceof Error ? err.message : "Unable to submit payment details.");
+    } finally {
+      setMarketplaceBusy(false);
+    }
+  }, [apiGet, loadMarketplaceOrders, payment, paymentForm]);
 
   const professor = dashboard?.professor;
   const professorName = professor?.full_name || "Professor";
@@ -598,10 +591,6 @@ export default function ProfessorMarketplace() {
             onUpdateCart={updateMarketplaceCartItem}
             onRemoveCart={removeMarketplaceCartItem}
             onCheckout={checkoutMarketplace}
-            paymentMethod={checkoutPaymentMethod}
-            onPaymentMethodChange={setCheckoutPaymentMethod}
-            shippingAddress={shippingAddress}
-            onShippingAddressChange={setShippingAddress}
             orders={marketplaceOrders}
             sellerOrders={sellerOrders}
             panel={marketplacePanel}
@@ -625,6 +614,85 @@ export default function ProfessorMarketplace() {
           />
         )}
       </main>
+
+      {paymentOpen && payment && (
+        <div
+          style={styles.modalBackdrop}
+          onClick={() => {
+            if (!marketplaceBusy) setPaymentOpen(false);
+          }}
+        >
+          <div style={styles.cartModal} onClick={(event) => event.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div>
+                <span style={styles.cardEyebrow}>MANUAL UPI PAYMENT</span>
+                <h2 style={styles.modalTitle}>Order #{payment.order_id}</h2>
+              </div>
+              <button type="button" onClick={() => setPaymentOpen(false)} disabled={marketplaceBusy} style={styles.modalCloseButton}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={styles.modalBody}>
+              <div style={styles.modalInfoGrid}>
+                <div style={styles.modalInfoCard}>
+                  <WalletCards size={17} />
+                  <div><span style={styles.modalInfoLabel}>TOTAL TO PAY</span><strong style={styles.modalInfoValue}>{money(payment.amount)}</strong></div>
+                </div>
+                <div style={styles.modalInfoCard}>
+                  <WalletCards size={17} />
+                  <div><span style={styles.modalInfoLabel}>STATUS</span><strong style={styles.modalInfoValue}>{payment.status}</strong></div>
+                </div>
+                <div style={styles.modalInfoCard}>
+                  <Store size={17} />
+                  <div><span style={styles.modalInfoLabel}>UPI ID</span><strong style={styles.modalInfoValue}>{payment.upi_id}</strong></div>
+                </div>
+                <div style={styles.modalInfoCard}>
+                  <UserRound size={17} />
+                  <div><span style={styles.modalInfoLabel}>PAYEE</span><strong style={styles.modalInfoValue}>{payment.payment_name}</strong></div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 18, padding: 15, borderRadius: 13, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.12)" }}>
+                <strong style={{ color: "#e2e8f0", fontSize: 12 }}>Pay directly using UPI</strong>
+                <p style={{ margin: "8px 0 12px", color: "#94a3b8", fontSize: 11, lineHeight: 1.6 }}>
+                  Pay exactly {money(payment.amount)} to the UPI ID shown above using Google Pay or another UPI app. After payment, enter the transaction details below.
+                </p>
+                <button type="button" style={styles.primaryButton} onClick={() => { if (navigator.clipboard) void navigator.clipboard.writeText(payment.upi_id); setMarketplaceNotice("UPI ID copied."); }}>
+                  Copy UPI ID
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 13, marginTop: 18 }}>
+                <label style={styles.formLabel}>UTR / Transaction Reference<input value={paymentForm.utr_number} onChange={(event) => setPaymentForm((current) => ({ ...current, utr_number: event.target.value }))} placeholder="Enter UTR / transaction reference" disabled={marketplaceBusy} style={styles.formInput} /></label>
+                <label style={styles.formLabel}>Payer UPI ID<input value={paymentForm.payer_upi_id} onChange={(event) => setPaymentForm((current) => ({ ...current, payer_upi_id: event.target.value }))} placeholder="example@upi" disabled={marketplaceBusy} style={styles.formInput} /></label>
+                <label style={styles.formLabel}>Payer Phone Number<input value={paymentForm.payer_phone} onChange={(event) => setPaymentForm((current) => ({ ...current, payer_phone: event.target.value }))} placeholder="10-digit mobile number" inputMode="numeric" disabled={marketplaceBusy} style={styles.formInput} /></label>
+              </div>
+            </div>
+
+            <div style={styles.modalFooter}>
+              <button type="button" style={styles.secondaryButton} onClick={() => setPaymentOpen(false)} disabled={marketplaceBusy}>Pay Later</button>
+              <button type="button" style={styles.primaryButton} onClick={submitUPIDetails} disabled={marketplaceBusy || payment.status !== "PENDING"}>
+                {marketplaceBusy ? "Submitting..." : "Submit UTR"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingMarketplacePayment && (
+        <MarketplaceUPIPaymentModal
+          payment={pendingMarketplacePayment}
+          onClose={() => setPendingMarketplacePayment(null)}
+          onSubmitted={async () => {
+            setPendingMarketplacePayment(null);
+            setMarketplaceNotice(
+              "Payment details submitted. Your payment is awaiting Super Admin verification."
+            );
+            await loadMarketplaceOrders();
+          }}
+        />
+      )}
 
       <AIChatbot />
       <button
@@ -650,6 +718,250 @@ export default function ProfessorMarketplace() {
   );
 }
 
+
+function MarketplaceUPIPaymentModal({
+  payment,
+  onClose,
+  onSubmitted,
+}: {
+  payment: MarketplacePaymentResponse;
+  onClose: () => void;
+  onSubmitted: () => void | Promise<void>;
+}) {
+  const [utrNumber, setUtrNumber] = useState("");
+  const [payerUpiId, setPayerUpiId] = useState("");
+  const [payerPhone, setPayerPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const amount = Number(payment.amount || 0);
+  const upiUri =
+    `upi://pay?pa=${encodeURIComponent(payment.upi_id)}` +
+    `&pn=${encodeURIComponent(payment.payment_name)}` +
+    `&am=${encodeURIComponent(amount.toFixed(2))}` +
+    `&cu=INR`;
+
+  const copyUpiId = async () => {
+    try {
+      await navigator.clipboard?.writeText(payment.upi_id);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setMessage("Copy failed. Please copy the UPI ID manually.");
+    }
+  };
+
+  const submitUtr = async () => {
+    const utr = utrNumber.trim();
+    const payerUpi = payerUpiId.trim();
+    const phone = payerPhone.trim();
+
+    if (!utr) {
+      setMessage("Enter the UTR / transaction reference number.");
+      return;
+    }
+
+    if (!payerUpi) {
+      setMessage("Enter the UPI ID used for payment.");
+      return;
+    }
+
+    if (!phone) {
+      setMessage("Enter the phone number used for payment.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/marketplace/payments/${payment.payment_id}/submit-utr`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            utr_number: utr,
+            payer_upi_id: payerUpi,
+            payer_phone: phone,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          getDisplayMessage(
+            data?.detail ?? data?.message,
+            "Unable to submit payment details."
+          )
+        );
+      }
+
+      setMessage(
+        "Payment details submitted. Your payment is awaiting Super Admin verification."
+      );
+
+      await onSubmitted();
+    } catch (err) {
+      setMessage(
+        err instanceof Error
+          ? err.message
+          : "Unable to submit payment details."
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={styles.upiModalBackdrop} onClick={onClose}>
+      <div
+        style={styles.upiModal}
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="professor-manual-upi-title"
+      >
+        <div style={styles.upiModalHeader}>
+          <div>
+            <span style={styles.cardEyebrow}>MANUAL UPI PAYMENT</span>
+            <h2 id="professor-manual-upi-title" style={styles.modalTitle}>
+              Pay ₹{amount.toFixed(2)}
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            style={styles.modalCloseButton}
+            disabled={busy}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={styles.upiModalBody}>
+          <div style={styles.upiPaymentCard}>
+            <span style={styles.modalInfoLabel}>PAY TO</span>
+            <strong style={styles.upiPaymentName}>
+              {payment.payment_name}
+            </strong>
+
+            <div style={styles.upiIdRow}>
+              <code style={styles.upiIdValue}>{payment.upi_id}</code>
+              <button
+                type="button"
+                onClick={copyUpiId}
+                style={styles.secondaryButton}
+                disabled={busy}
+              >
+                {copied ? "Copied" : "Copy UPI ID"}
+              </button>
+            </div>
+
+            <div style={styles.upiAmountRow}>
+              <span>Amount</span>
+              <strong>₹{amount.toFixed(2)}</strong>
+            </div>
+
+            <a
+              href={upiUri}
+              style={styles.upiOpenButton}
+              onClick={() =>
+                setMessage(
+                  "Complete the payment in your UPI app, then enter the UTR below."
+                )
+              }
+            >
+              <WalletCards size={16} />
+              Open UPI App
+            </a>
+          </div>
+
+          <div style={styles.upiInstructionBox}>
+            <strong>After payment</strong>
+            <ol style={styles.upiInstructionList}>
+              <li>Complete the payment.</li>
+              <li>Copy the UTR / transaction reference.</li>
+              <li>Enter the UPI ID and phone used to pay.</li>
+              <li>Submit the details for Super Admin verification.</li>
+            </ol>
+            <p style={styles.upiSecurityNote}>
+              The order stays pending until the payment is manually verified.
+            </p>
+          </div>
+
+          <div style={styles.upiForm}>
+            <label style={styles.formLabel}>
+              UTR / Transaction Reference
+              <input
+                value={utrNumber}
+                onChange={(event) => setUtrNumber(event.target.value)}
+                placeholder="Enter UTR / transaction reference"
+                disabled={busy}
+                style={styles.formInput}
+                autoComplete="off"
+              />
+            </label>
+
+            <label style={styles.formLabel}>
+              Payer UPI ID
+              <input
+                value={payerUpiId}
+                onChange={(event) => setPayerUpiId(event.target.value)}
+                placeholder="example@upi"
+                disabled={busy}
+                style={styles.formInput}
+                autoComplete="off"
+              />
+            </label>
+
+            <label style={styles.formLabel}>
+              Payer Phone
+              <input
+                value={payerPhone}
+                onChange={(event) => setPayerPhone(event.target.value)}
+                placeholder="Phone number used for payment"
+                disabled={busy}
+                style={styles.formInput}
+                autoComplete="tel"
+              />
+            </label>
+          </div>
+
+          {message && <div style={styles.upiMessage}>{message}</div>}
+
+          <div style={styles.upiModalActions}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={styles.secondaryButton}
+              disabled={busy}
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={submitUtr}
+              style={styles.primaryButton}
+              disabled={busy}
+            >
+              {busy ? "Submitting..." : "Submit UTR"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MarketplaceView({
   marketplace,
   loading,
@@ -669,10 +981,6 @@ function MarketplaceView({
   onUpdateCart,
   onRemoveCart,
   onCheckout,
-  paymentMethod,
-  onPaymentMethodChange,
-  shippingAddress,
-  onShippingAddressChange,
   orders,
   sellerOrders,
   panel,
@@ -704,11 +1012,7 @@ function MarketplaceView({
   onAddToCart: (productId: number) => void;
   onUpdateCart: (productId: number, quantity: number) => void;
   onRemoveCart: (productId: number) => void;
-  onCheckout: (paymentMethod: "ONLINE" | "COD", shippingAddress: string) => void;
-  paymentMethod: "ONLINE" | "COD";
-  onPaymentMethodChange: (method: "ONLINE" | "COD") => void;
-  shippingAddress: string;
-  onShippingAddressChange: (value: string) => void;
+  onCheckout: () => void;
   orders: MarketplaceOrdersResponse | null;
   sellerOrders: SellerOrdersResponse | null;
   panel: "shop" | "sell" | "orders" | "sales";
@@ -963,10 +1267,6 @@ function MarketplaceView({
           onUpdate={onUpdateCart}
           onRemove={onRemoveCart}
           onCheckout={onCheckout}
-          paymentMethod={paymentMethod}
-          onPaymentMethodChange={onPaymentMethodChange}
-          shippingAddress={shippingAddress}
-          onShippingAddressChange={onShippingAddressChange}
           busy={busy}
         />
       )}
@@ -1002,22 +1302,6 @@ function MarketplaceProductCard({
         style={styles.marketplaceProductMain}
         onClick={onSelect}
       >
-        {product.preview_image_path && (
-          <img
-            src={`${API_BASE_URL}/marketplace/${product.product_id}/preview`}
-            alt={`${product.name} preview`}
-            loading="lazy"
-            style={{
-              width: "100%",
-              height: 150,
-              objectFit: "cover",
-              borderRadius: 12,
-              marginBottom: 10,
-              display: "block",
-            }}
-          />
-        )}
-
         <div style={styles.marketplaceProductIcon}>
           {product.product_type === "DIGITAL" ? (
             <BookOpen size={22} />
@@ -1185,40 +1469,23 @@ function MarketplaceCartModal({
   onRemove,
   onCheckout,
   busy,
-  paymentMethod,
-  onPaymentMethodChange,
-  shippingAddress,
-  onShippingAddressChange,
 }: {
   cart: MarketplaceCartResponse;
   onClose: () => void;
   onUpdate: (productId: number, quantity: number) => void;
   onRemove: (productId: number) => void;
-  onCheckout: (paymentMethod: "ONLINE" | "COD", shippingAddress: string) => void;
+  onCheckout: () => void;
   busy: boolean;
-  paymentMethod: "ONLINE" | "COD";
-  onPaymentMethodChange: (method: "ONLINE" | "COD") => void;
-  shippingAddress: string;
-  onShippingAddressChange: (value: string) => void;
 }) {
   return (
     <div style={styles.modalBackdrop} onClick={onClose}>
-      <div
-        style={styles.cartModal}
-        onClick={(event) => event.stopPropagation()}
-      >
+      <div style={styles.cartModal} onClick={(event) => event.stopPropagation()}>
         <div style={styles.modalHeader}>
           <div>
             <span style={styles.cardEyebrow}>BUYER CART</span>
             <h2 style={styles.modalTitle}>Your Cart</h2>
           </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            style={styles.modalCloseButton}
-            aria-label="Close cart"
-          >
+          <button type="button" onClick={onClose} style={styles.modalCloseButton} aria-label="Close cart">
             <X size={18} />
           </button>
         </div>
@@ -1228,64 +1495,24 @@ function MarketplaceCartModal({
             <div style={styles.timetableEmpty}>
               <ShoppingCart size={30} />
               <h3 style={styles.timetableEmptyTitle}>Cart is empty</h3>
-              <p style={styles.timetableEmptyText}>
-                Add a marketplace product to begin checkout.
-              </p>
+              <p style={styles.timetableEmptyText}>Add a marketplace product to begin checkout.</p>
             </div>
           ) : (
             cart.items.map((item) => (
               <div key={item.cart_item_id} style={styles.cartItem}>
                 <div style={styles.cartItemMain}>
                   <strong>{item.name}</strong>
-                  <span>
-                    {item.seller_name || "Seller"} · ₹
-                    {Number(item.price).toFixed(2)}
-                  </span>
+                  <span>{item.seller_name || "Seller"} · ₹{Number(item.price).toFixed(2)}</span>
                 </div>
-
                 <div style={styles.cartItemActions}>
-                  <button
-                    type="button"
-                    style={styles.quantityButton}
-                    onClick={() =>
-                      onUpdate(
-                        item.product_id,
-                        Math.max(1, item.quantity - 1)
-                      )
-                    }
-                    disabled={busy}
-                  >
+                  <button type="button" style={styles.quantityButton} onClick={() => onUpdate(item.product_id, Math.max(1, item.quantity - 1))} disabled={busy}>
                     <Minus size={13} />
                   </button>
-
                   <span style={styles.quantityValue}>{item.quantity}</span>
-
-                  <button
-                    type="button"
-                    style={styles.quantityButton}
-                    onClick={() =>
-                      onUpdate(
-                        item.product_id,
-                        Math.min(
-                          item.available_quantity,
-                          item.quantity + 1
-                        )
-                      )
-                    }
-                    disabled={
-                      busy ||
-                      item.quantity >= item.available_quantity
-                    }
-                  >
+                  <button type="button" style={styles.quantityButton} onClick={() => onUpdate(item.product_id, Math.min(item.available_quantity, item.quantity + 1))} disabled={busy || item.quantity >= item.available_quantity}>
                     <Plus size={13} />
                   </button>
-
-                  <button
-                    type="button"
-                    style={styles.removeCartButton}
-                    onClick={() => onRemove(item.product_id)}
-                    disabled={busy}
-                  >
+                  <button type="button" style={styles.removeCartButton} onClick={() => onRemove(item.product_id)} disabled={busy}>
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -1294,117 +1521,20 @@ function MarketplaceCartModal({
           )}
         </div>
 
-          {cart.items.some(
-            (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-          ) && cart.items.every(
-            (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-          ) && (
-            <div style={{ width: "100%", marginBottom: 12 }}>
-              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <button
-                  type="button"
-                  onClick={() => onPaymentMethodChange("ONLINE")}
-                  disabled={busy}
-                  style={{
-                    flex: 1,
-                    padding: "10px 12px",
-                    borderRadius: 9,
-                    border: paymentMethod === "ONLINE" ? "1px solid #818cf8" : "1px solid #334155",
-                    background: paymentMethod === "ONLINE" ? "#1e1b4b" : "#0f172a",
-                    color: "#e2e8f0",
-                    fontWeight: 800,
-                  }}
-                >
-                  Online · Cashfree
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onPaymentMethodChange("COD")}
-                  disabled={busy}
-                  style={{
-                    flex: 1,
-                    padding: "10px 12px",
-                    borderRadius: 9,
-                    border: paymentMethod === "COD" ? "1px solid #818cf8" : "1px solid #334155",
-                    background: paymentMethod === "COD" ? "#1e1b4b" : "#0f172a",
-                    color: "#e2e8f0",
-                    fontWeight: 800,
-                  }}
-                >
-                  Cash on Delivery
-                </button>
-              </div>
-              {paymentMethod === "COD" && (
-                <textarea
-                  value={shippingAddress}
-                  onChange={(event) => onShippingAddressChange(event.target.value)}
-                  placeholder="Delivery address (house/building, street, area, city, PIN)"
-                  rows={3}
-                  disabled={busy}
-                  style={{ ...styles.formTextarea, width: "100%", boxSizing: "border-box" }}
-                />
-              )}
-            </div>
-          )}
-          {cart.items.some(
-            (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-          ) && !(
-            cart.items.every(
-              (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-            )
-          ) && (
-            <div style={{ width: "100%", marginBottom: 12 }}>
-              <textarea
-                value={shippingAddress}
-                onChange={(event) => onShippingAddressChange(event.target.value)}
-                placeholder="Delivery address (house/building, street, area, city, PIN)"
-                rows={3}
-                disabled={busy}
-                style={{ ...styles.formTextarea, width: "100%", boxSizing: "border-box" }}
-              />
-            </div>
-          )}
-          {cart.items.some(
-            (item) => String(item.product_type).toUpperCase() === "DIGITAL"
-          ) && (
-            <div
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                marginBottom: 12,
-                padding: "0 20px",
-                color: "#94a3b8",
-                fontSize: 11,
-                lineHeight: 1.5,
-              }}
-            >
-              Digital products require online payment. COD is unavailable for digital items.
-            </div>
-          )}
-
         <div style={styles.cartFooter}>
           <div>
             <span style={styles.modalInfoLabel}>BUYER PAYS</span>
-            <strong style={styles.cartTotal}>
-              ₹{Number(cart.total).toFixed(2)}
-            </strong>
+            <strong style={styles.cartTotal}>₹{Number(cart.total).toFixed(2)}</strong>
             <span style={{ display: "block", marginTop: 5, color: "#7f8aa5", fontSize: 10 }}>
-              EduSphere fee: 5% of seller earnings (seller-paid)
+              5% tax is added to the buyer total.
+            </span>
+            <span style={{ display: "block", marginTop: 3, color: "#64748b", fontSize: 10 }}>
+              Payment is made directly by UPI and manually verified by Super Admin.
             </span>
           </div>
-
-          <button
-            type="button"
-            style={styles.primaryButton}
-            onClick={() => onCheckout(paymentMethod, shippingAddress)}
-            disabled={busy || cart.items.length === 0}
-          >
+          <button type="button" style={styles.primaryButton} onClick={onCheckout} disabled={busy || cart.items.length === 0}>
             <WalletCards size={16} />
-            {busy
-              ? "Processing..."
-              : paymentMethod === "COD"
-                ? "Place COD Order"
-                : "Pay Online with Cashfree"}
+            {busy ? "Preparing..." : "Continue to UPI payment"}
           </button>
         </div>
       </div>
@@ -1611,7 +1741,6 @@ function MarketplaceProductForm({
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [file, setFile] = useState<File | null>(null);
-  const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -1629,18 +1758,6 @@ function MarketplaceProductForm({
       }
       if (!Number.isInteger(numericQuantity) || numericQuantity < 0) {
         throw new Error("Enter a valid non-negative quantity.");
-      }
-
-      if (!previewFile) {
-        throw new Error("A preview photo is required for every marketplace listing.");
-      }
-
-      if (!["image/jpeg", "image/png", "image/webp"].includes(previewFile.type)) {
-        throw new Error("Preview photo must be JPG, PNG or WEBP.");
-      }
-
-      if (previewFile.size > 5 * 1024 * 1024) {
-        throw new Error("Preview photo cannot exceed 5 MB.");
       }
 
       if (productType === "DIGITAL") {
@@ -1715,33 +1832,6 @@ function MarketplaceProductForm({
             )
           );
         }
-      }
-
-      if (!Number.isFinite(productId)) {
-        throw new Error("Product was created but no product ID was returned.");
-      }
-
-      const previewForm = new FormData();
-      previewForm.append("file", previewFile as File);
-
-      const previewResponse = await fetch(
-        `${API_BASE_URL}/marketplace/${productId}/preview`,
-        {
-          method: "POST",
-          credentials: "include",
-          body: previewForm,
-        }
-      );
-
-      const previewData = await previewResponse.json().catch(() => null);
-      if (!previewResponse.ok) {
-        throw new Error(
-          String(
-            previewData?.detail ||
-              previewData?.message ||
-              "Product created but preview photo upload failed."
-          )
-        );
       }
 
       onCreated();
@@ -1876,26 +1966,7 @@ function MarketplaceProductForm({
             />
           </label>
 
-                    <label style={styles.fileDrop}>
-            <Upload size={20} />
-            <strong>Preview photo</strong>
-            <span>JPG, PNG or WEBP · max 5 MB · required</span>
-            <input
-              type="file"
-              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-              onChange={(event) =>
-                setPreviewFile(event.target.files?.[0] ?? null)
-              }
-              style={{ display: "none" }}
-            />
-            {previewFile && (
-              <small style={styles.selectedFileName}>
-                Selected: {previewFile.name}
-              </small>
-            )}
-          </label>
-
-{productType === "DIGITAL" && (
+          {productType === "DIGITAL" && (
             <label style={styles.fileDrop}>
               <Upload size={20} />
               <strong>Digital file</strong>
@@ -1941,6 +2012,11 @@ function MarketplaceProductForm({
       </div>
     </div>
   );
+}
+
+function money(value: number | string) {
+  const amount = Number(value);
+  return `₹${Number.isFinite(amount) ? amount.toFixed(2) : "0.00"}`;
 }
 
 function formatMarketplaceDate(value: string) {
@@ -2871,9 +2947,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   cartModal: {
-    width: "min(760px, calc(100vw - 44px))",
+    width: "min(760px, 100%)",
     maxHeight: "90vh",
-    boxSizing: "border-box",
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
@@ -2885,8 +2960,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   cartBody: {
-    padding: "20px 24px",
-    boxSizing: "border-box",
+    padding: 20,
     overflowY: "auto",
   },
 
