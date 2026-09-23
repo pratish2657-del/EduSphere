@@ -30,7 +30,6 @@ import { useAuth } from "../../context/AuthContext";
 import StudentCube3D from "../../components/three/StudentCube3D";
 import AIChatbot from "../../components/ai/AIChatbot";
 import AttendanceView from "../../components/attendance/AttendanceView";
-import { load } from "@cashfreepayments/cashfree-js";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -310,6 +309,10 @@ type MarketplaceCartResponse = {
   cart_id: number;
   count: number;
   items: MarketplaceCartItem[];
+  subtotal_amount?: number | string;
+  tax_percent?: number | string;
+  tax_amount?: number | string;
+  total_amount?: number | string;
   total: number | string;
 };
 
@@ -360,18 +363,20 @@ type SellerOrdersResponse = {
 };
 
 type MarketplacePaymentCreateResponse = {
-  message: string;
   payment_id: number;
   order_id: number;
-  gateway: string;
-  gateway_order_id: string;
-  payment_session_id: string;
+  payment_method: "UPI";
+  status: string;
   amount: number | string;
   currency: string;
-  status: string;
-  platform_fee_percent?: number | string;
-  platform_fee_amount?: number | string;
-  seller_net_amount?: number | string;
+  upi_id: string;
+  payment_name: string;
+  payment_phone: string;
+  utr_number?: string | null;
+  payer_upi_id?: string | null;
+  payer_phone?: string | null;
+  submitted_at?: string | null;
+  verified_at?: string | null;
 };
 
 
@@ -418,8 +423,7 @@ export default function AppPlaceholder() {
   const [marketplaceCart, setMarketplaceCart] =
     useState<MarketplaceCartResponse | null>(null);
   const [marketplaceCartOpen, setMarketplaceCartOpen] = useState(false);
-  const [checkoutPaymentMethod, setCheckoutPaymentMethod] =
-    useState<"ONLINE" | "COD">("ONLINE");
+  const [pendingPayment, setPendingPayment] = useState<MarketplacePaymentCreateResponse | null>(null);
   const [shippingAddress, setShippingAddress] = useState("");
 
   const [marketplaceOrders, setMarketplaceOrders] =
@@ -633,19 +637,6 @@ export default function AppPlaceholder() {
     }
   }, []);
 
-  useEffect(() => {
-    const items = marketplaceCart?.items ?? [];
-    const isAllPhysical =
-      items.length > 0 &&
-      items.every(
-        (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-      );
-
-    if (!isAllPhysical && checkoutPaymentMethod === "COD") {
-      setCheckoutPaymentMethod("ONLINE");
-    }
-  }, [checkoutPaymentMethod, marketplaceCart]);
-
   const loadMarketplaceOrders = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/marketplace/orders`, {
@@ -810,47 +801,25 @@ export default function AppPlaceholder() {
   );
 
   const checkoutMarketplace = useCallback(
-    async (
-      paymentMethod: "ONLINE" | "COD",
-      deliveryAddress: string
-    ) => {
+    async (deliveryAddress: string) => {
       const institutionId =
         dashboard?.student.institution_id ??
         timetable?.student.institution_id;
 
       if (!institutionId) {
-        setMarketplaceNotice(
-          "Your institution information is not available yet."
-        );
+        setMarketplaceNotice("Your institution information is not available yet.");
         return;
       }
-
       if (!marketplaceCart?.items.length) {
         setMarketplaceNotice("Your cart is empty.");
         return;
       }
 
-      const hasDigital = marketplaceCart.items.some(
-        (item) =>
-          String(item.product_type).toUpperCase() === "DIGITAL"
-      );
-
-      if (paymentMethod === "COD" && hasDigital) {
-        setMarketplaceNotice(
-          "Cash on Delivery is available only when every cart item is physical."
-        );
-        return;
-      }
-
       const hasPhysical = marketplaceCart.items.some(
-        (item) =>
-          String(item.product_type).toUpperCase() === "PHYSICAL"
+        (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
       );
-
       if (hasPhysical && deliveryAddress.trim().length < 10) {
-        setMarketplaceNotice(
-          "Enter a valid delivery address for physical products."
-        );
+        setMarketplaceNotice("Enter a valid delivery address for physical products.");
         return;
       }
 
@@ -858,32 +827,21 @@ export default function AppPlaceholder() {
       setMarketplaceNotice("");
 
       try {
-        // ------------------------------------------------------------
-        // STEP 1: Create EduSphere marketplace order
-        // ------------------------------------------------------------
+        const query = new URLSearchParams({
+          institution_id: String(institutionId),
+        });
+        if (hasPhysical) query.set("shipping_address", deliveryAddress.trim());
+
         const checkoutResponse = await fetch(
-          `${API_BASE_URL}/marketplace/checkout?institution_id=${encodeURIComponent(
-            institutionId
-          )}&payment_method=${encodeURIComponent(paymentMethod)}${
-            hasPhysical
-              ? `&shipping_address=${encodeURIComponent(
-                  deliveryAddress.trim()
-                )}`
-              : ""
-          }`,
+          `${API_BASE_URL}/marketplace/checkout?${query.toString()}`,
           {
             method: "POST",
             credentials: "include",
-            headers: {
-              Accept: "application/json",
-            },
+            headers: { Accept: "application/json" },
           }
         );
 
-        const checkoutData = await checkoutResponse
-          .json()
-          .catch(() => null);
-
+        const checkoutData = await checkoutResponse.json().catch(() => null);
         if (!checkoutResponse.ok) {
           throw new Error(
             String(
@@ -895,35 +853,10 @@ export default function AppPlaceholder() {
         }
 
         const orderId = Number(checkoutData?.order_id);
-
         if (!Number.isFinite(orderId)) {
-          throw new Error(
-            "Marketplace order ID was not returned."
-          );
+          throw new Error("Marketplace order ID was not returned.");
         }
 
-        // ------------------------------------------------------------
-        // COD
-        // ------------------------------------------------------------
-        if (paymentMethod === "COD") {
-          setMarketplaceNotice(
-            `Cash on Delivery order #${orderId} placed successfully. Payment will remain pending until cash is collected.`
-          );
-
-          setMarketplacePanel("orders");
-          setCheckoutPaymentMethod("ONLINE");
-          setShippingAddress("");
-
-          await loadMarketplaceCart();
-          await loadMarketplaceOrders();
-
-          setMarketplaceBusy(false);
-          return;
-        }
-
-        // ------------------------------------------------------------
-        // STEP 2: Create Cashfree payment session
-        // ------------------------------------------------------------
         const paymentResponse = await fetch(
           `${API_BASE_URL}/marketplace/payments/`,
           {
@@ -933,152 +866,40 @@ export default function AppPlaceholder() {
               Accept: "application/json",
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              order_id: orderId,
-            }),
+            body: JSON.stringify({ order_id: orderId }),
           }
         );
 
-        const paymentData =
-          (await paymentResponse.json().catch(() => null)) as
-            | MarketplacePaymentCreateResponse
-            | { detail?: string; message?: string }
-            | null;
-
+        const paymentData = await paymentResponse.json().catch(() => null);
         if (!paymentResponse.ok) {
           throw new Error(
             String(
-              (paymentData as {
-                detail?: string;
-                message?: string;
-              } | null)?.detail ||
-                (paymentData as {
-                  detail?: string;
-                  message?: string;
-                } | null)?.message ||
-                "Unable to create Cashfree payment."
+              paymentData?.detail ||
+                paymentData?.message ||
+                "Unable to create UPI payment."
             )
           );
         }
 
-        const payment =
-          paymentData as MarketplacePaymentCreateResponse;
-
-        if (!payment.payment_session_id) {
-          throw new Error(
-            "Cashfree payment session was not returned by the server."
-          );
-        }
-
-        // ------------------------------------------------------------
-        // STEP 3: Load Cashfree Sandbox SDK
-        // ------------------------------------------------------------
-        const cashfree = await load({
-          mode: "sandbox",
-        });
-
-        if (!cashfree) {
-          throw new Error(
-            "Cashfree checkout could not be loaded."
-          );
-        }
-
-        // ------------------------------------------------------------
-        // STEP 4: Open Cashfree Sandbox Checkout
-        // ------------------------------------------------------------
-        const checkoutResult = (await cashfree.checkout({
-          paymentSessionId: payment.payment_session_id,
-          redirectTarget: "_self",
-        })) as {
-          error?: {
-            message?: string;
-          };
-        };
-
-        if (checkoutResult?.error) {
-          throw new Error(
-            checkoutResult.error.message ||
-              "Cashfree checkout could not be started."
-          );
-        }
-
-        // ------------------------------------------------------------
-        // STEP 5: Verify payment on EduSphere backend
-        //
-        // Do NOT use gateway_order_id as gateway_payment_id.
-        // The backend verifies the Cashfree order status server-side.
-        // ------------------------------------------------------------
-        const verifyResponse = await fetch(
-          `${API_BASE_URL}/marketplace/payments/verify`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              Accept: "application/json",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              order_id: orderId,
-              gateway_order_id: payment.gateway_order_id,
-            }),
-          }
-        );
-
-        const verifyData = await verifyResponse
-          .json()
-          .catch(() => null);
-
-        if (!verifyResponse.ok) {
-          throw new Error(
-            String(
-              verifyData?.detail ||
-                verifyData?.message ||
-                "Cashfree payment verification failed."
-            )
-          );
-        }
-
-        const verificationStatus = String(
-          verifyData?.status || ""
-        ).toUpperCase();
-
-        if (
-          verificationStatus === "PAID" ||
-          verificationStatus === "SUCCESS"
-        ) {
-          setMarketplaceNotice(
-            `Payment successful. Order #${orderId} is confirmed.`
-          );
-
-          setMarketplacePanel("orders");
-          setCheckoutPaymentMethod("ONLINE");
-          setShippingAddress("");
-
-          await loadMarketplaceCart();
-          await loadMarketplaceOrders();
-        } else {
-          setMarketplaceNotice(
-            `Payment is currently ${
-              verificationStatus || "pending"
-            }. Please check your orders shortly.`
-          );
-        }
+        setPendingPayment(paymentData as MarketplacePaymentCreateResponse);
+        setMarketplacePanel("orders");
+        setShippingAddress("");
+        await loadMarketplaceCart();
+        await loadMarketplaceOrders();
       } catch (err) {
         setMarketplaceNotice(
-          err instanceof Error
-            ? err.message
-            : "Unable to start marketplace payment."
+          err instanceof Error ? err.message : "Unable to start UPI payment."
         );
       } finally {
         setMarketplaceBusy(false);
       }
     },
     [
-      dashboard,
+      dashboard?.student.institution_id,
+      timetable?.student.institution_id,
+      marketplaceCart,
       loadMarketplaceCart,
       loadMarketplaceOrders,
-      marketplaceCart,
-      timetable,
     ]
   );
 
@@ -1977,8 +1798,6 @@ export default function AppPlaceholder() {
               onUpdateCart={updateMarketplaceCartItem}
               onRemoveCart={removeMarketplaceCartItem}
               onCheckout={checkoutMarketplace}
-              paymentMethod={checkoutPaymentMethod}
-              onPaymentMethodChange={setCheckoutPaymentMethod}
               shippingAddress={shippingAddress}
               onShippingAddressChange={setShippingAddress}
               orders={marketplaceOrders}
@@ -2037,8 +1856,281 @@ export default function AppPlaceholder() {
             </div>
           </footer>
 
-          <AIChatbot />
+          {pendingPayment && (
+        <MarketplaceUPIPaymentModal
+          payment={pendingPayment}
+          onClose={() => setPendingPayment(null)}
+          onSubmitted={(data) =>
+            setPendingPayment((current) =>
+              current ? { ...current, ...(data as Partial<MarketplacePaymentCreateResponse>) } : current
+            )
+          }
+        />
+      )}
+
+      <AIChatbot />
         </main>
+      </div>
+    </div>
+  );
+}
+
+/* =============================================================
+   MANUAL UPI PAYMENT MODAL
+============================================================= */
+
+function MarketplaceUPIPaymentModal({
+  payment,
+  onClose,
+  onSubmitted,
+}: {
+  payment: MarketplacePaymentCreateResponse;
+  onClose: () => void;
+  onSubmitted: (
+    data: Partial<MarketplacePaymentCreateResponse>
+  ) => void;
+}) {
+  const [utrNumber, setUtrNumber] = useState(payment.utr_number || "");
+  const [payerUpiId, setPayerUpiId] = useState(
+    payment.payer_upi_id || ""
+  );
+  const [payerPhone, setPayerPhone] = useState(
+    payment.payer_phone || ""
+  );
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const amount = Number(payment.amount || 0);
+  const upiUri =
+    `upi://pay?pa=${encodeURIComponent(payment.upi_id)}` +
+    `&pn=${encodeURIComponent(payment.payment_name)}` +
+    `&am=${encodeURIComponent(amount.toFixed(2))}` +
+    `&cu=INR` +
+    `&tn=${encodeURIComponent(`EduSphere Order #${payment.order_id}`)}`;
+
+  const copyUpiId = async () => {
+    try {
+      await navigator.clipboard.writeText(payment.upi_id);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setMessage("Unable to copy the UPI ID. Please copy it manually.");
+    }
+  };
+
+  const submitUtr = async () => {
+    const utr = utrNumber.trim();
+    const payerUpi = payerUpiId.trim();
+    const phone = payerPhone.trim();
+
+    if (!utr) {
+      setMessage("Enter the UTR / transaction reference number.");
+      return;
+    }
+    if (!payerUpi) {
+      setMessage("Enter the UPI ID used for payment.");
+      return;
+    }
+    if (!phone) {
+      setMessage("Enter the phone number used for payment.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/marketplace/payments/${payment.payment_id}/submit-utr`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            utr_number: utr,
+            payer_upi_id: payerUpi,
+            payer_phone: phone,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          getDisplayMessage(
+            data?.detail ?? data?.message,
+            "Unable to submit payment details."
+          )
+        );
+      }
+
+      onSubmitted({
+        status: String(data?.status || "PENDING"),
+        utr_number: utr,
+        payer_upi_id: payerUpi,
+        payer_phone: phone,
+        submitted_at: data?.submitted_at || null,
+      });
+
+      setMessage(
+        "Payment details submitted. Your payment is awaiting Super Admin verification."
+      );
+    } catch (err) {
+      setMessage(
+        err instanceof Error
+          ? err.message
+          : "Unable to submit payment details."
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={styles.upiModalBackdrop} onClick={onClose}>
+      <div
+        style={styles.upiModal}
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="manual-upi-payment-title"
+      >
+        <div style={styles.upiModalHeader}>
+          <div>
+            <span style={styles.cardEyebrow}>MANUAL UPI PAYMENT</span>
+            <h2 id="manual-upi-payment-title" style={styles.modalTitle}>
+              Pay ₹{amount.toFixed(2)}
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            style={styles.modalCloseButton}
+            aria-label="Close payment window"
+            disabled={busy}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={styles.upiModalBody}>
+          <div style={styles.upiPaymentCard}>
+            <span style={styles.modalInfoLabel}>PAY TO</span>
+            <strong style={styles.upiPaymentName}>
+              {payment.payment_name}
+            </strong>
+
+            <div style={styles.upiIdRow}>
+              <code style={styles.upiIdValue}>{payment.upi_id}</code>
+              <button
+                type="button"
+                onClick={copyUpiId}
+                style={styles.secondaryButton}
+                disabled={busy}
+              >
+                {copied ? "Copied" : "Copy UPI ID"}
+              </button>
+            </div>
+
+            <div style={styles.upiAmountRow}>
+              <span>Amount</span>
+              <strong>₹{amount.toFixed(2)}</strong>
+            </div>
+
+            <a
+              href={upiUri}
+              style={styles.upiOpenButton}
+              onClick={() =>
+                setMessage(
+                  "Complete the payment in your UPI app, then enter the UTR below."
+                )
+              }
+            >
+              <WalletCards size={16} />
+              Open UPI App
+            </a>
+          </div>
+
+          <div style={styles.upiInstructionBox}>
+            <strong>After payment</strong>
+            <ol style={styles.upiInstructionList}>
+              <li>Complete the ₹{amount.toFixed(2)} payment.</li>
+              <li>Copy the UTR / transaction reference.</li>
+              <li>Enter the UPI ID and phone used to pay.</li>
+              <li>Submit the details for Super Admin verification.</li>
+            </ol>
+            <p style={styles.upiSecurityNote}>
+              Your order stays pending until the payment is manually verified.
+            </p>
+          </div>
+
+          <div style={styles.upiForm}>
+            <label style={styles.formLabel}>
+              UTR / Transaction Reference
+              <input
+                value={utrNumber}
+                onChange={(event) => setUtrNumber(event.target.value)}
+                placeholder="Enter UTR / transaction reference"
+                disabled={busy}
+                style={styles.formInput}
+                autoComplete="off"
+              />
+            </label>
+
+            <label style={styles.formLabel}>
+              Payer UPI ID
+              <input
+                value={payerUpiId}
+                onChange={(event) => setPayerUpiId(event.target.value)}
+                placeholder="example@upi"
+                disabled={busy}
+                style={styles.formInput}
+                autoComplete="off"
+              />
+            </label>
+
+            <label style={styles.formLabel}>
+              Payer Phone
+              <input
+                value={payerPhone}
+                onChange={(event) => setPayerPhone(event.target.value)}
+                placeholder="Phone number used for payment"
+                disabled={busy}
+                style={styles.formInput}
+                inputMode="tel"
+                autoComplete="tel"
+              />
+            </label>
+          </div>
+
+          {message && <div style={styles.upiMessage}>{message}</div>}
+        </div>
+
+        <div style={styles.upiModalFooter}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={styles.secondaryButton}
+            disabled={busy}
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            onClick={submitUtr}
+            style={styles.primaryButton}
+            disabled={busy}
+          >
+            <Upload size={16} />
+            {busy ? "Submitting..." : "Submit UTR"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -2356,8 +2448,6 @@ function MarketplaceView({
   onUpdateCart,
   onRemoveCart,
   onCheckout,
-  paymentMethod,
-  onPaymentMethodChange,
   shippingAddress,
   onShippingAddressChange,
   orders,
@@ -2391,9 +2481,9 @@ function MarketplaceView({
   onAddToCart: (productId: number) => void;
   onUpdateCart: (productId: number, quantity: number) => void;
   onRemoveCart: (productId: number) => void;
-  onCheckout: (paymentMethod: "ONLINE" | "COD", shippingAddress: string) => void;
-  paymentMethod: "ONLINE" | "COD";
-  onPaymentMethodChange: (method: "ONLINE" | "COD") => void;
+  onCheckout: (shippingAddress: string) => void;
+  
+  
   shippingAddress: string;
   onShippingAddressChange: (value: string) => void;
   orders: MarketplaceOrdersResponse | null;
@@ -2650,8 +2740,6 @@ function MarketplaceView({
           onUpdate={onUpdateCart}
           onRemove={onRemoveCart}
           onCheckout={onCheckout}
-          paymentMethod={paymentMethod}
-          onPaymentMethodChange={onPaymentMethodChange}
           shippingAddress={shippingAddress}
           onShippingAddressChange={onShippingAddressChange}
           busy={busy}
@@ -2872,8 +2960,6 @@ function MarketplaceCartModal({
   onRemove,
   onCheckout,
   busy,
-  paymentMethod,
-  onPaymentMethodChange,
   shippingAddress,
   onShippingAddressChange,
 }: {
@@ -2881,10 +2967,10 @@ function MarketplaceCartModal({
   onClose: () => void;
   onUpdate: (productId: number, quantity: number) => void;
   onRemove: (productId: number) => void;
-  onCheckout: (paymentMethod: "ONLINE" | "COD", shippingAddress: string) => void;
+  onCheckout: (shippingAddress: string) => void;
   busy: boolean;
-  paymentMethod: "ONLINE" | "COD";
-  onPaymentMethodChange: (method: "ONLINE" | "COD") => void;
+  
+  
   shippingAddress: string;
   onShippingAddressChange: (value: string) => void;
 }) {
@@ -2980,101 +3066,9 @@ function MarketplaceCartModal({
             ))
           )}
         </div>
-
-          {cart.items.some(
-            (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-          ) && cart.items.every(
-            (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-          ) && (
-            <div
-              style={{
-                width: "100%",
-                margin: 0,
-                padding: "10px 20px",
-                boxSizing: "border-box",
-              }}
-            >
-              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <button
-                  type="button"
-                  onClick={() => onPaymentMethodChange("ONLINE")}
-                  disabled={busy}
-                  style={{
-                    flex: 1,
-                    padding: "10px 12px",
-                    borderRadius: 9,
-                    border: paymentMethod === "ONLINE" ? "1px solid #818cf8" : "1px solid #334155",
-                    background: paymentMethod === "ONLINE" ? "#1e1b4b" : "#0f172a",
-                    color: "#e2e8f0",
-                    fontWeight: 800,
-                  }}
-                >
-                  Online · Cashfree
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onPaymentMethodChange("COD")}
-                  disabled={busy}
-                  style={{
-                    flex: 1,
-                    padding: "10px 12px",
-                    borderRadius: 9,
-                    border: paymentMethod === "COD" ? "1px solid #818cf8" : "1px solid #334155",
-                    background: paymentMethod === "COD" ? "#1e1b4b" : "#0f172a",
-                    color: "#e2e8f0",
-                    fontWeight: 800,
-                  }}
-                >
-                  Cash on Delivery
-                </button>
-              </div>
-              {paymentMethod === "COD" && (
-                <textarea
-                  value={shippingAddress}
-                  onChange={(event) => onShippingAddressChange(event.target.value)}
-                  placeholder="Delivery address (house/building, street, area, city, PIN)"
-                  rows={3}
-                  disabled={busy}
-                  style={{ ...styles.formTextarea, width: "100%", boxSizing: "border-box" }}
-                />
-              )}
-            </div>
-          )}
-          {cart.items.some(
-            (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-          ) && !(
-            cart.items.every(
-              (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
-            )
-          ) && (
+          {cart.items.some((item) => String(item.product_type).toUpperCase() === "PHYSICAL") && (
             <div style={{ width: "100%", marginBottom: 12 }}>
-              <textarea
-                value={shippingAddress}
-                onChange={(event) => onShippingAddressChange(event.target.value)}
-                placeholder="Delivery address (house/building, street, area, city, PIN)"
-                rows={3}
-                disabled={busy}
-                style={{ ...styles.formTextarea, width: "100%", boxSizing: "border-box" }}
-              />
-            </div>
-          )}
-          {cart.items.some(
-            (item) => String(item.product_type).toUpperCase() === "DIGITAL"
-          ) && (
-            <div
-              style={{
-                width: "100%",
-                margin: 0,
-                padding: "8px 20px",
-                boxSizing: "border-box",
-                color: "#94a3b8",
-                fontSize: 11,
-                borderTop: "1px solid rgba(148,163,184,0.07)",
-                borderBottom: "1px solid rgba(148,163,184,0.07)",
-              }}
-            >
-              Digital products require online payment. COD is unavailable for digital
-              items.
+              <textarea value={shippingAddress} onChange={(event) => onShippingAddressChange(event.target.value)} placeholder="Delivery address (house/building, street, area, city, PIN)" rows={3} disabled={busy} style={{ ...styles.formTextarea, width: "100%", boxSizing: "border-box" }} />
             </div>
           )}
 
@@ -3082,25 +3076,21 @@ function MarketplaceCartModal({
           <div>
             <span style={styles.modalInfoLabel}>BUYER PAYS</span>
             <strong style={styles.cartTotal}>
-              ₹{Number(cart.total).toFixed(2)}
+              ₹{Number(cart.total_amount ?? cart.total).toFixed(2)}
             </strong>
             <span style={{ display: "block", marginTop: 5, color: "#7f8aa5", fontSize: 10 }}>
-              EduSphere fee: 5% of seller earnings (seller-paid)
+              5% tax is added to the buyer total at checkout.
             </span>
           </div>
 
           <button
             type="button"
             style={styles.primaryButton}
-            onClick={() => onCheckout(paymentMethod, shippingAddress)}
+            onClick={() => onCheckout(shippingAddress)}
             disabled={busy || cart.items.length === 0}
           >
             <WalletCards size={16} />
-            {busy
-              ? "Processing..."
-              : paymentMethod === "COD"
-                ? "Place COD Order"
-                : "Pay Online with Cashfree"}
+            {busy ? "Creating UPI payment..." : "Continue to UPI payment"}
           </button>
         </div>
       </div>
@@ -4816,6 +4806,130 @@ function formatTime(value: string | number | null | undefined) {
 ============================================================= */
 
 const styles: Record<string, React.CSSProperties> = {
+  upiModalBackdrop: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 9999,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+    background: "rgba(2, 6, 23, 0.82)",
+    backdropFilter: "blur(10px)",
+    boxSizing: "border-box",
+  },
+  upiModal: {
+    width: "min(680px, 100%)",
+    maxHeight: "calc(100vh - 36px)",
+    overflowY: "auto",
+    borderRadius: 22,
+    border: "1px solid rgba(148,163,184,0.16)",
+    background: "#0b1220",
+    boxShadow: "0 28px 80px rgba(0,0,0,0.55)",
+  },
+  upiModalHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+    padding: "22px 22px 16px",
+    borderBottom: "1px solid rgba(148,163,184,0.10)",
+  },
+  upiModalBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+    padding: 22,
+  },
+  upiPaymentCard: {
+    padding: 16,
+    borderRadius: 16,
+    border: "1px solid rgba(129,140,248,0.24)",
+    background: "rgba(30,41,59,0.55)",
+  },
+  upiPaymentName: {
+    display: "block",
+    marginTop: 5,
+    color: "#f8fafc",
+    fontSize: 18,
+  },
+  upiIdRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 12,
+    flexWrap: "wrap",
+  },
+  upiIdValue: {
+    flex: 1,
+    minWidth: 180,
+    padding: "10px 12px",
+    borderRadius: 10,
+    background: "#020617",
+    color: "#c7d2fe",
+    border: "1px solid rgba(148,163,184,0.12)",
+    fontSize: 14,
+  },
+  upiAmountRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 14,
+    color: "#94a3b8",
+  },
+  upiOpenButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    width: "100%",
+    marginTop: 14,
+    padding: "12px 14px",
+    borderRadius: 11,
+    textDecoration: "none",
+    background: "#4f46e5",
+    color: "#ffffff",
+    fontWeight: 800,
+    boxSizing: "border-box",
+  },
+  upiInstructionBox: {
+    padding: 15,
+    borderRadius: 14,
+    background: "rgba(15,23,42,0.72)",
+    border: "1px solid rgba(148,163,184,0.10)",
+    color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 1.55,
+  },
+  upiInstructionList: {
+    margin: "9px 0 0 20px",
+    padding: 0,
+  },
+  upiSecurityNote: {
+    margin: "10px 0 0",
+    color: "#94a3b8",
+    fontSize: 11,
+  },
+  upiForm: {
+    display: "grid",
+    gap: 12,
+  },
+  upiMessage: {
+    padding: 11,
+    borderRadius: 10,
+    background: "rgba(79,70,229,0.10)",
+    border: "1px solid rgba(129,140,248,0.20)",
+    color: "#c7d2fe",
+    fontSize: 12,
+    lineHeight: 1.45,
+  },
+  upiModalFooter: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 10,
+    padding: "16px 22px 22px",
+    borderTop: "1px solid rgba(148,163,184,0.10)",
+  },
   page: {
     minHeight: "100vh",
     background:

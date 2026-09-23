@@ -64,6 +64,14 @@ type Summary = {
   pending_orders?: number;
 };
 
+const ORDER_STATUSES = [
+  "PENDING",
+  "CONFIRMED",
+  "PROCESSING",
+  "COMPLETED",
+  "CANCELLED",
+] as const;
+
 async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
@@ -72,6 +80,7 @@ async function apiRequest<T>(
     ...options,
     credentials: "include",
     headers: {
+      Accept: "application/json",
       "Content-Type": "application/json",
       ...(options.headers || {}),
     },
@@ -83,7 +92,9 @@ async function apiRequest<T>(
     throw new Error(
       typeof data?.detail === "string"
         ? data.detail
-        : `Request failed (${response.status})`,
+        : typeof data?.message === "string"
+          ? data.message
+          : `Request failed (${response.status})`,
     );
   }
 
@@ -153,7 +164,9 @@ export default function SuperAdminMarketplaceManagement() {
       setProducts(productsResponse?.products || []);
       setOrders(ordersResponse?.orders || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load marketplace");
+      setError(
+        err instanceof Error ? err.message : "Unable to load marketplace",
+      );
     } finally {
       setLoading(false);
     }
@@ -179,7 +192,9 @@ export default function SuperAdminMarketplaceManagement() {
           product.institution_name,
         ]
           .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(query));
+          .some((value) =>
+            String(value).toLowerCase().includes(query),
+          );
 
       const matchesStatus =
         statusFilter === "ALL" ||
@@ -206,9 +221,13 @@ export default function SuperAdminMarketplaceManagement() {
           order.buyer_email,
           order.institution_name,
           order.status,
+          order.payment_method,
+          order.payment_status,
         ]
           .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(query));
+          .some((value) =>
+            String(value).toLowerCase().includes(query),
+          );
 
       return (
         matchesSearch &&
@@ -246,13 +265,20 @@ export default function SuperAdminMarketplaceManagement() {
           (product.is_active ? -1 : 1),
       }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to update product");
+      setError(
+        err instanceof Error ? err.message : "Unable to update product",
+      );
     } finally {
       setBusyId(null);
     }
   };
 
   const updateOrder = async (orderId: number, status: string) => {
+    if (!ORDER_STATUSES.includes(status as (typeof ORDER_STATUSES)[number])) {
+      setError("Invalid marketplace order status.");
+      return;
+    }
+
     setBusyId(orderId);
     setError("");
 
@@ -271,21 +297,9 @@ export default function SuperAdminMarketplaceManagement() {
         ),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to update order");
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const collectCodPayment = async (order: Order) => {
-    if (!order.payment_id) return;
-    setBusyId(order.payment_id);
-    setError("");
-    try {
-      await apiRequest(`/marketplace/payments/${order.payment_id}/cod/collect`, { method: "POST" });
-      await loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to collect COD payment.");
+      setError(
+        err instanceof Error ? err.message : "Unable to update order",
+      );
     } finally {
       setBusyId(null);
     }
@@ -321,7 +335,11 @@ export default function SuperAdminMarketplaceManagement() {
             </div>
           </div>
 
-          <button className="sam-refresh" onClick={loadData} disabled={loading}>
+          <button
+            className="sam-refresh"
+            onClick={() => void loadData()}
+            disabled={loading}
+          >
             <RefreshCw size={16} className={loading ? "sam-spin" : ""} />
             Refresh
           </button>
@@ -341,7 +359,9 @@ export default function SuperAdminMarketplaceManagement() {
           </div>
           <div>
             <span>SHARED EDUSPHERE MARKETPLACE</span>
-            <strong>One platform • One product database • One order system</strong>
+            <strong>
+              One platform • One product database • One order system
+            </strong>
             <p>
               Changes made here immediately affect the same marketplace used by
               Students, Professors, Admins and Super Admins.
@@ -398,6 +418,7 @@ export default function SuperAdminMarketplaceManagement() {
               Products
               <span>{products.length}</span>
             </button>
+
             <button
               className={tab === "orders" ? "active" : ""}
               onClick={() => {
@@ -432,17 +453,18 @@ export default function SuperAdminMarketplaceManagement() {
                 onChange={(event) => setStatusFilter(event.target.value)}
               >
                 <option value="ALL">All status</option>
+
                 {tab === "products" ? (
                   <>
                     <option value="ACTIVE">Active</option>
                     <option value="HIDDEN">Hidden</option>
                   </>
                 ) : (
-                  <>
-                    <option value="PENDING">Pending</option>
-                    <option value="CONFIRMED">Confirmed</option>
-                    <option value="CANCELLED">Cancelled</option>
-                  </>
+                  ORDER_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {status.charAt(0) + status.slice(1).toLowerCase()}
+                    </option>
+                  ))
                 )}
               </select>
               <ChevronDown size={15} />
@@ -500,6 +522,7 @@ export default function SuperAdminMarketplaceManagement() {
                       <th>ACTION</th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {filteredProducts.map((product) => (
                       <tr key={product.id}>
@@ -519,21 +542,33 @@ export default function SuperAdminMarketplaceManagement() {
                             </div>
                           </div>
                         </td>
+
                         <td>
                           <div className="sam-person">
                             <strong>{product.seller_name || "Seller"}</strong>
                             <span>{product.seller_email || "—"}</span>
                           </div>
                         </td>
+
                         <td>
                           <span className="sam-type">
                             {product.product_type || "—"}
                           </span>
-                          {String(product.product_type || "").toUpperCase() === "DIGITAL" && (
-                            <small>{Boolean(product.digital_file_attached) ? "File ready" : "File missing"}</small>
+
+                          {String(product.product_type || "").toUpperCase() ===
+                            "DIGITAL" && (
+                            <small>
+                              {Boolean(product.digital_file_attached)
+                                ? "File ready"
+                                : "File missing"}
+                            </small>
                           )}
                         </td>
-                        <td className="sam-price">{money(product.price)}</td>
+
+                        <td className="sam-price">
+                          {money(product.price)}
+                        </td>
+
                         <td>
                           <span
                             className={
@@ -545,12 +580,16 @@ export default function SuperAdminMarketplaceManagement() {
                             {product.quantity}
                           </span>
                         </td>
+
                         <td>
                           <StatusBadge
                             active={product.is_active}
-                            label={product.is_active ? "ACTIVE" : "HIDDEN"}
+                            label={
+                              product.is_active ? "ACTIVE" : "HIDDEN"
+                            }
                           />
                         </td>
+
                         <td>
                           <button
                             className={
@@ -559,10 +598,13 @@ export default function SuperAdminMarketplaceManagement() {
                                 : "sam-action success"
                             }
                             disabled={busyId === product.id}
-                            onClick={() => toggleProduct(product)}
+                            onClick={() => void toggleProduct(product)}
                           >
                             {busyId === product.id ? (
-                              <RefreshCw size={14} className="sam-spin" />
+                              <RefreshCw
+                                size={14}
+                                className="sam-spin"
+                              />
                             ) : product.is_active ? (
                               <>
                                 <EyeOff size={14} /> Hide
@@ -590,6 +632,7 @@ export default function SuperAdminMarketplaceManagement() {
                   Review and control order status across the shared platform.
                 </p>
               </div>
+
               <div className="sam-result-count">
                 {filteredOrders.length} results
               </div>
@@ -618,6 +661,7 @@ export default function SuperAdminMarketplaceManagement() {
                       <th>UPDATE</th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {filteredOrders.map((order) => (
                       <tr key={order.id}>
@@ -627,45 +671,59 @@ export default function SuperAdminMarketplaceManagement() {
                             <strong>#{order.id}</strong>
                           </div>
                         </td>
+
                         <td>
                           <div className="sam-person">
                             <strong>{order.buyer_name || "Buyer"}</strong>
                             <span>{order.buyer_email || "—"}</span>
                           </div>
                         </td>
+
                         <td>{order.institution_name || "—"}</td>
+
                         <td className="sam-price">
                           {money(order.total_amount)}
                         </td>
+
                         <td>
-                          <span className="sam-type">{order.payment_method || "ONLINE"}</span>
-                          {String(order.payment_method || "").toUpperCase() === "COD" && String(order.payment_status || "").toUpperCase() === "PENDING" && (
-                            <button
-                              className="sam-action success"
-                              disabled={!order.payment_id || busyId === order.payment_id}
-                              onClick={() => collectCodPayment(order)}
-                            >
-                              {busyId === order.payment_id ? "Saving…" : "Mark Cash Collected"}
-                            </button>
+                          <span className="sam-type">
+                            {order.payment_method || "UPI"}
+                          </span>
+
+                          {order.payment_status && (
+                            <small>
+                              Payment: {order.payment_status}
+                            </small>
                           )}
                         </td>
-                        <td className="sam-date">{dateTime(order.created_at)}</td>
+
+                        <td className="sam-date">
+                          {dateTime(order.created_at)}
+                        </td>
+
                         <td>
                           <OrderBadge status={order.status} />
                         </td>
+
                         <td>
                           <div className="sam-select sam-order-select">
                             <select
                               value={order.status}
                               disabled={busyId === order.id}
                               onChange={(event) =>
-                                updateOrder(order.id, event.target.value)
+                                void updateOrder(
+                                  order.id,
+                                  event.target.value,
+                                )
                               }
                             >
-                              <option value="PENDING">Pending</option>
-                              <option value="CONFIRMED">Confirmed</option>
-                              <option value="CANCELLED">Cancelled</option>
-                                      </select>
+                              {ORDER_STATUSES.map((status) => (
+                                <option key={status} value={status}>
+                                  {status.charAt(0) +
+                                    status.slice(1).toLowerCase()}
+                                </option>
+                              ))}
+                            </select>
                             <ChevronDown size={14} />
                           </div>
                         </td>
@@ -688,6 +746,7 @@ export default function SuperAdminMarketplaceManagement() {
           </span>
         </footer>
       </div>
+
       <AIChatbot />
     </div>
   );
@@ -712,6 +771,7 @@ function StatCard({
         <div className="sam-stat-icon">{icon}</div>
         {positive && <span className="sam-live-dot">LIVE</span>}
       </div>
+
       <span className="sam-stat-label">{label}</span>
       <strong>{value}</strong>
       <small>{hint}</small>
@@ -736,7 +796,7 @@ function StatusBadge({
 
 function OrderBadge({ status }: { status: string }) {
   const normalized = String(status || "").toUpperCase();
-  const isGood = normalized === "CONFIRMED";
+  const isGood = normalized === "CONFIRMED" || normalized === "COMPLETED";
   const isBad = normalized === "CANCELLED";
 
   return (
