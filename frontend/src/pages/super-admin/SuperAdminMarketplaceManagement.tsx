@@ -335,14 +335,27 @@ export default function SuperAdminMarketplaceManagement() {
             </div>
           </div>
 
-          <button
-            className="sam-refresh"
-            onClick={() => void loadData()}
-            disabled={loading}
-          >
-            <RefreshCw size={16} className={loading ? "sam-spin" : ""} />
-            Refresh
-          </button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              className="sam-refresh"
+              onClick={() => {
+                window.location.href = "/app/super-admin/marketplace-payments";
+              }}
+              title="Review submitted UPI payments"
+            >
+              <ShieldCheck size={16} />
+              Payment Submissions
+            </button>
+
+            <button
+              className="sam-refresh"
+              onClick={() => void loadData()}
+              disabled={loading}
+            >
+              <RefreshCw size={16} className={loading ? "sam-spin" : ""} />
+              Refresh
+            </button>
+          </div>
         </header>
 
         {error && (

@@ -163,9 +163,29 @@ async function api<T>(endpoint: string, options: RequestInit = {}) {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(
-      String(data?.detail || data?.message || `Request failed (${response.status})`)
-    );
+    const detail = data?.detail;
+    const message =
+      typeof detail === "string"
+        ? detail
+        : Array.isArray(detail)
+          ? detail
+              .map((item) =>
+                typeof item === "string"
+                  ? item
+                  : item && typeof item === "object" && "msg" in item
+                    ? String(item.msg)
+                    : JSON.stringify(item)
+              )
+              .join("; ")
+          : detail && typeof detail === "object"
+            ? "msg" in detail
+              ? String(detail.msg)
+              : JSON.stringify(detail)
+            : typeof data?.message === "string"
+              ? data.message
+              : `Request failed (${response.status})`;
+
+    throw new Error(message);
   }
 
   return data as T;

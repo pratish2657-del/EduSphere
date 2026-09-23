@@ -46,7 +46,29 @@ export default function SuperAdminMarketplacePayments() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(String(data?.detail || data?.message || "Unable to load pending UPI payments."));
+    const detail = data?.detail;
+    const message =
+      typeof detail === "string"
+        ? detail
+        : Array.isArray(detail)
+          ? detail
+              .map((item) =>
+                typeof item === "string"
+                  ? item
+                  : item && typeof item === "object" && "msg" in item
+                    ? String(item.msg)
+                    : JSON.stringify(item)
+              )
+              .join("; ")
+          : detail && typeof detail === "object"
+            ? "msg" in detail
+              ? String(detail.msg)
+              : JSON.stringify(detail)
+            : typeof data?.message === "string"
+              ? data.message
+              : "Unable to load pending UPI payments.";
+
+    throw new Error(message);
       }
       setItems(Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []);
     } catch (err) {
@@ -80,7 +102,29 @@ export default function SuperAdminMarketplacePayments() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(String(data?.detail || data?.message || "Unable to verify payment."));
+    const detail = data?.detail;
+    const message =
+      typeof detail === "string"
+        ? detail
+        : Array.isArray(detail)
+          ? detail
+              .map((item) =>
+                typeof item === "string"
+                  ? item
+                  : item && typeof item === "object" && "msg" in item
+                    ? String(item.msg)
+                    : JSON.stringify(item)
+              )
+              .join("; ")
+          : detail && typeof detail === "object"
+            ? "msg" in detail
+              ? String(detail.msg)
+              : JSON.stringify(detail)
+            : typeof data?.message === "string"
+              ? data.message
+              : "Unable to verify payment.";
+
+    throw new Error(message);
       }
       setMessage(`Payment #${paymentId} verified. The order is now confirmed and the receipt is generated.`);
       await load();
@@ -129,8 +173,8 @@ export default function SuperAdminMarketplacePayments() {
             <article className="sapm-card" key={item.payment_id}>
               <div className="sapm-card-top">
                 <div>
-                  <span className="sapm-label">PAYMENT #{item.payment_id}</span>
-                  <h2>Order #{item.order_id}</h2>
+                  <span className="sapm-label">PAYMENT ID #{item.payment_id}</span>
+                  <h2>ORDER ID #{item.order_id}</h2>
                 </div>
                 <strong>{money(item.amount)}</strong>
               </div>

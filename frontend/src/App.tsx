@@ -68,6 +68,7 @@ import SuperAdminLibrary from "./pages/super-admin/SuperAdminLibrary";
 import SuperAdminDeveloperSubmissions from "./pages/super-admin/SuperAdminDeveloperSubmissions";
 import MarketplacePaymentSuccess from "./pages/auth/MarketplacePaymentSuccess";
 import ProfessorEvents from "./pages/auth/ProfessorEvents";
+import SuperAdminMarketplacePayments from "./pages/super-admin/SuperAdminMarketplacePayments";
 
 const SuperAdminMarketplacePage =
   SuperAdminMarketplace as unknown as ComponentType;
@@ -657,6 +658,10 @@ export default function App() {
       <Route
         path="/app/super-admin/admin-requests"
         element={<AdminApplications />}
+      />
+      <Route
+        path="/app/super-admin/marketplace-payments"
+        element={<SuperAdminMarketplacePayments />}
       />
       <Route
         path="/app/super-admin/developer-verifications"
