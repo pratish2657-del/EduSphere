@@ -472,6 +472,7 @@ export default function AppPlaceholder() {
     useState<MarketplacePaymentCreateResponse | null>(() =>
       readPendingMarketplacePayment()
     );
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
   useEffect(() => {
     writePendingMarketplacePayment(pendingPayment);
@@ -953,6 +954,7 @@ export default function AppPlaceholder() {
           paymentData as MarketplacePaymentCreateResponse;
         writePendingMarketplacePayment(createdPayment);
         setPendingPayment(createdPayment);
+        setPaymentModalOpen(true);
         setMarketplacePanel("orders");
         setShippingAddress("");
         await loadMarketplaceCart();
@@ -1928,12 +1930,12 @@ export default function AppPlaceholder() {
           </footer>
 
           {pendingPayment &&
+            paymentModalOpen &&
             createPortal(
               <MarketplaceUPIPaymentModal
                 payment={pendingPayment}
                 onClose={() => {
-                  writePendingMarketplacePayment(null);
-                  setPendingPayment(null);
+                  setPaymentModalOpen(false);
                 }}
                 onSubmitted={(data) => {
                   setPendingPayment((current) => {
@@ -1947,6 +1949,8 @@ export default function AppPlaceholder() {
                     writePendingMarketplacePayment(updated);
                     return updated;
                   });
+
+                  setPaymentModalOpen(false);
                 }}
               />,
               document.body
