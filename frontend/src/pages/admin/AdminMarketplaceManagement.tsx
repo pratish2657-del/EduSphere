@@ -269,22 +269,6 @@ export default function AdminMarketplaceManagement() {
     }
   };
 
-  const collectCodPayment = async (order: Order) => {
-    if (!order.payment_id) return;
-    setBusyId(order.payment_id);
-    setError("");
-    try {
-      await api(`/marketplace/payments/${order.payment_id}/cod/collect`, {
-        method: "POST",
-      });
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to collect COD payment.");
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   return (
     <div className="amm-page">
       <header className="amm-header">
@@ -557,16 +541,9 @@ export default function AdminMarketplaceManagement() {
                       <td>{order.product_name || "—"}</td>
                       <td>{money(order.total_amount ?? order.amount)}</td>
                       <td>
-                        <span className="amm-badge active">{order.payment_method || "ONLINE"}</span>
-                        {String(order.payment_method || "").toUpperCase() === "COD" && String(order.payment_status || "").toUpperCase() === "PENDING" && (
-                          <button
-                            className="amm-table-button"
-                            disabled={!order.payment_id || busyId === order.payment_id}
-                            onClick={() => collectCodPayment(order)}
-                          >
-                            {busyId === order.payment_id ? "Saving…" : "Mark Cash Collected"}
-                          </button>
-                        )}
+                        <span className="amm-badge active">
+                          {order.payment_method || "UPI"}
+                        </span>
                       </td>
                       <td>
                 <span className="amm-badge active">

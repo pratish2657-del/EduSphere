@@ -1,0 +1,269 @@
+.marketplace-upi-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(6px);
+}
+
+.marketplace-upi-modal {
+  width: min(650px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  border: 1px solid #29344d;
+  border-radius: 16px;
+  background: #080d18;
+  color: #eef2ff;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.55);
+}
+
+.marketplace-upi-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 21px;
+  border-bottom: 1px solid #1d263a;
+}
+
+.marketplace-upi-eyebrow {
+  color: #8b8df8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.marketplace-upi-header h2 {
+  margin: 5px 0 4px;
+  font-size: 22px;
+}
+
+.marketplace-upi-header p {
+  margin: 0;
+  color: #75829d;
+  font-size: 11px;
+}
+
+.marketplace-upi-close {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #8c99b2;
+  cursor: pointer;
+}
+
+.marketplace-upi-close:hover {
+  background: #101827;
+  color: #fff;
+}
+
+.marketplace-upi-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 20px 21px;
+  overflow: hidden;
+  border: 1px solid #1d263a;
+  border-radius: 10px;
+}
+
+.marketplace-upi-summary > div {
+  min-width: 0;
+  padding: 13px;
+  background: #0b1120;
+}
+
+.marketplace-upi-summary span,
+.marketplace-upi-summary strong {
+  display: block;
+}
+
+.marketplace-upi-summary span {
+  margin-bottom: 5px;
+  color: #697691;
+  font-size: 10px;
+}
+
+.marketplace-upi-summary strong {
+  color: #dfe6f5;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.marketplace-upi-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 21px 16px;
+}
+
+.marketplace-upi-actions button,
+.marketplace-upi-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #28324b;
+  border-radius: 9px;
+  background: #0d1424;
+  color: #dfe6f8;
+  padding: 10px 13px;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.marketplace-upi-actions a {
+  border-color: #5b5ee8;
+  background: #4f46e5;
+  color: #fff;
+}
+
+.marketplace-upi-instruction {
+  margin: 0 21px 16px;
+  padding: 14px;
+  border: 1px solid #1d263a;
+  border-radius: 10px;
+  background: #0b1120;
+  color: #9ba6bb;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.marketplace-upi-instruction strong {
+  color: #dfe6f8;
+}
+
+.marketplace-upi-instruction ol {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.marketplace-upi-error {
+  margin: 0 21px 0;
+  padding: 10px;
+  border: 1px solid rgba(244, 63, 94, 0.2);
+  border-radius: 8px;
+  background: rgba(244, 63, 94, 0.07);
+  color: #fda4af;
+  font-size: 11px;
+}
+
+.marketplace-upi-form {
+  display: grid;
+  gap: 13px;
+  padding: 20px 21px;
+}
+
+.marketplace-upi-form label {
+  display: grid;
+  gap: 7px;
+  color: #9ba6bb;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.marketplace-upi-form input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid #28324b;
+  border-radius: 9px;
+  outline: none;
+  background: #0b1120;
+  color: #eef2ff;
+  padding: 11px 12px;
+}
+
+.marketplace-upi-form input:focus {
+  border-color: #5b5ee8;
+}
+
+.marketplace-upi-footer {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 15px 21px 12px;
+  border-top: 1px solid #1d263a;
+}
+
+.marketplace-upi-footer button {
+  border: 1px solid #28324b;
+  border-radius: 9px;
+  background: #0d1424;
+  color: #dfe6f8;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.marketplace-upi-footer .marketplace-upi-submit {
+  border-color: #5b5ee8;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  color: #fff;
+}
+
+.marketplace-upi-footer button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.marketplace-upi-note {
+  margin: 0;
+  padding: 0 21px 20px;
+  color: #697691;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+@media (max-width: 560px) {
+  .marketplace-upi-overlay {
+    padding: 10px;
+  }
+
+  .marketplace-upi-modal {
+    max-height: calc(100vh - 20px);
+  }
+
+  .marketplace-upi-summary {
+    grid-template-columns: 1fr;
+    margin: 16px 14px;
+  }
+
+  .marketplace-upi-actions,
+  .marketplace-upi-form {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .marketplace-upi-instruction,
+  .marketplace-upi-error {
+    margin-left: 14px;
+    margin-right: 14px;
+  }
+
+  .marketplace-upi-footer {
+    flex-direction: column;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .marketplace-upi-footer button,
+  .marketplace-upi-actions button,
+  .marketplace-upi-actions a {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .marketplace-upi-note {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
