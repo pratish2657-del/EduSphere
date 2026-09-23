@@ -7,7 +7,6 @@ from app.core.exceptions import (
 )
 from app.database import get_connection
 
-
 # ============================================================
 # CONSTANTS
 # ============================================================
