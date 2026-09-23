@@ -19,6 +19,7 @@ import {
   Save,
   ShieldCheck,
   UserRound,
+  WalletCards,
   XCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -37,6 +38,7 @@ interface ProfessorProfile {
   full_name?: string;
 
   phone: string;
+  upi_id: string;
   institution_code: string;
   employee_id: string;
   department: string;
@@ -51,33 +53,13 @@ interface ProfessorProfile {
   verification_status?: VerificationStatus;
 }
 
-interface ProfessorDashboardProfessor
-  extends ProfessorProfile {
-  university_code?: string;
-}
-
-interface ProfessorDashboardResponse {
-  message?: string;
-
-  professor: ProfessorDashboardProfessor;
-
-  courses?: {
-    count: number;
-    items: unknown[];
-  };
-
-  timetable?: {
-    count: number;
-    items: unknown[];
-  };
-}
-
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   "http://localhost:8000";
 
 const emptyProfile: ProfessorProfile = {
   phone: "",
+  upi_id: "",
   institution_code: "",
   employee_id: "",
   department: "",
@@ -329,22 +311,24 @@ export default function ProfessorProfile() {
     setSuccess("");
 
     try {
-      const data =
-        await apiRequest<ProfessorDashboardResponse>(
-          "/professor/dashboard/",
+      const loadedProfile =
+        await apiRequest<ProfessorProfile>(
+          "/profile/professor",
         );
 
-      const loadedProfile: ProfessorProfile = {
+      const normalizedProfile: ProfessorProfile = {
         ...emptyProfile,
-        ...(data.professor || {}),
+        ...loadedProfile,
         institution_code:
-          data.professor?.institution_code ||
-          data.professor?.university_code ||
+          loadedProfile.institution_code ||
+          (loadedProfile as ProfessorProfile & { university_code?: string })
+            .university_code ||
           "",
+        upi_id: loadedProfile.upi_id || "",
       };
 
-      setProfile(loadedProfile);
-      setInitialProfile(loadedProfile);
+      setProfile(normalizedProfile);
+      setInitialProfile(normalizedProfile);
     } catch (requestError) {
       setError(
         getErrorMessage(requestError),
@@ -401,6 +385,7 @@ export default function ProfessorProfile() {
 
       body: JSON.stringify({
         phone: profile.phone.trim(),
+        upi_id: profile.upi_id.trim(),
 
         institution_code:
           profile.institution_code.trim(),
@@ -447,6 +432,7 @@ export default function ProfessorProfile() {
 
       body: JSON.stringify({
         phone: profile.phone.trim(),
+        upi_id: profile.upi_id.trim(),
 
         institution_code:
           profile.institution_code.trim(),
@@ -959,6 +945,20 @@ export default function ProfessorProfile() {
                 placeholder="+91 XXXXX XXXXX"
                 type="tel"
                 icon={Phone}
+              />
+
+              <Field
+                label="UPI ID"
+                value={profile.upi_id}
+                onChange={(value) =>
+                  updateField(
+                    "upi_id",
+                    value,
+                  )
+                }
+                placeholder="example@upi"
+                icon={WalletCards}
+                required={false}
               />
 
               <Field

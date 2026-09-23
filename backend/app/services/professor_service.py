@@ -198,6 +198,7 @@ def create_professor_profile(user_id, data):
             INSERT INTO professor_profiles (
                 user_id,
                 phone,
+                upi_id,
                 institution_id,
                 employee_id,
                 department,
@@ -220,12 +221,14 @@ def create_professor_profile(user_id, data):
                 %s,
                 %s,
                 %s,
+                %s,
                 %s
             )
             """,
             (
                 user_id,
                 data.phone,
+                str(data.upi_id or '').strip(),
                 institution_id,
                 data.employee_id,
                 data.department,
@@ -442,6 +445,7 @@ def update_professor_profile(user_id, data):
 
             SET
                 phone = %s,
+                upi_id = %s,
                 institution_id = %s,
                 employee_id = %s,
                 department = %s,
@@ -456,6 +460,7 @@ def update_professor_profile(user_id, data):
             """,
             (
                 data.phone,
+                str(data.upi_id or '').strip(),
                 institution_id,
                 data.employee_id,
                 data.department,

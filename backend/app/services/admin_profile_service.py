@@ -36,6 +36,7 @@ def _result(user, profile, verification):
         'id': profile['id'] if profile else None,
         'user_id': user['id'], 'email': user['email'], 'full_name': user['full_name'],
         'phone': profile['phone'] if profile else '',
+        'upi_id': profile['upi_id'] if profile else '',
         'admin_id': profile['admin_id'] if profile else '',
         'department': profile['department'] if profile else '',
         'designation': profile['designation'] if profile else '',
@@ -61,7 +62,7 @@ def get_admin_profile(user_id):
         cursor = connection.cursor()
         user = _user(cursor, user_id)
         cursor.execute("""
-            SELECT ap.id,ap.user_id,ap.phone,ap.admin_id,ap.department,ap.designation,
+            SELECT ap.id,ap.user_id,ap.phone,ap.upi_id,ap.admin_id,ap.department,ap.designation,
                    ap.office_information,ap.responsibilities,ap.profile_photo_url,
                    ap.institution_id,i.name AS institution_name,i.university_code AS institution_code
             FROM admin_profiles ap INNER JOIN institutions i ON ap.institution_id=i.id

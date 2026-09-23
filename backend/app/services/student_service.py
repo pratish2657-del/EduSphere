@@ -265,6 +265,7 @@ def create_student_profile(user_id, data):
             INSERT INTO student_profiles (
                 user_id,
                 phone,
+                upi_id,
                 institution_id,
                 program_id,
                 section_id,
@@ -286,12 +287,14 @@ def create_student_profile(user_id, data):
                 %s,
                 %s,
                 %s,
+                %s,
                 %s
             )
             """,
             (
                 user_id,
                 data.phone,
+                str(data.upi_id or '').strip(),
                 data.institution_id,
                 data.program_id,
                 data.section_id,
@@ -492,6 +495,7 @@ def update_student_profile(user_id, data):
             UPDATE student_profiles
             SET
                 phone = %s,
+                upi_id = %s,
                 institution_id = %s,
                 program_id = %s,
                 section_id = %s,
@@ -506,6 +510,7 @@ def update_student_profile(user_id, data):
             """,
             (
                 data.phone,
+                str(data.upi_id or '').strip(),
                 data.institution_id,
                 data.program_id,
                 data.section_id,
@@ -570,6 +575,7 @@ def get_student_profile(user_id):
 
                 sp.id AS student_profile_id,
                 sp.phone,
+                sp.upi_id,
 
                 sp.institution_id,
                 i.name AS institution_name,

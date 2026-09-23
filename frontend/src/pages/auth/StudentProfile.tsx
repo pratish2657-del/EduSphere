@@ -11,6 +11,7 @@ import {
   MapPin,
   Phone,
   UserRound,
+  WalletCards,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
@@ -19,6 +20,7 @@ const API_BASE_URL =
 
 interface StudentForm {
   phone: string;
+  upi_id: string;
   institution_id: string;
   enrollment_number: string;
   program_id: string;
@@ -63,6 +65,7 @@ interface StudentProfileOptions {
 
 const initialForm: StudentForm = {
   phone: "",
+  upi_id: "",
   institution_id: "",
   enrollment_number: "",
   program_id: "",
@@ -368,6 +371,7 @@ export default function StudentProfile() {
           },
           body: JSON.stringify({
             phone: form.phone.trim(),
+            upi_id: form.upi_id.trim(),
             institution_id: Number(form.institution_id),
             enrollment_number:
               form.enrollment_number.trim(),
@@ -530,6 +534,27 @@ export default function StudentProfile() {
                     maxLength={20}
                     autoComplete="tel"
                     required
+                  />
+                </label>
+
+                <label className="profile-form-field">
+                  <span>
+                    <WalletCards size={16} />
+                    UPI ID
+                  </span>
+
+                  <input
+                    type="text"
+                    value={form.upi_id}
+                    onChange={(event) =>
+                      updateField(
+                        "upi_id",
+                        event.target.value,
+                      )
+                    }
+                    placeholder="example@upi"
+                    autoComplete="off"
+                    inputMode="text"
                   />
                 </label>
 

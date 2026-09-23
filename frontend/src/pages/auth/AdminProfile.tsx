@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Sparkles,
   UserRound,
+  WalletCards,
   XCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -33,6 +34,7 @@ type AdminProfileData = {
   designation: string;
   office_information: string;
   responsibilities: string;
+  upi_id: string;
   role?: string | null;
   verification_status?: string | null;
   verification_remarks?: string | null;
@@ -46,6 +48,7 @@ const emptyProfile: AdminProfileData = {
   designation: "",
   office_information: "",
   responsibilities: "",
+  upi_id: "",
 };
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -459,9 +462,21 @@ export default function AdminProfile() {
                 <div className="admin-profile-section-heading">
                   <div className="admin-profile-section-number">03</div>
                   <div>
-                    <h3>Marketplace Seller</h3>
-                    <p>Seller UPI details are managed from Marketplace Seller Mode. EduSphere stores direct UPI details only.</p>
+                    <h3>Marketplace Payment Details</h3>
+                    <p>Store your direct UPI ID for EduSphere marketplace seller payments.</p>
                   </div>
+                </div>
+
+                <div className="admin-profile-fields">
+                  <Field
+                    full
+                    label="UPI ID"
+                    value={profile.upi_id}
+                    disabled={locked}
+                    onChange={(value) => updateField("upi_id", value)}
+                    icon={<WalletCards size={16} />}
+                    placeholder="example@upi"
+                  />
                 </div>
               </section>
 

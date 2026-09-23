@@ -8,7 +8,7 @@ class StudentProfileCreate(BaseModel):
     )
 
     institution_id: int
-
+    upi_id: str | None = None
     enrollment_number: str = Field(
         min_length=1,
         max_length=100,
