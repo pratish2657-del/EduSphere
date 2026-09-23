@@ -43,6 +43,10 @@ export default function MarketplaceUPIPaymentModal({
   const [payerPhone, setPayerPhone] = useState(payment.payer_phone ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [submitted, setSubmitted] = useState(
+    Boolean(payment.utr_number && payment.submitted_at)
+  );
   const [copied, setCopied] = useState(false);
 
   const amount = Number(payment.amount || 0);
@@ -53,31 +57,11 @@ export default function MarketplaceUPIPaymentModal({
     `&cu=${encodeURIComponent(payment.currency || "INR")}`;
 
   const openUpiApp = () => {
-    setError("");
-
     try {
-      // Do NOT use window.location.href here.
-      // That navigates the EduSphere page to the upi:// URL and can make
-      // the React app disappear. A temporary hidden iframe triggers the
-      // UPI deep link while keeping the current page and modal mounted.
-      const iframe = document.createElement("iframe");
-      iframe.style.position = "fixed";
-      iframe.style.width = "1px";
-      iframe.style.height = "1px";
-      iframe.style.border = "0";
-      iframe.style.opacity = "0";
-      iframe.style.pointerEvents = "none";
-      iframe.src = upiLink;
-
-      document.body.appendChild(iframe);
-
-      window.setTimeout(() => {
-        iframe.remove();
-      }, 1500);
+      // Trigger the UPI deep link without rendering a normal navigation link.
+      window.location.href = upiLink;
     } catch {
-      setError(
-        "Unable to open the UPI app. Please use the UPI ID manually."
-      );
+      setError("Unable to open the UPI app. Please use the UPI ID manually.");
     }
   };
 
@@ -111,6 +95,7 @@ export default function MarketplaceUPIPaymentModal({
 
     setBusy(true);
     setError("");
+    setSuccess("");
 
     try {
       const response = await fetch(
@@ -142,12 +127,21 @@ export default function MarketplaceUPIPaymentModal({
         );
       }
 
-      onSubmitted({
+      const submittedPayment = {
         ...(data || {}),
+        status: "PENDING",
         utr_number: cleanUtr,
         payer_upi_id: cleanPayerUpiId,
         payer_phone: cleanPayerPhone,
-      });
+        submitted_at:
+          data?.submitted_at || new Date().toISOString(),
+      };
+
+      onSubmitted(submittedPayment);
+      setSubmitted(true);
+      setSuccess(
+        "Payment details submitted successfully. Your payment is now PENDING Super Admin verification."
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -163,8 +157,8 @@ export default function MarketplaceUPIPaymentModal({
     <div
       className="marketplace-upi-overlay"
       onClick={(event) => event.stopPropagation()}
-      role="dialog"      
-      aria-modal="true"    
+      role="dialog"
+      aria-modal="true"
     >
       <div
         className="marketplace-upi-modal"
@@ -201,7 +195,7 @@ export default function MarketplaceUPIPaymentModal({
           </div>
           <div>
             <span>Status</span>
-            <strong>{payment.status}</strong>
+            <strong>{submitted ? "PENDING VERIFICATION" : payment.status}</strong>
           </div>
         </div>
 
@@ -230,13 +224,22 @@ export default function MarketplaceUPIPaymentModal({
         </div>
 
         {error && <div className="marketplace-upi-error">{error}</div>}
+        {success && (
+          <div
+            className="marketplace-upi-success"
+            role="status"
+            aria-live="polite"
+          >
+            {success}
+          </div>
+        )}
 
         <div className="marketplace-upi-form">
           <label>
             UTR / Transaction Reference
             <input
               value={utr}
-              onChange={(event) => setUtr(event.target.value)}
+              onChange={(event) => { setUtr(event.target.value); setSuccess(""); }}
               placeholder="Enter UTR / transaction reference"
               autoComplete="off"
             />
@@ -246,7 +249,7 @@ export default function MarketplaceUPIPaymentModal({
             Payer UPI ID
             <input
               value={payerUpiId}
-              onChange={(event) => setPayerUpiId(event.target.value)}
+              onChange={(event) => { setPayerUpiId(event.target.value); setSuccess(""); }}
               placeholder="example@upi"
               autoComplete="off"
             />
@@ -256,7 +259,7 @@ export default function MarketplaceUPIPaymentModal({
             Payer Phone
             <input
               value={payerPhone}
-              onChange={(event) => setPayerPhone(event.target.value)}
+              onChange={(event) => { setPayerPhone(event.target.value); setSuccess(""); }}
               placeholder="10-digit phone number"
               inputMode="tel"
               autoComplete="tel"
@@ -272,9 +275,13 @@ export default function MarketplaceUPIPaymentModal({
             type="button"
             className="marketplace-upi-submit"
             onClick={submit}
-            disabled={busy}
+            disabled={busy || submitted}
           >
-            {busy ? "Submitting..." : "Submit Payment Details"}
+            {busy
+              ? "Submitting..."
+              : submitted
+                ? "Payment Details Submitted"
+                : "Submit Payment Details"}
           </button>
         </div>
 
