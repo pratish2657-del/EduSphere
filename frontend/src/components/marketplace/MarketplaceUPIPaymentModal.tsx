@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Copy, ExternalLink, X } from "lucide-react";
+import { Copy, X } from "lucide-react";
 import "./MarketplaceUPIPaymentModal.css";
 
 const API_BASE_URL =
