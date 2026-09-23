@@ -294,8 +294,15 @@ export default function AdminMarketplace() {
     setBusy(true);
     setNotice("");
     try {
-      await api(`/marketplace/cart?product_id=${productId}&quantity=1`, {
+      await api("/marketplace/cart", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          product_id: productId,
+          quantity: 1,
+        }),
       });
       await loadCart();
       setNotice("Added to cart.");

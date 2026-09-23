@@ -1,29 +1,10 @@
-.sa-payout-page{min-height:100vh;padding:28px;background:#020617;color:#f8fafc}.sa-payout-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}.sa-payout-head h1{display:flex;align-items:center;gap:9px;margin:0}.sa-payout-head p{color:#94a3b8;margin:6px 0}.sa-payout-head button,.sa-action{display:inline-flex;align-items:center;gap:7px;border:1px solid #293753;background:#0f172a;color:#e2e8f0;border-radius:9px;padding:9px 12px;cursor:pointer}.sa-action.primary{background:#172554;border-color:#3b82f6;color:#bfdbfe}.sa-action.danger{background:#3f111b;border-color:#7f1d1d;color:#fecaca}.sa-finance-grid{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:10px;margin-bottom:18px}.sa-finance-grid>div{border:1px solid #1e293b;background:#07101f;border-radius:12px;padding:13px}.sa-finance-grid span{display:block;color:#64748b;font-size:10px;text-transform:uppercase;font-weight:800}.sa-finance-grid strong{display:block;margin-top:7px;font-size:17px}.sa-payout-msg{padding:11px;border-radius:10px;background:#111827;margin-bottom:14px;color:#cbd5e1}.sa-payout-table{overflow:auto;border:1px solid #1e293b;border-radius:14px}.sa-payout-table table{width:100%;border-collapse:collapse;min-width:1150px}.sa-payout-table th,.sa-payout-table td{padding:13px;border-bottom:1px solid #172033;text-align:left;font-size:13px}.sa-payout-table th{color:#94a3b8;font-size:11px;text-transform:uppercase}.sa-payout-table small{display:block;color:#64748b;margin-top:3px;max-width:220px;overflow:hidden;text-overflow:ellipsis}.sa-pill{display:inline-block;padding:5px 8px;border-radius:999px;font-size:10px;font-weight:800;background:#172033}.sa-pill.settled{color:#86efac}.sa-pill.failed,.sa-pill.reversed{color:#fca5a5}.sa-pill.transfer_initiated{color:#93c5fd}.sa-pill.pending,.sa-pill.ready{color:#fcd34d}.sa-failure{color:#fca5a5!important}.sa-muted{color:#64748b;font-size:11px;white-space:nowrap}@media(max-width:900px){.sa-finance-grid{grid-template-columns:repeat(2,1fr)}.sa-payout-page{padding:18px}}@media(max-width:520px){.sa-finance-grid{grid-template-columns:1fr}.sa-payout-head{align-items:flex-start;flex-direction:column}}
-.sa-action-group {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.sa-action.secondary {
-  border: 1px solid rgba(120, 140, 180, 0.35);
-  background: rgba(120, 140, 180, 0.08);
-  color: inherit;
-}
-
-
-/* ============================================================
-   EduSphere Super Admin — Advanced 3D UI Layer
-   ============================================================ */
-.sa-payout-page{position:relative;overflow:hidden;background:radial-gradient(circle at 12% 0%,rgba(99,102,241,.16),transparent 30%),radial-gradient(circle at 90% 80%,rgba(34,197,94,.06),transparent 28%),#050816;perspective:1500px}
-.sa-payout-page::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.13;background-image:linear-gradient(rgba(129,140,248,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(129,140,248,.08) 1px,transparent 1px);background-size:44px 44px;animation:saPayoutGrid 20s linear infinite}
-.sa-finance-grid>div,.sa-payout-card,.sa-payout-table,.sa-payout-row{box-shadow:0 16px 38px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.035);transition:transform .25s ease,box-shadow .25s ease}
-.sa-finance-grid>div:hover,.sa-payout-card:hover,.sa-payout-row:hover{transform:translateY(-5px) rotateX(1deg);box-shadow:0 28px 55px rgba(0,0,0,.34),0 0 30px rgba(99,102,241,.09)}
-.sa-action{box-shadow:inset 0 1px rgba(255,255,255,.08),0 8px 20px rgba(0,0,0,.2)}
-@keyframes saPayoutGrid{to{background-position:44px 44px}}
-
-
-/* 3D interaction safety */
-@media (prefers-reduced-motion: reduce){
-  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
-}
+.sa-payout-page { padding: 24px; }
+.sa-payout-head { display:flex; justify-content:space-between; gap:24px; align-items:center; margin-bottom:20px; }
+.sa-payout-head h1 { display:flex; align-items:center; gap:10px; margin:0 0 8px; }
+.sa-payout-head p { margin:0; opacity:.72; }
+.sa-payout-head button, .sa-payout-table button { display:inline-flex; align-items:center; gap:8px; }
+.sa-payout-msg { padding:12px 14px; margin-bottom:16px; border-radius:10px; }
+.sa-payout-table { overflow:auto; border-radius:12px; }
+.sa-payout-table table { width:100%; border-collapse:collapse; }
+.sa-payout-table th, .sa-payout-table td { padding:12px; text-align:left; vertical-align:top; }
+.sa-payout-table small { display:block; opacity:.65; margin-top:4px; }

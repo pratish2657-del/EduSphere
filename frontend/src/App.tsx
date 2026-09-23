@@ -17,6 +17,7 @@ import {
   Route,
   Routes,
 } from "react-router-dom";
+import type { ComponentType } from "react";
 import AuthCallback from "./pages/auth/AuthCallback";
 import AccessRouter from "./pages/auth/AccessRouter";
 import ProfileSetup from "./pages/auth/ProfileSetup";
@@ -52,10 +53,6 @@ import EduSphereAI1 from "./pages/super-admin/EduSphereAI";
 import SuperAdminActivity from "./pages/super-admin/SuperAdminActivity";
 import SuperAdminMarketplaceManagement from "./pages/super-admin/SuperAdminMarketplaceManagement";
 import SuperAdminMarketplace from "./pages/super-admin/SuperAdminMarketplace";
-import MarketplaceRouteOnboarding from "./pages/auth/MarketplaceRouteOnboarding";
-import MarketplacePayoutManagement from "./pages/admin/MarketplacePayoutManagement";
-import SuperAdminMarketplacePayouts from "./pages/super-admin/SuperAdminMarketplacePayouts";
-import MarketplaceRefundManagement from "./pages/admin/MarketplaceRefundManagement";
 import DeveloperProfile from "./pages/auth/DeveloperProfile";
 import DeveloperDashboard from "./pages/developer/DeveloperDashboard";
 import DeveloperLibrary from "./pages/developer/DeveloperLibrary";
@@ -71,6 +68,9 @@ import SuperAdminLibrary from "./pages/super-admin/SuperAdminLibrary";
 import SuperAdminDeveloperSubmissions from "./pages/super-admin/SuperAdminDeveloperSubmissions";
 import MarketplacePaymentSuccess from "./pages/auth/MarketplacePaymentSuccess";
 import ProfessorEvents from "./pages/auth/ProfessorEvents";
+
+const SuperAdminMarketplacePage =
+  SuperAdminMarketplace as unknown as ComponentType;
 
 type FloatingCardProps = {
   icon: typeof BookOpen;
@@ -693,8 +693,6 @@ export default function App() {
       />
       <Route path="/app/library" element={<LibraryPage />} />
       <Route path="/app/super-admin/library" element={<SuperAdminLibrary />} />
-      <Route path="/app/admin/marketplace-payouts" element={<MarketplacePayoutManagement />} />
-      <Route path="/app/admin/marketplace-refunds" element={<MarketplaceRefundManagement />} />
       <Route
         path="/app/super-admin"
         element={<SuperAdminDashboard />}
@@ -721,7 +719,7 @@ export default function App() {
       />
       <Route
         path="/app/super-admin/marketplace"
-        element={<SuperAdminMarketplace />}
+        element={<SuperAdminMarketplacePage />}
       />
       <Route
         path="/app/super-admin/marketplace-management"
@@ -731,8 +729,6 @@ export default function App() {
         path="/app/super-admin/developer-submissions"
         element={<SuperAdminDeveloperSubmissions />}
       />
-      <Route path="/app/super-admin/marketplace-payouts" element={<SuperAdminMarketplacePayouts />} />
-      <Route path="/app/marketplace/seller/route-onboarding" element={<MarketplaceRouteOnboarding />} />
       <Route
         path="/app/marketplace/payment-success"
         element={

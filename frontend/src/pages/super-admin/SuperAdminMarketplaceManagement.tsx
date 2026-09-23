@@ -442,7 +442,6 @@ export default function SuperAdminMarketplaceManagement() {
                     <option value="PENDING">Pending</option>
                     <option value="CONFIRMED">Confirmed</option>
                     <option value="CANCELLED">Cancelled</option>
-                    <option value="REFUNDED">Refunded</option>
                   </>
                 )}
               </select>
@@ -666,8 +665,7 @@ export default function SuperAdminMarketplaceManagement() {
                               <option value="PENDING">Pending</option>
                               <option value="CONFIRMED">Confirmed</option>
                               <option value="CANCELLED">Cancelled</option>
-                              <option value="REFUNDED">Refunded</option>
-                            </select>
+                                      </select>
                             <ChevronDown size={14} />
                           </div>
                         </td>
@@ -739,7 +737,7 @@ function StatusBadge({
 function OrderBadge({ status }: { status: string }) {
   const normalized = String(status || "").toUpperCase();
   const isGood = normalized === "CONFIRMED";
-  const isBad = normalized === "CANCELLED" || normalized === "REFUNDED";
+  const isBad = normalized === "CANCELLED";
 
   return (
     <span

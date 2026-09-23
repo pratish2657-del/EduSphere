@@ -260,7 +260,6 @@ export default function SuperAdminDashboard() {
         icon: Settings,
         path: "/app/super-admin/marketplace-management",
       },
-      { label: "Marketplace Payouts", icon: Settings, path: "/app/super-admin/marketplace-payouts" },
       {
         label: "EduSphere AI",
         icon: Sparkles,
