@@ -1,3 +1,5 @@
+import MarketplaceUPIPaymentModal from "../../components/marketplace/MarketplaceUPIPaymentModal";
+import "../../components/marketplace/MarketplaceUPIPaymentModal.css";
 import { useCallback, useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -36,66 +38,43 @@ const API_BASE_URL =
 
 const REQUEST_TIMEOUT_MS = 15000;
 
-function getDisplayMessage(
-  value: unknown,
-  fallback = "Something went wrong."
-): string {
-  if (typeof value === "string" && value.trim()) {
-    return value;
-  }
-
-  if (value instanceof Error) {
-    return value.message || fallback;
-  }
+function getDisplayMessage(value: unknown, fallback = "Something went wrong."): string {
+  if (typeof value === "string" && value.trim()) return value;
 
   if (Array.isArray(value)) {
     const messages = value
       .map((item) => getDisplayMessage(item, ""))
       .filter(Boolean);
-
-    return messages.length ? messages.join(", ") : fallback;
+    return messages.length ? messages.join("; ") : fallback;
   }
 
   if (value && typeof value === "object") {
-    const objectValue = value as Record<string, unknown>;
+    const record = value as Record<string, unknown>;
 
-    for (const key of ["detail", "message", "error", "description"]) {
-      const candidate = objectValue[key];
+    if (typeof record.message === "string" && record.message.trim()) {
+      return record.message;
+    }
 
-      if (typeof candidate === "string" && candidate.trim()) {
-        return candidate;
-      }
+    if (typeof record.msg === "string" && record.msg.trim()) {
+      return record.msg;
+    }
 
-      if (candidate && typeof candidate === "object") {
-        const nested = getDisplayMessage(candidate, "");
-        if (nested) {
-          return nested;
-        }
-      }
+    if (record.detail !== undefined) {
+      return getDisplayMessage(record.detail, fallback);
+    }
+
+    if (record.error !== undefined) {
+      return getDisplayMessage(record.error, fallback);
     }
 
     try {
-      const serialized = JSON.stringify(value);
-      return serialized && serialized !== "{}" ? serialized : fallback;
+      return JSON.stringify(value);
     } catch {
       return fallback;
     }
   }
 
   return fallback;
-}
-
-function getApiErrorMessage(
-  payload: unknown,
-  fallback = "Something went wrong."
-): string {
-  const message = getDisplayMessage(payload, "");
-  if (!message) return fallback;
-
-  // Never allow JavaScript's generic object coercion to leak into the UI.
-  if (message === "[object Object]") return fallback;
-
-  return message;
 }
 
 function createRequestController() {
@@ -546,9 +525,10 @@ export default function AppPlaceholder() {
 
       if (!response.ok) {
         throw new Error(
-          getApiErrorMessage(
-            data,
-            "Unable to load your examination results."
+          String(
+            data?.detail ||
+              data?.message ||
+              "Unable to load your examination results."
           )
         );
       }
@@ -602,8 +582,8 @@ export default function AppPlaceholder() {
 
       if (!response.ok) {
         throw new Error(
-          getApiErrorMessage(
-            data,
+          getDisplayMessage(
+            data?.detail ?? data?.message,
             "Unable to load marketplace products."
           )
         );
@@ -685,8 +665,8 @@ export default function AppPlaceholder() {
 
       if (!response.ok) {
         throw new Error(
-          getApiErrorMessage(
-            data,
+          getDisplayMessage(
+            data?.detail ?? data?.message,
             "Unable to load seller sales."
           )
         );
@@ -707,13 +687,18 @@ export default function AppPlaceholder() {
 
       try {
         const response = await fetch(
-          `${API_BASE_URL}/marketplace/cart?product_id=${encodeURIComponent(
-            productId
-          )}&quantity=1`,
+          `${API_BASE_URL}/marketplace/cart`,
           {
             method: "POST",
             credentials: "include",
-            headers: { Accept: "application/json" },
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              product_id: productId,
+              quantity: 1,
+            }),
           }
         );
 
@@ -721,8 +706,8 @@ export default function AppPlaceholder() {
 
         if (!response.ok) {
           throw new Error(
-            getApiErrorMessage(
-              data,
+            getDisplayMessage(
+              data?.detail ?? data?.message,
               "Unable to add product to cart."
             )
           );
@@ -746,13 +731,17 @@ export default function AppPlaceholder() {
       setMarketplaceBusy(true);
       try {
         const response = await fetch(
-          `${API_BASE_URL}/marketplace/cart/items/${productId}?quantity=${encodeURIComponent(
-            quantity
-          )}`,
+          `${API_BASE_URL}/marketplace/cart/items/${productId}`,
           {
             method: "PUT",
             credentials: "include",
-            headers: { Accept: "application/json" },
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              quantity,
+            }),
           }
         );
 
@@ -760,8 +749,8 @@ export default function AppPlaceholder() {
 
         if (!response.ok) {
           throw new Error(
-            getApiErrorMessage(
-              data,
+            getDisplayMessage(
+              data?.detail ?? data?.message,
               "Unable to update cart item."
             )
           );
@@ -796,8 +785,8 @@ export default function AppPlaceholder() {
 
         if (!response.ok) {
           throw new Error(
-            getApiErrorMessage(
-              data,
+            getDisplayMessage(
+              data?.detail ?? data?.message,
               "Unable to remove cart item."
             )
           );
@@ -842,25 +831,29 @@ export default function AppPlaceholder() {
       setMarketplaceNotice("");
 
       try {
-        const query = new URLSearchParams({
-          institution_id: String(institutionId),
-        });
-        if (hasPhysical) query.set("shipping_address", deliveryAddress.trim());
-
         const checkoutResponse = await fetch(
-          `${API_BASE_URL}/marketplace/checkout?${query.toString()}`,
+          `${API_BASE_URL}/marketplace/checkout`,
           {
             method: "POST",
             credentials: "include",
-            headers: { Accept: "application/json" },
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              institution_id: institutionId,
+              shipping_address: hasPhysical
+                ? deliveryAddress.trim()
+                : null,
+            }),
           }
         );
 
         const checkoutData = await checkoutResponse.json().catch(() => null);
         if (!checkoutResponse.ok) {
           throw new Error(
-            getApiErrorMessage(
-              checkoutData,
+            getDisplayMessage(
+              checkoutData?.detail ?? checkoutData?.message,
               "Unable to create marketplace order."
             )
           );
@@ -887,8 +880,8 @@ export default function AppPlaceholder() {
         const paymentData = await paymentResponse.json().catch(() => null);
         if (!paymentResponse.ok) {
           throw new Error(
-            getApiErrorMessage(
-              paymentData,
+            getDisplayMessage(
+              paymentData?.detail ?? paymentData?.message,
               "Unable to create UPI payment."
             )
           );
@@ -937,12 +930,12 @@ export default function AppPlaceholder() {
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(
-          getApiErrorMessage(
-            data,
-            "Unable to load your timetable."
-          )
-        );
+        const message =
+          data?.detail ||
+          data?.message ||
+          "Unable to load your timetable.";
+
+        throw new Error(String(message));
       }
 
       if (!data || !Array.isArray(data.timetable)) {
@@ -1888,271 +1881,6 @@ export default function AppPlaceholder() {
   );
 }
 
-/* =============================================================
-   MANUAL UPI PAYMENT MODAL
-============================================================= */
-
-function MarketplaceUPIPaymentModal({
-  payment,
-  onClose,
-  onSubmitted,
-}: {
-  payment: MarketplacePaymentCreateResponse;
-  onClose: () => void;
-  onSubmitted: (
-    data: Partial<MarketplacePaymentCreateResponse>
-  ) => void;
-}) {
-  const [utrNumber, setUtrNumber] = useState(payment.utr_number || "");
-  const [payerUpiId, setPayerUpiId] = useState(
-    payment.payer_upi_id || ""
-  );
-  const [payerPhone, setPayerPhone] = useState(
-    payment.payer_phone || ""
-  );
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [copied, setCopied] = useState(false);
-
-  const amount = Number(payment.amount || 0);
-  const upiUri =
-    `upi://pay?pa=${encodeURIComponent(payment.upi_id)}` +
-    `&pn=${encodeURIComponent(payment.payment_name)}` +
-    `&am=${encodeURIComponent(amount.toFixed(2))}` +
-    `&cu=INR` +
-    `&tn=${encodeURIComponent(`EduSphere Order #${payment.order_id}`)}`;
-
-  const copyUpiId = async () => {
-    try {
-      await navigator.clipboard.writeText(payment.upi_id);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setMessage("Unable to copy the UPI ID. Please copy it manually.");
-    }
-  };
-
-  const submitUtr = async () => {
-    const utr = utrNumber.trim();
-    const payerUpi = payerUpiId.trim();
-    const phone = payerPhone.trim();
-
-    if (!utr) {
-      setMessage("Enter the UTR / transaction reference number.");
-      return;
-    }
-    if (!payerUpi) {
-      setMessage("Enter the UPI ID used for payment.");
-      return;
-    }
-    if (!phone) {
-      setMessage("Enter the phone number used for payment.");
-      return;
-    }
-
-    setBusy(true);
-    setMessage("");
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/marketplace/payments/${payment.payment_id}/submit-utr`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            utr_number: utr,
-            payer_upi_id: payerUpi,
-            payer_phone: phone,
-          }),
-        }
-      );
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(
-          getDisplayMessage(
-            data?.detail ?? data?.message,
-            "Unable to submit payment details."
-          )
-        );
-      }
-
-      onSubmitted({
-        status: String(data?.status || "PENDING"),
-        utr_number: utr,
-        payer_upi_id: payerUpi,
-        payer_phone: phone,
-        submitted_at: data?.submitted_at || null,
-      });
-
-      setMessage(
-        "Payment details submitted. Your payment is awaiting Super Admin verification."
-      );
-    } catch (err) {
-      setMessage(
-        err instanceof Error
-          ? err.message
-          : "Unable to submit payment details."
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div style={styles.upiModalBackdrop} onClick={onClose}>
-      <div
-        style={styles.upiModal}
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="manual-upi-payment-title"
-      >
-        <div style={styles.upiModalHeader}>
-          <div>
-            <span style={styles.cardEyebrow}>MANUAL UPI PAYMENT</span>
-            <h2 id="manual-upi-payment-title" style={styles.modalTitle}>
-              Pay ₹{amount.toFixed(2)}
-            </h2>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            style={styles.modalCloseButton}
-            aria-label="Close payment window"
-            disabled={busy}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div style={styles.upiModalBody}>
-          <div style={styles.upiPaymentCard}>
-            <span style={styles.modalInfoLabel}>PAY TO</span>
-            <strong style={styles.upiPaymentName}>
-              {payment.payment_name}
-            </strong>
-
-            <div style={styles.upiIdRow}>
-              <code style={styles.upiIdValue}>{payment.upi_id}</code>
-              <button
-                type="button"
-                onClick={copyUpiId}
-                style={styles.secondaryButton}
-                disabled={busy}
-              >
-                {copied ? "Copied" : "Copy UPI ID"}
-              </button>
-            </div>
-
-            <div style={styles.upiAmountRow}>
-              <span>Amount</span>
-              <strong>₹{amount.toFixed(2)}</strong>
-            </div>
-
-            <a
-              href={upiUri}
-              style={styles.upiOpenButton}
-              onClick={() =>
-                setMessage(
-                  "Complete the payment in your UPI app, then enter the UTR below."
-                )
-              }
-            >
-              <WalletCards size={16} />
-              Open UPI App
-            </a>
-          </div>
-
-          <div style={styles.upiInstructionBox}>
-            <strong>After payment</strong>
-            <ol style={styles.upiInstructionList}>
-              <li>Complete the ₹{amount.toFixed(2)} payment.</li>
-              <li>Copy the UTR / transaction reference.</li>
-              <li>Enter the UPI ID and phone used to pay.</li>
-              <li>Submit the details for Super Admin verification.</li>
-            </ol>
-            <p style={styles.upiSecurityNote}>
-              Your order stays pending until the payment is manually verified.
-            </p>
-          </div>
-
-          <div style={styles.upiForm}>
-            <label style={styles.formLabel}>
-              UTR / Transaction Reference
-              <input
-                value={utrNumber}
-                onChange={(event) => setUtrNumber(event.target.value)}
-                placeholder="Enter UTR / transaction reference"
-                disabled={busy}
-                style={styles.formInput}
-                autoComplete="off"
-              />
-            </label>
-
-            <label style={styles.formLabel}>
-              Payer UPI ID
-              <input
-                value={payerUpiId}
-                onChange={(event) => setPayerUpiId(event.target.value)}
-                placeholder="example@upi"
-                disabled={busy}
-                style={styles.formInput}
-                autoComplete="off"
-              />
-            </label>
-
-            <label style={styles.formLabel}>
-              Payer Phone
-              <input
-                value={payerPhone}
-                onChange={(event) => setPayerPhone(event.target.value)}
-                placeholder="Phone number used for payment"
-                disabled={busy}
-                style={styles.formInput}
-                inputMode="tel"
-                autoComplete="tel"
-              />
-            </label>
-          </div>
-
-          {message && <div style={styles.upiMessage}>{message}</div>}
-        </div>
-
-        <div style={styles.upiModalFooter}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={styles.secondaryButton}
-            disabled={busy}
-          >
-            Close
-          </button>
-          <button
-            type="button"
-            onClick={submitUtr}
-            style={styles.primaryButton}
-            disabled={busy}
-          >
-            <Upload size={16} />
-            {busy ? "Submitting..." : "Submit UTR"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* =============================================================
-   DATA CARD
-============================================================= */
-
 function DataCard({
   label,
   value,
@@ -2442,6 +2170,77 @@ function ResultsView({
    MARKETPLACE VIEW
 ============================================================= */
 
+function MarketplacePreviewImage({
+  productId,
+  productName,
+}: {
+  productId: number;
+  productName: string;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+
+    const loadPreview = async () => {
+      try {
+        setFailed(false);
+
+        const response = await fetch(
+          `${API_BASE_URL}/marketplace/${productId}/preview`,
+          {
+            credentials: "include",
+            headers: {
+              Accept: "image/*,*/*;q=0.8",
+            },
+          }
+        );
+
+        if (!response.ok) throw new Error("Preview unavailable");
+
+        const blob = await response.blob();
+        if (!blob.type.startsWith("image/")) {
+          throw new Error("Preview response is not an image.");
+        }
+
+        objectUrl = URL.createObjectURL(blob);
+        if (active) setSrc(objectUrl);
+      } catch {
+        if (active) {
+          setSrc(null);
+          setFailed(true);
+        }
+      }
+    };
+
+    loadPreview();
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [productId]);
+
+  if (failed || !src) {
+    return (
+      <div className="marketplace-preview-unavailable">
+        PREVIEW UNAVAILABLE
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={`${productName} preview`}
+      loading="lazy"
+      className="marketplace-product-preview"
+    />
+  );
+}
+
 function MarketplaceView({
   marketplace,
   loading,
@@ -2605,10 +2404,8 @@ function MarketplaceView({
         ))}
       </div>
 
-      {Boolean(getDisplayMessage(notice, "")) && (
-        <div style={styles.marketplaceNotice}>
-          {getApiErrorMessage(notice)}
-        </div>
+      {Boolean(notice) && (
+        <div style={styles.marketplaceNotice}>{getDisplayMessage(notice)}</div>
       )}
 
       {panel === "shop" && (
@@ -2792,49 +2589,12 @@ function MarketplaceProductCard({
         style={styles.marketplaceProductMain}
         onClick={onSelect}
       >
-        {product.preview_image_path ? (
-          <img
-            src={`${API_BASE_URL}/marketplace/${product.product_id}/preview`}
-            alt={`${product.name} preview`}
-            loading="lazy"
-            onError={(event) => {
-              event.currentTarget.style.display = "none";
-              const fallback = event.currentTarget.nextElementSibling as HTMLElement | null;
-              if (fallback) {
-                fallback.style.display = "flex";
-              }
-            }}
-            style={{
-              width: "100%",
-              height: 150,
-              objectFit: "cover",
-              borderRadius: 12,
-              marginBottom: 10,
-              display: "block",
-            }}
+        {product.preview_image_path && (
+          <MarketplacePreviewImage
+            productId={product.product_id}
+            productName={product.name}
           />
-        ) : null}
-
-        <div
-          aria-hidden="true"
-          style={{
-            display: product.preview_image_path ? "none" : "flex",
-            width: "100%",
-            height: 150,
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 12,
-            marginBottom: 10,
-            background: "linear-gradient(135deg, rgba(15,23,42,.95), rgba(30,41,59,.82))",
-            border: "1px solid rgba(148,163,184,.12)",
-            color: "#64748b",
-            fontSize: 11,
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
-          }}
-        >
-          Preview unavailable
-        </div>
+        )}
 
         <div style={styles.marketplaceProductIcon}>
           {product.product_type === "DIGITAL" ? (
@@ -3404,9 +3164,10 @@ function MarketplaceProductForm({
 
       if (!createResponse.ok) {
         throw new Error(
-          getApiErrorMessage(
-            createData,
-            "Unable to create listing."
+          String(
+            createData?.detail ||
+              createData?.message ||
+              "Unable to create listing."
           )
         );
       }
@@ -3436,9 +3197,10 @@ function MarketplaceProductForm({
 
         if (!uploadResponse.ok) {
           throw new Error(
-            getApiErrorMessage(
-              uploadData,
-              "Product created but file upload failed."
+            String(
+              uploadData?.detail ||
+                uploadData?.message ||
+                "Product created but file upload failed."
             )
           );
         }
@@ -3463,9 +3225,10 @@ function MarketplaceProductForm({
       const previewData = await previewResponse.json().catch(() => null);
       if (!previewResponse.ok) {
         throw new Error(
-          getApiErrorMessage(
-            previewData,
-            "Product created but preview photo upload failed."
+          String(
+            previewData?.detail ||
+              previewData?.message ||
+              "Product created but preview photo upload failed."
           )
         );
       }
