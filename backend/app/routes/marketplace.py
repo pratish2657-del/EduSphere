@@ -26,6 +26,7 @@ from app.services.marketplace_order_service import (
     checkout,
     get_cart,
     get_order,
+    get_seller_orders,
     get_user_orders,
     remove_cart_item,
     update_cart_item,
@@ -321,6 +322,33 @@ async def get_marketplace_order(
         return get_order(
             user_id=user["id"],
             order_id=order_id,
+        )
+
+    except Exception as error:
+        raise _handle_marketplace_error(error) from error
+
+
+# ============================================================
+# SELLER ORDERS
+# ============================================================
+
+@router.get("/seller/orders")
+async def list_seller_orders(
+    request: Request,
+):
+    """
+    GET /marketplace/seller/orders
+
+    Return orders containing products sold by the authenticated
+    seller. An account with no sales receives an empty list,
+    not a 404.
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return get_seller_orders(
+            user_id=user["id"],
         )
 
     except Exception as error:
@@ -728,5 +756,4 @@ async def delete_marketplace_product(
 
     except Exception as error:
         raise _handle_marketplace_error(error) from error
-
 

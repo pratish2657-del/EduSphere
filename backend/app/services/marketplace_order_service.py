@@ -69,7 +69,7 @@ def get_or_create_cart(user_id: int):
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
@@ -139,7 +139,7 @@ def add_cart_item(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         # ----------------------------------------------------
         # Check product
@@ -294,7 +294,7 @@ def update_cart_item(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
@@ -368,7 +368,7 @@ def remove_cart_item(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
@@ -408,7 +408,7 @@ def get_cart(user_id: int):
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
@@ -534,7 +534,7 @@ def checkout(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         # ----------------------------------------------------
         # Lock cart
@@ -866,7 +866,7 @@ def get_order(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
@@ -935,7 +935,7 @@ def get_user_orders(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute(
             """
@@ -1008,3 +1008,67 @@ def get_order_for_update(
         raise NotFoundError("Order not found.")
 
     return order
+
+
+# ============================================================
+# SELLER ORDERS
+# ============================================================
+
+def get_seller_orders(
+    user_id: int,
+):
+    """
+    Return marketplace order items sold by the authenticated seller.
+
+    This is intentionally read-only. It does not perform payment,
+    payout, refund, or gateway operations.
+    """
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+
+        cursor.execute(
+            """
+            SELECT
+                oi.id AS order_item_id,
+                oi.order_id,
+                oi.product_id,
+                oi.product_name,
+                oi.unit_price,
+                oi.quantity,
+                oi.subtotal,
+
+                o.buyer_id,
+                buyer.full_name AS buyer_name,
+
+                o.institution_id,
+                o.status AS order_status,
+                o.total_amount,
+                o.created_at,
+                o.updated_at
+
+            FROM marketplace_order_items oi
+
+            INNER JOIN marketplace_orders o
+                ON o.id = oi.order_id
+
+            LEFT JOIN users buyer
+                ON buyer.id = o.buyer_id
+
+            WHERE oi.seller_id = %s
+
+            ORDER BY o.created_at DESC, oi.id ASC
+            """,
+            (user_id,),
+        )
+
+        orders = cursor.fetchall() or []
+
+        return {
+            "count": len(orders),
+            "orders": orders,
+        }
+
+    finally:
+        connection.close()
