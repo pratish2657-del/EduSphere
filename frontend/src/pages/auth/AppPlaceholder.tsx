@@ -472,7 +472,9 @@ export default function AppPlaceholder() {
   // automatically open a full-screen modal when the dashboard mounts.
   // The modal is opened explicitly only after checkout creates a payment.
   const [pendingPayment, setPendingPayment] =
-    useState<MarketplacePaymentCreateResponse | null>(null);
+    useState<MarketplacePaymentCreateResponse | null>(() =>
+      readPendingMarketplacePayment()
+    );
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
 
