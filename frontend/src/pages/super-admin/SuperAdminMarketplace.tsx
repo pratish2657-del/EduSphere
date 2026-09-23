@@ -1,3 +1,5 @@
+import "../../components/marketplace/MarketplaceUPIPaymentModal.css";
+import MarketplaceUPIPaymentModal from "../../components/marketplace/MarketplaceUPIPaymentModal";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
@@ -6,8 +8,8 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Download,
   ShoppingCart,
+  Download,
   Store,
   Trash2,
   Upload,
@@ -16,16 +18,16 @@ import {
   X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import "./super-admin-marketplace.css";
+import "./admin-marketplace.css";
 import AIChatbot from "../../components/ai/AIChatbot";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-type Institution = {
-  id: number;
-  name: string;
-  university_code?: string | null;
+type AdminProfile = {
+  institution_id?: number;
+  institution_name?: string;
+  profile_photo_url?: string | null;
 };
 
 type MarketplaceProduct = {
@@ -73,6 +75,10 @@ type CartResponse = {
   cart_id: number;
   count: number;
   items: CartItem[];
+  subtotal_amount?: number | string;
+  tax_percent?: number | string;
+  tax_amount?: number | string;
+  total_amount?: number | string;
   total: number | string;
 };
 
@@ -123,11 +129,10 @@ type SellerOrdersResponse = {
 };
 
 type PaymentResponse = {
-  message: string;
   payment_id: number;
   order_id: number;
-  payment_method: "UPI" | string;
-  status: "PENDING" | "PAID" | "REJECTED" | string;
+  payment_method: "UPI";
+  status: string;
   amount: number | string;
   currency: string;
   upi_id: string;
@@ -138,12 +143,6 @@ type PaymentResponse = {
   payer_phone?: string | null;
   submitted_at?: string | null;
   verified_at?: string | null;
-};
-
-type UPIFormState = {
-  utr_number: string;
-  payer_upi_id: string;
-  payer_phone: string;
 };
 
 
@@ -163,29 +162,9 @@ async function api<T>(endpoint: string, options: RequestInit = {}) {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const detail = data?.detail;
-    const message =
-      typeof detail === "string"
-        ? detail
-        : Array.isArray(detail)
-          ? detail
-              .map((item) =>
-                typeof item === "string"
-                  ? item
-                  : item && typeof item === "object" && "msg" in item
-                    ? String(item.msg)
-                    : JSON.stringify(item)
-              )
-              .join("; ")
-          : detail && typeof detail === "object"
-            ? "msg" in detail
-              ? String(detail.msg)
-              : JSON.stringify(detail)
-            : typeof data?.message === "string"
-              ? data.message
-              : `Request failed (${response.status})`;
-
-    throw new Error(message);
+    throw new Error(
+      String(data?.detail || data?.message || `Request failed (${response.status})`)
+    );
   }
 
   return data as T;
@@ -230,8 +209,7 @@ function dateTime(value: string) {
 export default function AdminMarketplace() {
   const navigate = useNavigate();
 
-  const [institutions, setInstitutions] = useState<Institution[]>([]);
-  const [selectedInstitutionId, setSelectedInstitutionId] = useState<number | null>(null);
+  const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [products, setProducts] = useState<MarketplaceProduct[]>([]);
   const [cart, setCart] = useState<CartResponse | null>(null);
   const [orders, setOrders] = useState<OrdersResponse | null>(null);
@@ -246,30 +224,22 @@ export default function AdminMarketplace() {
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [pendingPayment, setPendingPayment] = useState<PaymentResponse | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [cartOpen, setCartOpen] = useState(false);
   const [selected, setSelected] = useState<MarketplaceProduct | null>(null);
   const [formOpen, setFormOpen] = useState(false);
-  const [payment, setPayment] = useState<PaymentResponse | null>(null);
-  const [paymentOpen, setPaymentOpen] = useState(false);
-  const [paymentForm, setPaymentForm] = useState<UPIFormState>({
-    utr_number: "",
-    payer_upi_id: "",
-    payer_phone: "",
-  });
 
-  const loadInstitutions = useCallback(async () => {
-    const data = await api<{ count: number; institutions: Institution[] }>(
-      "/super-admin/marketplace/institutions"
+  const loadProfile = useCallback(async () => {
+    const response = await api<AdminProfile | { profile?: AdminProfile }>(
+      "/profile/admin"
     );
-    const list = Array.isArray(data?.institutions) ? data.institutions : [];
-    setInstitutions(list);
-    setSelectedInstitutionId((current) =>
-      current && list.some((item) => item.id === current)
-        ? current
-        : list[0]?.id ?? null
-    );
+    const data: AdminProfile | null =
+      response && typeof response === "object" && "profile" in response
+        ? response.profile ?? null
+        : (response as AdminProfile | null);
+    setProfile(data ?? null);
   }, []);
 
   const loadProducts = useCallback(async () => {
@@ -305,7 +275,7 @@ export default function AdminMarketplace() {
     setError("");
 
     try {
-      await Promise.all([loadInstitutions(), loadProducts(), loadCart()]);
+      await Promise.all([loadProfile(), loadProducts(), loadCart()]);
     } catch (err) {
       setError(
         err instanceof Error
@@ -315,7 +285,7 @@ export default function AdminMarketplace() {
     } finally {
       setLoading(false);
     }
-  }, [loadCart, loadInstitutions, loadProducts]);
+  }, [loadCart, loadProducts, loadProfile]);
 
   useEffect(() => {
     loadAll();
@@ -333,12 +303,8 @@ export default function AdminMarketplace() {
     setBusy(true);
     setNotice("");
     try {
-      await api("/marketplace/cart", {
+      await api(`/marketplace/cart?product_id=${productId}&quantity=1`, {
         method: "POST",
-        body: JSON.stringify({
-          product_id: productId,
-          quantity: 1,
-        }),
       });
       await loadCart();
       setNotice("Added to cart.");
@@ -379,125 +345,70 @@ export default function AdminMarketplace() {
   };
 
   const checkout = async () => {
-    const institutionId = selectedInstitutionId;
-
+    const institutionId = profile?.institution_id;
     if (!institutionId) {
-      setNotice("Select an institution before checkout.");
+      setNotice("Your Admin Profile does not have institution information.");
       return;
     }
-
     if (!cart?.items.length) {
       setNotice("Your cart is empty.");
       return;
     }
 
+    const hasPhysical = cart.items.some(
+      (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
+    );
     setBusy(true);
     setNotice("");
 
     try {
+      let shippingAddress: string | null = null;
+
+      if (hasPhysical) {
+        const address = window.prompt(
+          "Enter the delivery address for physical products:"
+        );
+        if (!address || address.trim().length < 10) {
+          throw new Error("A valid delivery address is required for physical products.");
+        }
+        shippingAddress = address.trim();
+      }
+
       const checkoutData = await api<{
         order_id: number;
         status: string;
-        subtotal_amount?: number | string;
-        tax_percent?: number | string;
-        tax_amount?: number | string;
-        total_amount?: number | string;
+        subtotal_amount: number | string;
+        tax_percent: number | string;
+        tax_amount: number | string;
+        total_amount: number | string;
         currency?: string;
         expires_at?: string | null;
-      }>(
-        `/marketplace/checkout?institution_id=${institutionId}`,
-        { method: "POST" }
-      );
+      }>("/marketplace/checkout", {
+        method: "POST",
+        body: JSON.stringify({
+          institution_id: institutionId,
+          shipping_address: shippingAddress,
+        }),
+      });
 
       const orderId = Number(checkoutData.order_id);
-      if (!Number.isFinite(orderId)) {
-        throw new Error("Marketplace order ID was not returned.");
-      }
+      if (!Number.isFinite(orderId)) throw new Error("Marketplace order ID was not returned.");
 
-      // Create a local pending UPI payment.
-      const createdPayment = await api<PaymentResponse>(
-        "/marketplace/payments/",
-        {
-          method: "POST",
-          body: JSON.stringify({ order_id: orderId }),
-        }
-      );
-
-      setPayment(createdPayment);
-      setPaymentForm({
-        utr_number: "",
-        payer_upi_id: "",
-        payer_phone: "",
+      const payment = await api<PaymentResponse>("/marketplace/payments/", {
+        method: "POST",
+        body: JSON.stringify({ order_id: orderId }),
       });
-      setPaymentOpen(true);
+
+      setPendingPayment(payment);
       setCartOpen(false);
-      setNotice(
-        `Order #${orderId} created. Pay ${money(createdPayment.amount)} using UPI, then submit the UTR.`
-      );
-    } catch (err) {
-      setNotice(
-        err instanceof Error
-          ? err.message
-          : "Unable to start marketplace payment."
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submitUPIDetails = async () => {
-    if (!payment) return;
-
-    const utr = paymentForm.utr_number.trim();
-    const payerUpi = paymentForm.payer_upi_id.trim();
-    const payerPhone = paymentForm.payer_phone.trim();
-
-    if (!utr) {
-      setNotice("UTR number is required.");
-      return;
-    }
-    if (!payerUpi) {
-      setNotice("Payer UPI ID is required.");
-      return;
-    }
-    if (!payerPhone) {
-      setNotice("Payer phone number is required.");
-      return;
-    }
-
-    setBusy(true);
-    setNotice("");
-
-    try {
-      const submitted = await api<PaymentResponse>(
-        `/marketplace/payments/${payment.payment_id}/submit-utr`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            utr_number: utr,
-            payer_upi_id: payerUpi,
-            payer_phone: payerPhone,
-          }),
-        }
-      );
-
-      setPayment(submitted);
-      setPaymentOpen(false);
-      setNotice(
-        `Payment details submitted for Order #${payment.order_id}. Payment is pending Super Admin verification.`
-      );
+      setNotice(`Order #${orderId} created. Complete the direct UPI payment and submit the UTR.`);
       await Promise.all([loadCart(), loadOrders()]);
     } catch (err) {
-      setNotice(
-        err instanceof Error
-          ? err.message
-          : "Unable to submit UPI payment details."
-      );
+      setNotice(err instanceof Error ? err.message : "Unable to start UPI payment.");
     } finally {
       setBusy(false);
     }
   };
-
 
   const openPanel = async (
     next: "shop" | "sell" | "orders" | "sales"
@@ -535,9 +446,8 @@ export default function AdminMarketplace() {
           <span className="admin-marketplace-eyebrow">CAMPUS COMMERCE</span>
           <h1>Marketplace</h1>
           <p>
-            This is the same EduSphere Marketplace used by Students,
-            Professors and Admins. Products, carts, orders, sales and payments
-            are shared across the platform.
+            Use EduSphere Marketplace exactly like Student and Professor
+            accounts — buy, sell and manage your own marketplace activity.
           </p>
         </div>
 
@@ -581,34 +491,6 @@ export default function AdminMarketplace() {
         <div><span>Purchases</span><strong>{stats.purchases}</strong></div>
         <div><span>Sales</span><strong>{stats.sales}</strong></div>
       </section>
-
-      <div className="super-admin-marketplace-context">
-        <div>
-          <span>SUPER ADMIN MARKETPLACE ACCESS</span>
-          <strong>Shared platform marketplace</strong>
-        </div>
-        <label>
-          <span>Institution context for selling / checkout</span>
-          <select
-            value={selectedInstitutionId ?? ""}
-            onChange={(event) =>
-              setSelectedInstitutionId(
-                event.target.value ? Number(event.target.value) : null
-              )
-            }
-          >
-            <option value="">Select institution</option>
-            {institutions.map((institution) => (
-              <option key={institution.id} value={institution.id}>
-                {institution.name}
-                {institution.university_code
-                  ? ` (${institution.university_code})`
-                  : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
 
       <nav className="admin-marketplace-tabs">
         <button className={panel === "shop" ? "active" : ""} onClick={() => openPanel("shop")}>
@@ -755,12 +637,9 @@ export default function AdminMarketplace() {
             <div className="admin-marketplace-order-list">
               {orders.orders.map((order) => {
                 const digitalFiles = order.digital_files || [];
-                const canDownload =
-                  ["CONFIRMED", "PROCESSING", "COMPLETED"].includes(
-                    String(order.status || "").toUpperCase()
-                  ) &&
-                  (!order.payment_status ||
-                    String(order.payment_status).toUpperCase() === "PAID");
+                const canDownload = ["CONFIRMED", "PROCESSING", "COMPLETED"].includes(
+                  String(order.status || "").toUpperCase()
+                );
 
                 return (
                   <div className="admin-marketplace-order" key={order.order_id}>
@@ -904,7 +783,7 @@ export default function AdminMarketplace() {
               <div><span>Category</span><strong>{selected.category || "Uncategorized"}</strong></div>
               <div><span>Condition</span><strong>{selected.condition_type || "—"}</strong></div>
               <div><span>Availability</span><strong>{selected.product_type === "DIGITAL" ? "Digital" : `${selected.quantity} available`}</strong></div>
-              <div><span>Institution</span><strong>{selected.institution_name || "Institution"}</strong></div>
+              <div><span>Institution</span><strong>{selected.institution_name || profile?.institution_name || "Institution"}</strong></div>
             </div>
             <div className="admin-marketplace-modal-footer">
               <button
@@ -969,9 +848,12 @@ export default function AdminMarketplace() {
 
             <div className="admin-marketplace-cart-footer">
               <div>
-                <span>Total</span>
-                <strong>{money(cart.total)}</strong>
-                <small className="marketplace-fee-note">5% tax is added to the buyer total. Payment is made directly by UPI and verified manually by Super Admin.</small>
+                <span>Subtotal</span>
+                <strong>{money(cart.subtotal_amount ?? cart.total)}</strong>
+                <small className="marketplace-fee-note">
+                  Tax ({Number(cart.tax_percent ?? 5).toFixed(0)}%): {money(cart.tax_amount ?? 0)}
+                  {" · "}Total: {money(cart.total_amount ?? cart.total)}
+                </small>
               </div>
               <button
                 className="admin-marketplace-primary"
@@ -979,126 +861,28 @@ export default function AdminMarketplace() {
                 disabled={busy || !cart.items.length}
               >
                 <WalletCards size={16} />
-                {busy ? "Preparing..." : "Continue to UPI payment"}
+                {busy ? "Processing..." : "Pay securely with UPI"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {paymentOpen && payment && (
-        <div
-          className="admin-marketplace-overlay"
-          onClick={() => {
-            if (!busy) setPaymentOpen(false);
-          }}
-        >
-          <div
-            className="admin-marketplace-modal cart"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="admin-marketplace-modal-head">
-              <div>
-                <span className="admin-marketplace-eyebrow">MANUAL UPI PAYMENT</span>
-                <h2>Order #{payment.order_id}</h2>
-              </div>
-              <button onClick={() => setPaymentOpen(false)} disabled={busy}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="admin-marketplace-detail-grid">
-              <div><span>Total to Pay</span><strong>{money(payment.amount)}</strong></div>
-              <div><span>Status</span><strong>{payment.status}</strong></div>
-              <div><span>UPI ID</span><strong>{payment.upi_id}</strong></div>
-              <div><span>Payee</span><strong>{payment.payment_name}</strong></div>
-            </div>
-
-            <div style={{
-              marginTop: 16,
-              padding: 14,
-              border: "1px solid #334155",
-              borderRadius: 12,
-              background: "#0f172a",
-            }}>
-              <strong>Pay directly using UPI</strong>
-              <p style={{ margin: "8px 0 0", color: "#94a3b8", fontSize: 13 }}>
-                Pay exactly {money(payment.amount)} to the UPI ID above using any UPI app.
-                On a laptop, scan the QR shown by your UPI app; on mobile, copy the UPI ID.
-              </p>
-              <button
-                type="button"
-                className="admin-marketplace-primary"
-                style={{ marginTop: 12 }}
-                onClick={() => {
-                  if (navigator.clipboard) {
-                    void navigator.clipboard.writeText(payment.upi_id);
-                  }
-                  setNotice("UPI ID copied.");
-                }}
-              >
-                Copy UPI ID
-              </button>
-            </div>
-
-            <div className="admin-marketplace-form" style={{ marginTop: 16 }}>
-              <label>
-                UTR / Transaction Reference
-                <input
-                  value={paymentForm.utr_number}
-                  onChange={(event) => setPaymentForm((current) => ({
-                    ...current, utr_number: event.target.value,
-                  }))}
-                  placeholder="Enter UTR from your UPI transaction"
-                  disabled={busy}
-                />
-              </label>
-
-              <label>
-                Your Payer UPI ID
-                <input
-                  value={paymentForm.payer_upi_id}
-                  onChange={(event) => setPaymentForm((current) => ({
-                    ...current, payer_upi_id: event.target.value,
-                  }))}
-                  placeholder="example@upi"
-                  disabled={busy}
-                />
-              </label>
-
-              <label>
-                Your Phone Number
-                <input
-                  value={paymentForm.payer_phone}
-                  onChange={(event) => setPaymentForm((current) => ({
-                    ...current, payer_phone: event.target.value,
-                  }))}
-                  placeholder="10-digit mobile number"
-                  inputMode="numeric"
-                  disabled={busy}
-                />
-              </label>
-            </div>
-
-            <div className="admin-marketplace-modal-footer">
-              <button onClick={() => setPaymentOpen(false)} disabled={busy}>
-                Pay Later
-              </button>
-              <button
-                className="admin-marketplace-primary"
-                onClick={submitUPIDetails}
-                disabled={busy || payment.status !== "PENDING"}
-              >
-                {busy ? "Submitting..." : "Submit UTR"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {pendingPayment && (
+        <MarketplaceUPIPaymentModal
+          payment={pendingPayment}
+          onClose={() => setPendingPayment(null)}
+          onSubmitted={(data) =>
+            setPendingPayment((current) =>
+              current ? { ...current, ...(data as Partial<PaymentResponse>) } : current
+            )
+          }
+        />
       )}
 
-      {formOpen && selectedInstitutionId && (
+      {formOpen && profile?.institution_id && (
         <ProductForm
-          institutionId={selectedInstitutionId}
+          institutionId={profile.institution_id}
           onClose={() => setFormOpen(false)}
           onCreated={async () => {
             setFormOpen(false);
@@ -1110,9 +894,9 @@ export default function AdminMarketplace() {
 
       <button
         className="admin-marketplace-back"
-        onClick={() => navigate("/app/super-admin")}
+        onClick={() => navigate("/app/admin")}
       >
-        ← Super Admin Dashboard
+        ← Dashboard
       </button>
       <AIChatbot />
     </div>
@@ -1139,6 +923,7 @@ function ProductForm({
   const [file, setFile] = useState<File | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingPayment, setPendingPayment] = useState<PaymentResponse | null>(null);
   const [error, setError] = useState("");
 
   const submit = async () => {
