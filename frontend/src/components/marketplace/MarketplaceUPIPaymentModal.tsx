@@ -53,11 +53,31 @@ export default function MarketplaceUPIPaymentModal({
     `&cu=${encodeURIComponent(payment.currency || "INR")}`;
 
   const openUpiApp = () => {
+    setError("");
+
     try {
-      // Trigger the UPI deep link without rendering a normal navigation link.
-      window.location.href = upiLink;
+      // Do NOT use window.location.href here.
+      // That navigates the EduSphere page to the upi:// URL and can make
+      // the React app disappear. A temporary hidden iframe triggers the
+      // UPI deep link while keeping the current page and modal mounted.
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.width = "1px";
+      iframe.style.height = "1px";
+      iframe.style.border = "0";
+      iframe.style.opacity = "0";
+      iframe.style.pointerEvents = "none";
+      iframe.src = upiLink;
+
+      document.body.appendChild(iframe);
+
+      window.setTimeout(() => {
+        iframe.remove();
+      }, 1500);
     } catch {
-      setError("Unable to open the UPI app. Please use the UPI ID manually.");
+      setError(
+        "Unable to open the UPI app. Please use the UPI ID manually."
+      );
     }
   };
 
