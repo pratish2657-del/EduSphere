@@ -311,14 +311,17 @@ export default function ProfessorMarketplace() {
     setMarketplaceBusy(true);
     setMarketplaceNotice("");
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/marketplace/cart?product_id=${encodeURIComponent(productId)}&quantity=1`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { Accept: "application/json" },
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/marketplace/cart`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          product_id: productId,
+          quantity:1
+        }),
+      });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
         throw new Error(getDisplayMessage(data?.detail ?? data?.message, "Unable to add product to cart."));
