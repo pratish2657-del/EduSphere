@@ -85,6 +85,19 @@ function getDisplayMessage(
   return fallback;
 }
 
+function getApiErrorMessage(
+  payload: unknown,
+  fallback = "Something went wrong."
+): string {
+  const message = getDisplayMessage(payload, "");
+  if (!message) return fallback;
+
+  // Never allow JavaScript's generic object coercion to leak into the UI.
+  if (message === "[object Object]") return fallback;
+
+  return message;
+}
+
 function createRequestController() {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(
@@ -533,10 +546,9 @@ export default function AppPlaceholder() {
 
       if (!response.ok) {
         throw new Error(
-          String(
-            data?.detail ||
-              data?.message ||
-              "Unable to load your examination results."
+          getApiErrorMessage(
+            data,
+            "Unable to load your examination results."
           )
         );
       }
@@ -590,10 +602,9 @@ export default function AppPlaceholder() {
 
       if (!response.ok) {
         throw new Error(
-          String(
-            data?.detail ||
-              data?.message ||
-              "Unable to load marketplace products."
+          getApiErrorMessage(
+            data,
+            "Unable to load marketplace products."
           )
         );
       }
@@ -674,8 +685,9 @@ export default function AppPlaceholder() {
 
       if (!response.ok) {
         throw new Error(
-          String(
-            data?.detail || data?.message || "Unable to load seller sales."
+          getApiErrorMessage(
+            data,
+            "Unable to load seller sales."
           )
         );
       }
@@ -709,8 +721,9 @@ export default function AppPlaceholder() {
 
         if (!response.ok) {
           throw new Error(
-            String(
-              data?.detail || data?.message || "Unable to add product to cart."
+            getApiErrorMessage(
+              data,
+              "Unable to add product to cart."
             )
           );
         }
@@ -747,8 +760,9 @@ export default function AppPlaceholder() {
 
         if (!response.ok) {
           throw new Error(
-            String(
-              data?.detail || data?.message || "Unable to update cart item."
+            getApiErrorMessage(
+              data,
+              "Unable to update cart item."
             )
           );
         }
@@ -782,8 +796,9 @@ export default function AppPlaceholder() {
 
         if (!response.ok) {
           throw new Error(
-            String(
-              data?.detail || data?.message || "Unable to remove cart item."
+            getApiErrorMessage(
+              data,
+              "Unable to remove cart item."
             )
           );
         }
@@ -844,10 +859,9 @@ export default function AppPlaceholder() {
         const checkoutData = await checkoutResponse.json().catch(() => null);
         if (!checkoutResponse.ok) {
           throw new Error(
-            String(
-              checkoutData?.detail ||
-                checkoutData?.message ||
-                "Unable to create marketplace order."
+            getApiErrorMessage(
+              checkoutData,
+              "Unable to create marketplace order."
             )
           );
         }
@@ -873,10 +887,9 @@ export default function AppPlaceholder() {
         const paymentData = await paymentResponse.json().catch(() => null);
         if (!paymentResponse.ok) {
           throw new Error(
-            String(
-              paymentData?.detail ||
-                paymentData?.message ||
-                "Unable to create UPI payment."
+            getApiErrorMessage(
+              paymentData,
+              "Unable to create UPI payment."
             )
           );
         }
@@ -924,12 +937,12 @@ export default function AppPlaceholder() {
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        const message =
-          data?.detail ||
-          data?.message ||
-          "Unable to load your timetable.";
-
-        throw new Error(String(message));
+        throw new Error(
+          getApiErrorMessage(
+            data,
+            "Unable to load your timetable."
+          )
+        );
       }
 
       if (!data || !Array.isArray(data.timetable)) {
@@ -2592,8 +2605,10 @@ function MarketplaceView({
         ))}
       </div>
 
-      {Boolean(notice) && (
-        <div style={styles.marketplaceNotice}>{getDisplayMessage(notice)}</div>
+      {Boolean(getDisplayMessage(notice, "")) && (
+        <div style={styles.marketplaceNotice}>
+          {getApiErrorMessage(notice)}
+        </div>
       )}
 
       {panel === "shop" && (
@@ -2777,11 +2792,18 @@ function MarketplaceProductCard({
         style={styles.marketplaceProductMain}
         onClick={onSelect}
       >
-        {product.preview_image_path && (
+        {product.preview_image_path ? (
           <img
             src={`${API_BASE_URL}/marketplace/${product.product_id}/preview`}
             alt={`${product.name} preview`}
             loading="lazy"
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
+              const fallback = event.currentTarget.nextElementSibling as HTMLElement | null;
+              if (fallback) {
+                fallback.style.display = "flex";
+              }
+            }}
             style={{
               width: "100%",
               height: 150,
@@ -2791,7 +2813,28 @@ function MarketplaceProductCard({
               display: "block",
             }}
           />
-        )}
+        ) : null}
+
+        <div
+          aria-hidden="true"
+          style={{
+            display: product.preview_image_path ? "none" : "flex",
+            width: "100%",
+            height: 150,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 12,
+            marginBottom: 10,
+            background: "linear-gradient(135deg, rgba(15,23,42,.95), rgba(30,41,59,.82))",
+            border: "1px solid rgba(148,163,184,.12)",
+            color: "#64748b",
+            fontSize: 11,
+            letterSpacing: ".08em",
+            textTransform: "uppercase",
+          }}
+        >
+          Preview unavailable
+        </div>
 
         <div style={styles.marketplaceProductIcon}>
           {product.product_type === "DIGITAL" ? (
@@ -3361,10 +3404,9 @@ function MarketplaceProductForm({
 
       if (!createResponse.ok) {
         throw new Error(
-          String(
-            createData?.detail ||
-              createData?.message ||
-              "Unable to create listing."
+          getApiErrorMessage(
+            createData,
+            "Unable to create listing."
           )
         );
       }
@@ -3394,10 +3436,9 @@ function MarketplaceProductForm({
 
         if (!uploadResponse.ok) {
           throw new Error(
-            String(
-              uploadData?.detail ||
-                uploadData?.message ||
-                "Product created but file upload failed."
+            getApiErrorMessage(
+              uploadData,
+              "Product created but file upload failed."
             )
           );
         }
@@ -3422,10 +3463,9 @@ function MarketplaceProductForm({
       const previewData = await previewResponse.json().catch(() => null);
       if (!previewResponse.ok) {
         throw new Error(
-          String(
-            previewData?.detail ||
-              previewData?.message ||
-              "Product created but preview photo upload failed."
+          getApiErrorMessage(
+            previewData,
+            "Product created but preview photo upload failed."
           )
         );
       }
