@@ -732,6 +732,7 @@ def verify_payment(
                 mp.utr_number,
                 mp.payer_upi_id,
                 mp.payer_phone,
+                mp.submitted_at,
 
                 o.institution_id,
                 o.status AS order_status,
@@ -810,14 +811,26 @@ def verify_payment(
         # ----------------------------------------------------
 
         if payment["expires_at"] is not None:
-            now = datetime.now(
-                timezone.utc
-            ).replace(tzinfo=None)
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+            # A checkout can expire before the Super Admin gets
+            # time to manually verify the UPI transaction.
+            #
+            # If the buyer submitted the UTR before expiry,
+            # the payment remains eligible for manual verification.
 
             if payment["expires_at"] <= now:
-                raise BadRequestError(
-                    "This order has expired"
-                )
+                submitted_at = payment.get("submitted_at")
+
+                if not submitted_at:
+                    raise BadRequestError(
+                        "This order has expired and no UTR was submitted before expiry"
+                    )
+
+                if submitted_at > payment["expires_at"]:
+                    raise BadRequestError(
+                        "The UTR was submitted after the checkout expired"
+                    )
 
         # ----------------------------------------------------
         # AMOUNT MUST MATCH ORDER

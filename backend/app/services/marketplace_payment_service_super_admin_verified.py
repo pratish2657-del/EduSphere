@@ -525,6 +525,10 @@ def submit_utr(
                     "This checkout session has expired"
                 )
 
+        # ----------------------------------------------------
+        # CLEAN INPUT
+        # ----------------------------------------------------
+
         utr_number = utr_number.strip()
         payer_upi_id = payer_upi_id.strip()
         payer_phone = payer_phone.strip()
@@ -633,9 +637,7 @@ def submit_utr(
 # SUPER ADMIN — PENDING PAYMENTS
 #
 # Super Admin can review marketplace payments across all
-# institutions. Institution-level filtering is intentionally not
-# used here because payment verification is a platform-level
-# financial action.
+# institutions.
 # ============================================================
 
 
@@ -704,7 +706,8 @@ def get_pending_payments():
 # ============================================================
 # SUPER ADMIN — VERIFY PAYMENT
 #
-# THIS IS THE ONLY PLACE WHERE A MANUAL UPI PAYMENT BECOMES PAID.
+# THIS IS THE ONLY PLACE WHERE A MANUAL UPI PAYMENT
+# BECOMES PAID.
 # ============================================================
 
 
@@ -732,6 +735,7 @@ def verify_payment(
                 mp.utr_number,
                 mp.payer_upi_id,
                 mp.payer_phone,
+                mp.submitted_at,
 
                 o.institution_id,
                 o.status AS order_status,
@@ -807,6 +811,14 @@ def verify_payment(
 
         # ----------------------------------------------------
         # CHECK EXPIRY
+        #
+        # IMPORTANT:
+        #
+        # The checkout may expire before the Super Admin
+        # gets time to manually verify the actual UPI payment.
+        #
+        # If the buyer submitted the UTR BEFORE expiry,
+        # verification remains allowed.
         # ----------------------------------------------------
 
         if payment["expires_at"] is not None:
@@ -815,9 +827,20 @@ def verify_payment(
             ).replace(tzinfo=None)
 
             if payment["expires_at"] <= now:
-                raise BadRequestError(
-                    "This order has expired"
+
+                submitted_at = payment.get(
+                    "submitted_at"
                 )
+
+                if not submitted_at:
+                    raise BadRequestError(
+                        "This order has expired and no UTR was submitted before expiry"
+                    )
+
+                if submitted_at > payment["expires_at"]:
+                    raise BadRequestError(
+                        "The UTR was submitted after the checkout expired"
+                    )
 
         # ----------------------------------------------------
         # AMOUNT MUST MATCH ORDER
@@ -918,4 +941,3 @@ def verify_payment(
 
     finally:
         connection.close()
-

@@ -205,9 +205,7 @@ def get_marketplace_products(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(
-            dictionary=True
-        )
+        cursor = connection.cursor()
 
         clauses: list[str] = []
         params: list = []
@@ -345,9 +343,7 @@ def get_marketplace_product(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(
-            dictionary=True
-        )
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -424,9 +420,7 @@ def update_product_status(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(
-            dictionary=True
-        )
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -515,9 +509,7 @@ def get_marketplace_orders(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(
-            dictionary=True
-        )
+        cursor = connection.cursor()
 
         clauses: list[str] = []
         params: list = []
@@ -709,9 +701,7 @@ def get_marketplace_order(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(
-            dictionary=True
-        )
+        cursor = connection.cursor()
 
         cursor.execute(
             """
@@ -891,9 +881,7 @@ def update_order_status(
     connection = get_connection()
 
     try:
-        cursor = connection.cursor(
-            dictionary=True
-        )
+        cursor = connection.cursor()
 
         # ----------------------------------------------------
         # LOCK ORDER
