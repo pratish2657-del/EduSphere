@@ -705,7 +705,20 @@ export default function AppPlaceholder() {
         );
       }
 
-      setMarketplaceOrders(data as MarketplaceOrdersResponse);
+      // The current backend order service returns the buyer orders as an
+      // array, while older versions returned { count, orders }. Normalize
+      // both shapes here so the UI never crashes on `.orders.length`.
+      const normalizedOrders: MarketplaceOrdersResponse = Array.isArray(data)
+        ? {
+            count: data.length,
+            orders: data,
+          }
+        : {
+            count: Array.isArray(data?.orders) ? data.orders.length : 0,
+            orders: Array.isArray(data?.orders) ? data.orders : [],
+          };
+
+      setMarketplaceOrders(normalizedOrders);
     } catch (err) {
       setMarketplaceNotice(
         err instanceof Error ? err.message : "Unable to load your orders."
@@ -3009,7 +3022,11 @@ function MarketplaceOrders({
     );
   }
 
-  if (!orders.orders.length) {
+  const orderList = Array.isArray(orders.orders)
+    ? orders.orders
+    : [];
+
+  if (!orderList.length) {
     return (
       <div style={styles.timetableEmpty}>
         <Package size={30} />
@@ -3023,7 +3040,7 @@ function MarketplaceOrders({
 
   return (
     <div style={styles.orderList}>
-      {orders.orders.map((order) => {
+      {orderList.map((order) => {
         const digitalFiles = order.digital_files || [];
         const canDownload = ["CONFIRMED", "PROCESSING", "COMPLETED"].includes(
           order.status
@@ -3134,7 +3151,11 @@ function MarketplaceSales({
     );
   }
 
-  if (!orders.orders.length) {
+  const orderList = Array.isArray(orders.orders)
+    ? orders.orders
+    : [];
+
+  if (!orderList.length) {
     return (
       <div style={styles.timetableEmpty}>
         <WalletCards size={30} />
@@ -3148,7 +3169,7 @@ function MarketplaceSales({
 
   return (
     <div style={styles.orderList}>
-      {orders.orders.map((order) => (
+      {orderList.map((order) => (
         <div key={order.order_item_id} style={styles.orderRow}>
           <div>
             <span style={styles.cardEyebrow}>
