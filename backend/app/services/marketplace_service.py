@@ -20,7 +20,7 @@ from app.database import get_connection
 # PERSISTENT MARKETPLACE STORAGE
 # ============================================================
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().strip('"').strip("'").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 SUPABASE_LIBRARY_BUCKET = os.getenv("SUPABASE_LIBRARY_BUCKET", "library").strip() or "library"
 
