@@ -15,6 +15,7 @@ from app.core.exceptions import (
 from app.database import get_connection
 
 
+
 # ============================================================
 # PERSISTENT MARKETPLACE STORAGE
 # ============================================================
@@ -40,10 +41,7 @@ SUPABASE_LIBRARY_BUCKET = (
 
 
 def _storage_configured():
-    """
-    Check whether the persistent Supabase Storage configuration
-    is present and the Supabase URL has a valid HTTP/HTTPS format.
-    """
+    """Return True when Supabase Storage configuration is valid."""
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         return False
 
@@ -55,19 +53,54 @@ def _storage_configured():
     )
 
 
+def _log_supabase_dns_status():
+    """
+    Log safe Supabase connection diagnostics on backend startup.
+
+    The service-role key is never printed. This is useful on Render
+    because a DNS failure can otherwise look like a generic upload error.
+    """
+    print("========== SUPABASE STORAGE CONFIG ==========")
+    print("SUPABASE_URL:", repr(SUPABASE_URL))
+    print(
+        "SUPABASE_SERVICE_ROLE_KEY configured:",
+        bool(SUPABASE_SERVICE_ROLE_KEY),
+    )
+    print(
+        "SUPABASE_LIBRARY_BUCKET:",
+        repr(SUPABASE_LIBRARY_BUCKET),
+    )
+
+    if not _storage_configured():
+        print("SUPABASE_CONFIG_STATUS: INVALID_OR_MISSING")
+        print("=============================================")
+        return
+
+    hostname = urlparse(SUPABASE_URL).hostname
+    print("SUPABASE_HOSTNAME:", repr(hostname))
+
+    try:
+        resolved_ip = socket.gethostbyname(hostname)
+        print("SUPABASE_DNS:", resolved_ip)
+        print("SUPABASE_DNS_STATUS: OK")
+    except socket.gaierror as error:
+        print("SUPABASE_DNS_STATUS: FAILED")
+        print("SUPABASE_DNS_ERROR:", repr(error))
+
+    print("=============================================")
+
+
+# Safe startup diagnostic. Never prints the service-role key.
+_log_supabase_dns_status()
+
+
 def _storage_request(
     method,
     path,
     body=None,
     content_type=None,
 ):
-    """
-    Make an authenticated request to Supabase Storage.
-
-    All marketplace files are stored in the private Supabase
-    Storage bucket configured by SUPABASE_LIBRARY_BUCKET.
-    """
-
+    """Make an authenticated request to Supabase Storage."""
     if not _storage_configured():
         raise BadRequestError(
             "Persistent marketplace storage is not configured. "
@@ -78,9 +111,7 @@ def _storage_request(
     data = None
 
     headers = {
-        "Authorization": (
-            f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"
-        ),
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
         "apikey": SUPABASE_SERVICE_ROLE_KEY,
     }
 
@@ -113,7 +144,6 @@ def _storage_request(
             request,
             timeout=60,
         ) as response:
-
             raw = response.read()
 
             if not raw:
@@ -123,7 +153,6 @@ def _storage_request(
                 return json.loads(
                     raw.decode("utf-8")
                 )
-
             except (
                 UnicodeDecodeError,
                 json.JSONDecodeError,
@@ -179,15 +208,12 @@ def upload_marketplace_storage(
     kind,
 ):
     """
-    Upload marketplace media to persistent private
-    Supabase Storage.
-
-    The bucket must already exist.
+    Upload marketplace media to the already-created private
+    Supabase Storage bucket.
 
     Returns:
         supabase://<object-path>
     """
-
     if not _storage_configured():
         raise BadRequestError(
             "Marketplace persistent storage is not configured. "
@@ -200,10 +226,8 @@ def upload_marketplace_storage(
     )[1].lower()
 
     object_path = (
-        f"marketplace/"
-        f"{kind}/"
-        f"{uuid.uuid4().hex}"
-        f"{extension}"
+        f"marketplace/{kind}/"
+        f"{uuid.uuid4().hex}{extension}"
     )
 
     bucket_name = quote(
@@ -219,8 +243,7 @@ def upload_marketplace_storage(
     _storage_request(
         "POST",
         (
-            f"/object/"
-            f"{bucket_name}/"
+            f"/object/{bucket_name}/"
             f"{encoded_object_path}"
         ),
         data,
@@ -236,13 +259,7 @@ def get_marketplace_signed_url(
     expires_in=300,
     download_name=None,
 ):
-    """
-    Generate a short-lived signed URL for a private
-    Supabase Storage object.
-
-    Returns None for non-Supabase storage paths.
-    """
-
+    """Generate a short-lived signed URL for a private object."""
     if (
         not storage_path
         or not storage_path.startswith(
@@ -271,8 +288,7 @@ def get_marketplace_signed_url(
     result = _storage_request(
         "POST",
         (
-            f"/object/sign/"
-            f"{bucket_name}/"
+            f"/object/sign/{bucket_name}/"
             f"{encoded_object_path}"
         ),
         {
@@ -311,8 +327,7 @@ def get_marketplace_signed_url(
     ):
         url = (
             f"{SUPABASE_URL}"
-            f"/storage/v1"
-            f"{signed_path}"
+            f"/storage/v1{signed_path}"
         )
 
     else:
@@ -330,10 +345,8 @@ def get_marketplace_signed_url(
         )
 
         url = (
-            f"{url}"
-            f"{separator}"
-            f"download="
-            f"{quote(download_name)}"
+            f"{url}{separator}"
+            f"download={quote(download_name)}"
         )
 
     return url
@@ -346,26 +359,16 @@ def get_marketplace_signed_url(
 ALLOWED_MARKETPLACE_FILE_TYPES = {
     "application/pdf",
     "application/msword",
-    (
-        "application/"
-        "vnd.openxmlformats-officedocument."
-        "wordprocessingml.document"
-    ),
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.ms-powerpoint",
-    (
-        "application/"
-        "vnd.openxmlformats-officedocument."
-        "presentationml.presentation"
-    ),
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "image/jpeg",
     "image/png",
     "image/webp",
     "text/plain",
 }
 
-MAX_MARKETPLACE_FILE_SIZE = (
-    10 * 1024 * 1024
-)
+MAX_MARKETPLACE_FILE_SIZE = 10 * 1024 * 1024
 
 ALLOWED_MARKETPLACE_PREVIEW_TYPES = {
     "image/jpeg",
@@ -373,9 +376,7 @@ ALLOWED_MARKETPLACE_PREVIEW_TYPES = {
     "image/webp",
 }
 
-MAX_MARKETPLACE_PREVIEW_SIZE = (
-    5 * 1024 * 1024
-)
+MAX_MARKETPLACE_PREVIEW_SIZE = 5 * 1024 * 1024
 
 
 # ============================================================
@@ -434,56 +435,36 @@ def get_products(
             query += """
                 AND mp.institution_id = %s
             """
-
-            params.append(
-                institution_id
-            )
+            params.append(institution_id)
 
         if category:
             query += """
-                AND LOWER(mp.category)
-                    = LOWER(%s)
+                AND LOWER(mp.category) = LOWER(%s)
             """
-
-            params.append(
-                category.strip()
-            )
+            params.append(category.strip())
 
         if product_type:
             query += """
                 AND mp.product_type = %s
             """
-
-            params.append(
-                product_type.upper()
-            )
+            params.append(product_type.upper())
 
         if search:
             query += """
                 AND (
-                    LOWER(mp.name)
-                        LIKE LOWER(%s)
-                    OR LOWER(mp.description)
-                        LIKE LOWER(%s)
+                    LOWER(mp.name) LIKE LOWER(%s)
+                    OR LOWER(mp.description) LIKE LOWER(%s)
                 )
             """
 
-            value = (
-                f"%{search.strip()}%"
-            )
-
-            params.extend(
-                [value, value]
-            )
+            value = f"%{search.strip()}%"
+            params.extend([value, value])
 
         query += """
             ORDER BY mp.created_at DESC
         """
 
-        cursor.execute(
-            query,
-            tuple(params),
-        )
+        cursor.execute(query, tuple(params))
 
         products = cursor.fetchall()
 
@@ -563,10 +544,7 @@ def get_product(product_id):
 # ============================================================
 
 
-def create_product(
-    user_id,
-    data,
-):
+def create_product(user_id, data):
     connection = get_connection()
 
     try:
@@ -598,9 +576,7 @@ def create_product(
         if data.product_type == "DIGITAL":
             condition_type = "DIGITAL"
         else:
-            condition_type = (
-                data.condition_type
-            )
+            condition_type = data.condition_type
 
         if data.price < 0:
             raise BadRequestError(
@@ -662,10 +638,7 @@ def create_product(
         connection.commit()
 
         return {
-            "message": (
-                "Marketplace product "
-                "created successfully"
-            ),
+            "message": "Marketplace product created successfully",
             "product_id": product_id,
         }
 
@@ -714,17 +687,12 @@ def update_product(
 
         if product["seller_id"] != user_id:
             raise ForbiddenError(
-                "You can only update "
-                "your own products"
+                "You can only update your own products"
             )
 
-        if (
-            data.quantity
-            < product["reserved_quantity"]
-        ):
+        if data.quantity < product["reserved_quantity"]:
             raise BadRequestError(
-                "Quantity cannot be lower "
-                "than currently reserved stock"
+                "Quantity cannot be lower than currently reserved stock"
             )
 
         condition_type = (
@@ -771,10 +739,7 @@ def update_product(
         connection.commit()
 
         return {
-            "message": (
-                "Marketplace product "
-                "updated successfully"
-            ),
+            "message": "Marketplace product updated successfully",
             "product_id": product_id,
         }
 
@@ -791,10 +756,7 @@ def update_product(
 # ============================================================
 
 
-def delete_product(
-    product_id,
-    user_id,
-):
+def delete_product(product_id, user_id):
     connection = get_connection()
 
     try:
@@ -822,14 +784,12 @@ def delete_product(
 
         if product["seller_id"] != user_id:
             raise ForbiddenError(
-                "You can only delete "
-                "your own products"
+                "You can only delete your own products"
             )
 
         if product["reserved_quantity"] > 0:
             raise BadRequestError(
-                "This product cannot be removed "
-                "while stock is reserved"
+                "This product cannot be removed while stock is reserved"
             )
 
         cursor.execute(
@@ -844,10 +804,7 @@ def delete_product(
         connection.commit()
 
         return {
-            "message": (
-                "Marketplace product "
-                "removed successfully"
-            ),
+            "message": "Marketplace product removed successfully",
             "product_id": product_id,
         }
 
@@ -877,10 +834,7 @@ def add_product_attachment(
     try:
         cursor = connection.cursor()
 
-        if (
-            file_type
-            not in ALLOWED_MARKETPLACE_FILE_TYPES
-        ):
+        if file_type not in ALLOWED_MARKETPLACE_FILE_TYPES:
             raise BadRequestError(
                 "File type is not allowed"
             )
@@ -890,10 +844,7 @@ def add_product_attachment(
                 "File cannot be empty"
             )
 
-        if (
-            file_size
-            > MAX_MARKETPLACE_FILE_SIZE
-        ):
+        if file_size > MAX_MARKETPLACE_FILE_SIZE:
             raise BadRequestError(
                 "File size cannot exceed 10 MB"
             )
@@ -920,14 +871,12 @@ def add_product_attachment(
 
         if product["seller_id"] != user_id:
             raise ForbiddenError(
-                "You can only upload files "
-                "for your own products"
+                "You can only upload files for your own products"
             )
 
         if product["product_type"] != "DIGITAL":
             raise BadRequestError(
-                "Attachments are only allowed "
-                "for digital products"
+                "Attachments are only allowed for digital products"
             )
 
         cursor.execute(
@@ -957,10 +906,7 @@ def add_product_attachment(
         connection.commit()
 
         return {
-            "message": (
-                "Product attachment "
-                "uploaded successfully"
-            ),
+            "message": "Product attachment uploaded successfully",
             "attachment_id": attachment_id,
         }
 
@@ -986,10 +932,6 @@ def get_product_attachment(
 
     try:
         cursor = connection.cursor()
-
-        # ----------------------------------------------------
-        # Get all attachments for a product
-        # ----------------------------------------------------
 
         if product_id is not None:
             cursor.execute(
@@ -1018,25 +960,16 @@ def get_product_attachment(
 
             if user_id is not None:
                 for attachment in attachments:
-                    if (
-                        attachment["seller_id"]
-                        != user_id
-                    ):
+                    if attachment["seller_id"] != user_id:
                         raise ForbiddenError(
-                            "You do not have permission "
-                            "to access these attachments"
+                            "You do not have permission to access these attachments"
                         )
 
             return attachments
 
-        # ----------------------------------------------------
-        # Get one attachment
-        # ----------------------------------------------------
-
         if attachment_id is None:
             raise BadRequestError(
-                "Attachment ID or product ID "
-                "is required"
+                "Attachment ID or product ID is required"
             )
 
         cursor.execute(
@@ -1069,12 +1002,10 @@ def get_product_attachment(
 
         if (
             user_id is not None
-            and attachment["seller_id"]
-            != user_id
+            and attachment["seller_id"] != user_id
         ):
             raise ForbiddenError(
-                "You do not have permission "
-                "to access this attachment"
+                "You do not have permission to access this attachment"
             )
 
         return attachment
@@ -1112,24 +1043,15 @@ def delete_product_attachment(
 
             WHERE ma.id = %s
         """
-
         params = [attachment_id]
 
         if product_id is not None:
-            query += """
-                AND ma.product_id = %s
-            """
-
-            params.append(
-                product_id
-            )
+            query += " AND ma.product_id = %s"
+            params.append(product_id)
 
         query += " FOR UPDATE"
 
-        cursor.execute(
-            query,
-            tuple(params),
-        )
+        cursor.execute(query, tuple(params))
 
         attachment = cursor.fetchone()
 
@@ -1138,13 +1060,9 @@ def delete_product_attachment(
                 "Attachment not found"
             )
 
-        if (
-            attachment["seller_id"]
-            != user_id
-        ):
+        if attachment["seller_id"] != user_id:
             raise ForbiddenError(
-                "You can only delete "
-                "your own attachment"
+                "You can only delete your own attachment"
             )
 
         cursor.execute(
@@ -1158,13 +1076,8 @@ def delete_product_attachment(
         connection.commit()
 
         return {
-            "message": (
-                "Attachment deleted "
-                "successfully"
-            ),
-            "file_path": (
-                attachment["storage_path"]
-            ),
+            "message": "Attachment deleted successfully",
+            "file_path": attachment["storage_path"],
         }
 
     except Exception:
@@ -1192,13 +1105,9 @@ def save_product_preview(
     try:
         cursor = connection.cursor()
 
-        if (
-            file_type
-            not in ALLOWED_MARKETPLACE_PREVIEW_TYPES
-        ):
+        if file_type not in ALLOWED_MARKETPLACE_PREVIEW_TYPES:
             raise BadRequestError(
-                "Preview image must be JPG, "
-                "PNG or WEBP"
+                "Preview image must be JPG, PNG or WEBP"
             )
 
         if file_size <= 0:
@@ -1206,10 +1115,7 @@ def save_product_preview(
                 "Preview image cannot be empty"
             )
 
-        if (
-            file_size
-            > MAX_MARKETPLACE_PREVIEW_SIZE
-        ):
+        if file_size > MAX_MARKETPLACE_PREVIEW_SIZE:
             raise BadRequestError(
                 "Preview image cannot exceed 5 MB"
             )
@@ -1236,14 +1142,12 @@ def save_product_preview(
 
         if product["seller_id"] != user_id:
             raise ForbiddenError(
-                "You can only update "
-                "your own product"
+                "You can only update your own product"
             )
 
         if not product["is_active"]:
             raise BadRequestError(
-                "Cannot upload preview "
-                "to an inactive product"
+                "Cannot upload preview to an inactive product"
             )
 
         if not file_path:
@@ -1266,10 +1170,7 @@ def save_product_preview(
         connection.commit()
 
         return {
-            "message": (
-                "Product preview "
-                "updated successfully"
-            ),
+            "message": "Product preview updated successfully",
             "product_id": product_id,
             "preview_image_path": file_path,
             "file_type": file_type,
@@ -1289,9 +1190,7 @@ def save_product_preview(
 # ============================================================
 
 
-def get_product_preview(
-    product_id,
-):
+def get_product_preview(product_id):
     connection = get_connection()
 
     try:
@@ -1303,16 +1202,10 @@ def get_product_preview(
                 preview_image_path,
                 CASE
                     WHEN preview_image_path IS NOT NULL THEN
-                        SUBSTRING_INDEX(
-                            preview_image_path,
-                            '/',
-                            -1
-                        )
+                        SUBSTRING_INDEX(preview_image_path, '/', -1)
                     ELSE NULL
                 END AS file_name
-
             FROM marketplace_products
-
             WHERE id = %s
               AND is_active = TRUE
             """,
@@ -1326,59 +1219,34 @@ def get_product_preview(
                 "Marketplace product not found"
             )
 
-        path = product[
-            "preview_image_path"
-        ]
+        path = product["preview_image_path"]
 
         if not path:
             raise NotFoundError(
                 "Product preview not found"
             )
 
-        # ----------------------------------------------------
-        # Persistent Supabase Storage
-        # ----------------------------------------------------
-
-        if path.startswith(
-            "supabase://"
-        ):
-            # Do NOT call os.path.isfile()
-            # on a Supabase storage path.
-            extension = (
-                os.path.splitext(path)[1]
-                .lower()
-            )
-
-        # ----------------------------------------------------
-        # Legacy local-storage fallback
-        # ----------------------------------------------------
-
+        if path.startswith("supabase://"):
+            # Persistent Supabase object. The route will generate a
+            # short-lived signed URL; do not call os.path.isfile().
+            extension = os.path.splitext(path)[1].lower()
         else:
+            # Legacy local-storage fallback.
             if not os.path.isfile(path):
                 raise NotFoundError(
                     "Product preview not found"
                 )
-
-            extension = (
-                os.path.splitext(path)[1]
-                .lower()
-            )
-
+            extension = os.path.splitext(path)[1].lower()
         media_type = {
             ".jpg": "image/jpeg",
             ".jpeg": "image/jpeg",
             ".png": "image/png",
             ".webp": "image/webp",
-        }.get(
-            extension,
-            "application/octet-stream",
-        )
+        }.get(extension, "application/octet-stream")
 
         return {
             "storage_path": path,
-            "file_name": product[
-                "file_name"
-            ],
+            "file_name": product["file_name"],
             "file_type": media_type,
         }
 
@@ -1386,22 +1254,15 @@ def get_product_preview(
         connection.close()
 
 
-# ============================================================
-# PROTECTED DIGITAL DOWNLOAD
-# ============================================================
-
-
 def get_attachment_for_download(
     user_id: int,
     attachment_id: int,
 ):
     """
-    Return a digital attachment only when the
-    authenticated buyer has a successfully paid
-    and confirmed order containing the attachment's
-    product.
+    Return a digital attachment only when the authenticated
+    buyer has a successfully paid and confirmed order
+    containing the attachment's product.
     """
-
     connection = get_connection()
 
     try:
@@ -1454,8 +1315,7 @@ def get_attachment_for_download(
 
         if not attachment:
             raise ForbiddenError(
-                "You do not have access "
-                "to this digital file."
+                "You do not have access to this digital file."
             )
 
         return attachment
