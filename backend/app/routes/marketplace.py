@@ -403,26 +403,12 @@ async def upload_marketplace_attachment(
                 "File size cannot exceed 10 MB."
             )
 
-        persistent_path = upload_marketplace_storage(
+        file_path = upload_marketplace_storage(
             data=contents,
             filename=file.filename,
             content_type=file.content_type,
             kind="files",
         )
-
-        if persistent_path:
-            file_path = persistent_path
-        else:
-            upload_directory = os.path.join(
-                "private_uploads",
-                "marketplace",
-            )
-            os.makedirs(upload_directory, exist_ok=True)
-            extension = os.path.splitext(file.filename)[1].lower()
-            stored_name = f"{uuid.uuid4().hex}{extension}"
-            file_path = os.path.join(upload_directory, stored_name)
-            async with aiofiles.open(file_path, "wb") as output_file:
-                await output_file.write(contents)
 
         result = add_product_attachment(
             product_id=product_id,
@@ -535,29 +521,12 @@ async def upload_marketplace_preview(
                 "Preview image cannot exceed 5 MB."
             )
 
-        persistent_path = upload_marketplace_storage(
+        file_path = upload_marketplace_storage(
             data=contents,
             filename=file.filename,
             content_type=file.content_type,
             kind="previews",
         )
-
-        if persistent_path:
-            file_path = persistent_path
-        else:
-            upload_directory = os.path.join(
-                "private_uploads",
-                "marketplace",
-                "previews",
-            )
-            os.makedirs(upload_directory, exist_ok=True)
-            extension = os.path.splitext(file.filename)[1].lower()
-            if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
-                extension = ".jpg"
-            stored_name = f"{uuid.uuid4().hex}{extension}"
-            file_path = os.path.join(upload_directory, stored_name)
-            async with aiofiles.open(file_path, "wb") as output_file:
-                await output_file.write(contents)
 
         result = save_product_preview(
             product_id=product_id,

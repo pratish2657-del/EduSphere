@@ -103,7 +103,10 @@ def _ensure_storage_bucket():
 def upload_marketplace_storage(data, filename, content_type, kind):
     """Upload marketplace media to persistent private Supabase Storage."""
     if not _storage_configured():
-        return None
+        raise BadRequestError(
+            "Marketplace persistent storage is not configured. "
+            "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on the backend."
+        )
 
     _ensure_storage_bucket()
     extension = os.path.splitext(filename or "")[1].lower()
