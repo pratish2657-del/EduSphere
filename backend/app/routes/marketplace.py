@@ -41,11 +41,11 @@ from app.services.marketplace_service import (
     delete_product,
     delete_product_attachment,
     get_attachment_for_download,
+    get_marketplace_signed_url,
+    upload_marketplace_storage,
     get_product,
     get_product_attachment,
     get_product_preview,
-    get_marketplace_signed_url,
-    upload_marketplace_storage,
     get_products,
     save_product_preview,
     update_product,
@@ -371,12 +371,10 @@ async def upload_marketplace_attachment(
     """
     POST /marketplace/{product_id}/attachments
 
-    Seller uploads the actual digital product file.
+    Upload the actual digital product file to private Supabase Storage.
     """
 
     user = require_completed_profile(request)
-
-    file_path = None
 
     try:
         if not file.filename:
@@ -403,31 +401,23 @@ async def upload_marketplace_attachment(
                 "File size cannot exceed 10 MB."
             )
 
-        file_path = upload_marketplace_storage(
+        storage_path = upload_marketplace_storage(
             data=contents,
             filename=file.filename,
             content_type=file.content_type,
             kind="files",
         )
 
-        result = add_product_attachment(
+        return add_product_attachment(
             product_id=product_id,
             user_id=user["id"],
             file_name=file.filename,
-            file_path=file_path,
+            file_path=storage_path,
             file_type=file.content_type,
             file_size=len(contents),
         )
 
-        return result
-
     except Exception as error:
-        if file_path and os.path.isfile(file_path):
-            try:
-                os.remove(file_path)
-            except OSError:
-                pass
-
         raise _handle_marketplace_error(error) from error
 
 
@@ -491,12 +481,10 @@ async def upload_marketplace_preview(
     """
     POST /marketplace/{product_id}/preview
 
-    Upload a product preview image.
+    Upload a product preview image to private Supabase Storage.
     """
 
     user = require_completed_profile(request)
-
-    file_path = None
 
     try:
         if not file.filename:
@@ -521,30 +509,22 @@ async def upload_marketplace_preview(
                 "Preview image cannot exceed 5 MB."
             )
 
-        file_path = upload_marketplace_storage(
+        storage_path = upload_marketplace_storage(
             data=contents,
             filename=file.filename,
             content_type=file.content_type,
             kind="previews",
         )
 
-        result = save_product_preview(
+        return save_product_preview(
             product_id=product_id,
             user_id=user["id"],
-            file_path=file_path,
+            file_path=storage_path,
             file_type=file.content_type,
             file_size=len(contents),
         )
 
-        return result
-
     except Exception as error:
-        if file_path and os.path.isfile(file_path):
-            try:
-                os.remove(file_path)
-            except OSError:
-                pass
-
         raise _handle_marketplace_error(error) from error
 
 
@@ -556,7 +536,7 @@ async def get_marketplace_preview(
     """
     GET /marketplace/{product_id}/preview
 
-    Return the product preview image.
+    Returns a short-lived signed URL for a private Supabase object.
     """
 
     require_completed_profile(request)
@@ -571,29 +551,50 @@ async def get_marketplace_preview(
                 "Product preview not found."
             )
 
-        file_path = preview.get("storage_path")
+        storage_path = preview.get("storage_path")
 
-        if file_path and file_path.startswith("supabase://"):
-            signed_url = get_marketplace_signed_url(file_path, expires_in=300)
-            return RedirectResponse(url=signed_url, status_code=307)
+        if not storage_path:
+            raise NotFoundError(
+                "Product preview not found."
+            )
 
-        if not file_path or not os.path.isfile(file_path):
+        if storage_path.startswith("supabase://"):
+            signed_url = get_marketplace_signed_url(
+                storage_path,
+                expires_in=300,
+            )
+
+            if not signed_url:
+                raise NotFoundError(
+                    "Product preview is not available."
+                )
+
+            return RedirectResponse(
+                url=signed_url,
+                status_code=307,
+            )
+
+        # Legacy local-storage fallback.
+        if not os.path.isfile(storage_path):
             raise NotFoundError(
                 "Product preview file not found."
             )
 
         return FileResponse(
-            path=file_path,
+            path=storage_path,
             media_type=preview.get(
                 "file_type",
                 "application/octet-stream",
             ),
-            filename=preview.get("file_name"),
+            filename=preview.get(
+                "file_name",
+            ),
         )
 
     except Exception as error:
         raise _handle_marketplace_error(error) from error
-    
+
+
 @router.get("/attachments/{attachment_id}/download")
 async def download_marketplace_attachment(
     attachment_id: int,
@@ -619,29 +620,45 @@ async def download_marketplace_attachment(
             attachment_id=attachment_id,
         )
 
-        file_path = attachment["storage_path"]
+        storage_path = attachment["storage_path"]
 
-        if file_path and file_path.startswith("supabase://"):
+        if not storage_path:
+            raise NotFoundError(
+                "Digital file is no longer available."
+            )
+
+        if storage_path.startswith("supabase://"):
             signed_url = get_marketplace_signed_url(
-                file_path,
+                storage_path,
                 expires_in=300,
                 download_name=attachment["file_name"],
             )
-            return RedirectResponse(url=signed_url, status_code=307)
 
-        if not file_path or not os.path.isfile(file_path):
+            if not signed_url:
+                raise NotFoundError(
+                    "Digital file is no longer available."
+                )
+
+            return RedirectResponse(
+                url=signed_url,
+                status_code=307,
+            )
+
+        # Legacy local-storage fallback.
+        if not os.path.isfile(storage_path):
             raise NotFoundError(
                 "Digital file is no longer available."
             )
 
         return FileResponse(
-            path=file_path,
+            path=storage_path,
             media_type=attachment["file_type"],
             filename=attachment["file_name"],
         )
 
     except Exception as error:
         raise _handle_marketplace_error(error) from error
+
 
 @router.get("/{product_id}")
 async def get_marketplace_product(

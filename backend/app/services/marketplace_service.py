@@ -1,8 +1,9 @@
 import json
 import os
 import uuid
+import socket
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from urllib.request import Request as URLRequest
 from urllib.request import urlopen
 
@@ -25,7 +26,15 @@ SUPABASE_LIBRARY_BUCKET = os.getenv("SUPABASE_LIBRARY_BUCKET", "library").strip(
 
 
 def _storage_configured():
-    return bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return False
+
+    parsed = urlparse(SUPABASE_URL)
+
+    return (
+        parsed.scheme in {"http", "https"}
+        and bool(parsed.netloc)
+    )
 
 
 def _storage_request(method, path, body=None, content_type=None):
@@ -73,8 +82,17 @@ def _storage_request(method, path, body=None, content_type=None):
             f"Marketplace storage request failed ({error.code}): {detail[:500]}"
         ) from error
     except URLError as error:
+        reason = getattr(error, "reason", error)
+
+        if isinstance(reason, socket.gaierror):
+            raise BadRequestError(
+                "Unable to resolve the Supabase hostname. "
+                "Check that SUPABASE_URL is the exact Supabase project URL "
+                "and that it contains no quotes or spaces."
+            ) from error
+
         raise BadRequestError(
-            f"Unable to reach marketplace storage: {error.reason}"
+            f"Unable to reach marketplace storage: {reason}"
         ) from error
 
 
@@ -725,13 +743,53 @@ def add_product_attachment(
 
 
 def get_product_attachment(
-    attachment_id,
+    attachment_id=None,
     user_id=None,
+    product_id=None,
 ):
     connection = get_connection()
 
     try:
         cursor = connection.cursor()
+
+        if product_id is not None:
+            cursor.execute(
+                """
+                SELECT
+                    ma.id,
+                    ma.product_id,
+                    ma.file_name,
+                    ma.file_type,
+                    ma.file_size,
+                    ma.storage_path,
+                    mp.seller_id
+
+                FROM marketplace_attachments ma
+
+                INNER JOIN marketplace_products mp
+                    ON mp.id = ma.product_id
+
+                WHERE ma.product_id = %s
+                ORDER BY ma.id ASC
+                """,
+                (product_id,),
+            )
+
+            attachments = cursor.fetchall()
+
+            if user_id is not None:
+                for attachment in attachments:
+                    if attachment["seller_id"] != user_id:
+                        raise ForbiddenError(
+                            "You do not have permission to access these attachments"
+                        )
+
+            return attachments
+
+        if attachment_id is None:
+            raise BadRequestError(
+                "Attachment ID or product ID is required"
+            )
 
         cursor.execute(
             """
@@ -783,16 +841,17 @@ def get_product_attachment(
 def delete_product_attachment(
     attachment_id,
     user_id,
+    product_id=None,
 ):
     connection = get_connection()
 
     try:
         cursor = connection.cursor()
 
-        cursor.execute(
-            """
+        query = """
             SELECT
                 ma.id,
+                ma.product_id,
                 ma.storage_path,
                 mp.seller_id
 
@@ -802,11 +861,16 @@ def delete_product_attachment(
                 ON mp.id = ma.product_id
 
             WHERE ma.id = %s
+        """
+        params = [attachment_id]
 
-            FOR UPDATE
-            """,
-            (attachment_id,),
-        )
+        if product_id is not None:
+            query += " AND ma.product_id = %s"
+            params.append(product_id)
+
+        query += " FOR UPDATE"
+
+        cursor.execute(query, tuple(params))
 
         attachment = cursor.fetchone()
 
@@ -982,12 +1046,15 @@ def get_product_preview(product_id):
             )
 
         if path.startswith("supabase://"):
+            # Persistent Supabase object. The route will generate a
+            # short-lived signed URL; do not call os.path.isfile().
             extension = os.path.splitext(path)[1].lower()
-        elif not os.path.isfile(path):
-            raise NotFoundError(
-                "Product preview not found"
-            )
         else:
+            # Legacy local-storage fallback.
+            if not os.path.isfile(path):
+                raise NotFoundError(
+                    "Product preview not found"
+                )
             extension = os.path.splitext(path)[1].lower()
         media_type = {
             ".jpg": "image/jpeg",
