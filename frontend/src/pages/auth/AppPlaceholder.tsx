@@ -2279,20 +2279,61 @@ function MarketplacePreviewImage({
 
   if (failed) {
     return (
-      <div className="marketplace-preview-unavailable">
+      <div
+        style={{
+          width: "100%",
+          height: 180,
+          minHeight: 180,
+          maxHeight: 180,
+          display: "grid",
+          placeItems: "center",
+          overflow: "hidden",
+          boxSizing: "border-box",
+          borderRadius: 12,
+          marginBottom: 10,
+          background: "rgba(15,23,42,0.72)",
+          color: "#64748b",
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: "0.08em",
+        }}
+      >
         PREVIEW UNAVAILABLE
       </div>
     );
   }
 
   return (
-    <img
-      src={previewUrl}
-      alt={`${productName} preview`}
-      loading="lazy"
-      className="marketplace-product-preview"
-      onError={() => setFailed(true)}
-    />
+    <div
+      style={{
+        width: "100%",
+        height: 180,
+        minHeight: 180,
+        maxHeight: 180,
+        overflow: "hidden",
+        borderRadius: 12,
+        marginBottom: 10,
+        background: "rgba(15,23,42,0.72)",
+        boxSizing: "border-box",
+      }}
+    >
+      <img
+        src={previewUrl}
+        alt={`${productName} preview`}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        style={{
+          width: "100%",
+          height: "180px",
+          minHeight: "180px",
+          maxHeight: "180px",
+          display: "block",
+          objectFit: "cover",
+          objectPosition: "center",
+          borderRadius: 12,
+        }}
+      />
+    </div>
   );
 }
 
