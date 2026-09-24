@@ -930,7 +930,8 @@ def get_user_orders(
     user_id: int,
 ):
     """
-    Return all marketplace orders belonging to a buyer.
+    Return buyer orders with manual UPI payment state and
+    downloadable digital attachments for confirmed/paid orders.
     """
     connection = get_connection()
 
@@ -940,26 +941,84 @@ def get_user_orders(
         cursor.execute(
             """
             SELECT
-                o.id,
+                o.id AS order_id,
                 o.institution_id,
-                o.subtotal_amount,
-                o.tax_percent,
-                o.tax_amount,
                 o.total_amount,
                 o.status,
-                o.expires_at,
+                o.shipping_address,
                 o.created_at,
-                i.name AS institution_name
+                o.updated_at,
+                mpay.payment_method,
+                mpay.status AS payment_status,
+                oi.product_id,
+                oi.product_name,
+                mp.product_type,
+                ma.id AS attachment_id,
+                ma.file_name,
+                ma.file_type,
+                ma.file_size
             FROM marketplace_orders o
-            LEFT JOIN institutions i
-                ON i.id = o.institution_id
+            LEFT JOIN marketplace_payments mpay
+                ON mpay.order_id = o.id
+            LEFT JOIN marketplace_order_items oi
+                ON oi.order_id = o.id
+            LEFT JOIN marketplace_products mp
+                ON mp.id = oi.product_id
+            LEFT JOIN marketplace_attachments ma
+                ON ma.product_id = oi.product_id
+               AND mp.product_type = 'DIGITAL'
+               AND o.status IN ('CONFIRMED', 'PROCESSING', 'COMPLETED')
+               AND mpay.status = 'PAID'
             WHERE o.buyer_id = %s
-            ORDER BY o.created_at DESC
+            ORDER BY o.created_at DESC, oi.id ASC, ma.id ASC
             """,
             (user_id,),
         )
 
-        return cursor.fetchall()
+        rows = cursor.fetchall()
+        orders_by_id = {}
+
+        for row in rows:
+            order_id = row["order_id"]
+            order = orders_by_id.get(order_id)
+
+            if order is None:
+                order = {
+                    "order_id": order_id,
+                    "institution_id": row["institution_id"],
+                    "total_amount": row["total_amount"],
+                    "status": row["status"],
+                    "payment_method": row.get("payment_method"),
+                    "payment_status": row.get("payment_status"),
+                    "shipping_address": row.get("shipping_address"),
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                    "digital_files": [],
+                    "has_digital_product": False,
+                    "_digital_file_ids": set(),
+                }
+                orders_by_id[order_id] = order
+
+            if row.get("product_type") == "DIGITAL":
+                order["has_digital_product"] = True
+
+            attachment_id = row.get("attachment_id")
+            if attachment_id is not None and attachment_id not in order["_digital_file_ids"]:
+                order["digital_files"].append({
+                    "attachment_id": attachment_id,
+                    "product_id": row["product_id"],
+                    "product_name": row["product_name"],
+                    "file_name": row["file_name"],
+                    "file_type": row["file_type"],
+                    "file_size": row["file_size"],
+                })
+                order["_digital_file_ids"].add(attachment_id)
+
+        orders = list(orders_by_id.values())
+        for order in orders:
+            order.pop("_digital_file_ids", None)
+
+        return {"count": len(orders), "orders": orders}
 
     finally:
         connection.close()

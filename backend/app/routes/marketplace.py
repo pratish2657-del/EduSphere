@@ -5,7 +5,7 @@ import uuid
 
 import aiofiles
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from app.core.exceptions import (
     BadRequestError,
@@ -44,6 +44,8 @@ from app.services.marketplace_service import (
     get_product,
     get_product_attachment,
     get_product_preview,
+    get_marketplace_signed_url,
+    upload_marketplace_storage,
     get_products,
     save_product_preview,
     update_product,
@@ -401,37 +403,26 @@ async def upload_marketplace_attachment(
                 "File size cannot exceed 10 MB."
             )
 
-        upload_directory = os.path.join(
-            "private_uploads",
-            "marketplace",
+        persistent_path = upload_marketplace_storage(
+            data=contents,
+            filename=file.filename,
+            content_type=file.content_type,
+            kind="files",
         )
 
-        os.makedirs(
-            upload_directory,
-            exist_ok=True,
-        )
-
-        extension = ""
-
-        if "." in file.filename:
-            extension = os.path.splitext(
-                file.filename
-            )[1].lower()
-
-        stored_name = (
-            f"{uuid.uuid4().hex}{extension}"
-        )
-
-        file_path = os.path.join(
-            upload_directory,
-            stored_name,
-        )
-
-        async with aiofiles.open(
-            file_path,
-            "wb",
-        ) as output_file:
-            await output_file.write(contents)
+        if persistent_path:
+            file_path = persistent_path
+        else:
+            upload_directory = os.path.join(
+                "private_uploads",
+                "marketplace",
+            )
+            os.makedirs(upload_directory, exist_ok=True)
+            extension = os.path.splitext(file.filename)[1].lower()
+            stored_name = f"{uuid.uuid4().hex}{extension}"
+            file_path = os.path.join(upload_directory, stored_name)
+            async with aiofiles.open(file_path, "wb") as output_file:
+                await output_file.write(contents)
 
         result = add_product_attachment(
             product_id=product_id,
@@ -544,46 +535,29 @@ async def upload_marketplace_preview(
                 "Preview image cannot exceed 5 MB."
             )
 
-        upload_directory = os.path.join(
-            "private_uploads",
-            "marketplace",
-            "previews",
+        persistent_path = upload_marketplace_storage(
+            data=contents,
+            filename=file.filename,
+            content_type=file.content_type,
+            kind="previews",
         )
 
-        os.makedirs(
-            upload_directory,
-            exist_ok=True,
-        )
-
-        extension = ""
-
-        if "." in file.filename:
-            extension = os.path.splitext(
-                file.filename
-            )[1].lower()
-
-        if extension not in {
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".webp",
-        }:
-            extension = ".jpg"
-
-        stored_name = (
-            f"{uuid.uuid4().hex}{extension}"
-        )
-
-        file_path = os.path.join(
-            upload_directory,
-            stored_name,
-        )
-
-        async with aiofiles.open(
-            file_path,
-            "wb",
-        ) as output_file:
-            await output_file.write(contents)
+        if persistent_path:
+            file_path = persistent_path
+        else:
+            upload_directory = os.path.join(
+                "private_uploads",
+                "marketplace",
+                "previews",
+            )
+            os.makedirs(upload_directory, exist_ok=True)
+            extension = os.path.splitext(file.filename)[1].lower()
+            if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
+                extension = ".jpg"
+            stored_name = f"{uuid.uuid4().hex}{extension}"
+            file_path = os.path.join(upload_directory, stored_name)
+            async with aiofiles.open(file_path, "wb") as output_file:
+                await output_file.write(contents)
 
         result = save_product_preview(
             product_id=product_id,
@@ -630,6 +604,10 @@ async def get_marketplace_preview(
 
         file_path = preview.get("storage_path")
 
+        if file_path and file_path.startswith("supabase://"):
+            signed_url = get_marketplace_signed_url(file_path, expires_in=300)
+            return RedirectResponse(url=signed_url, status_code=307)
+
         if not file_path or not os.path.isfile(file_path):
             raise NotFoundError(
                 "Product preview file not found."
@@ -641,9 +619,7 @@ async def get_marketplace_preview(
                 "file_type",
                 "application/octet-stream",
             ),
-            filename=preview.get(
-                "file_name",
-            ),
+            filename=preview.get("file_name"),
         )
 
     except Exception as error:
@@ -675,6 +651,14 @@ async def download_marketplace_attachment(
         )
 
         file_path = attachment["storage_path"]
+
+        if file_path and file_path.startswith("supabase://"):
+            signed_url = get_marketplace_signed_url(
+                file_path,
+                expires_in=300,
+                download_name=attachment["file_name"],
+            )
+            return RedirectResponse(url=signed_url, status_code=307)
 
         if not file_path or not os.path.isfile(file_path):
             raise NotFoundError(

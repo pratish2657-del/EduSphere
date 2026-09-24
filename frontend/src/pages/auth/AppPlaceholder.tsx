@@ -329,6 +329,7 @@ type MarketplaceOrder = {
   payment_status?: string | null;
   shipping_address?: string | null;
   digital_files?: MarketplaceDigitalFile[];
+  has_digital_product?: boolean;
 };
 
 type MarketplaceOrdersResponse = {
@@ -3057,7 +3058,7 @@ function MarketplaceOrders({
                 {formatMarketplaceDate(order.created_at)}
               </span>
               <span style={{ display: "block", marginTop: 5, color: "#94a3b8", fontSize: 11 }}>
-                Payment: {order.payment_method || "ONLINE"} · {order.payment_status || (order.status === "CONFIRMED" ? "PAID" : "PENDING")}
+                Payment: {order.payment_method || "UPI"} · {order.payment_status || (order.status === "CONFIRMED" ? "PAID" : "PENDING")}
               </span>
 
               {canDownload && digitalFiles.length > 0 && (
@@ -3110,18 +3111,20 @@ function MarketplaceOrders({
                 </div>
               )}
 
-              {canDownload && digitalFiles.length === 0 && (
-                <span
-                  style={{
-                    display: "block",
-                    marginTop: 10,
-                    color: "#94a3b8",
-                    fontSize: 11,
-                  }}
-                >
-                  Digital file is not available yet.
-                </span>
-              )}
+              {canDownload &&
+                order.has_digital_product &&
+                digitalFiles.length === 0 && (
+                  <span
+                    style={{
+                      display: "block",
+                      marginTop: 10,
+                      color: "#f59e0b",
+                      fontSize: 11,
+                    }}
+                  >
+                    Digital file is not available yet.
+                  </span>
+                )}
             </div>
 
             <span style={getMarketplaceStatusStyle(order.status)}>

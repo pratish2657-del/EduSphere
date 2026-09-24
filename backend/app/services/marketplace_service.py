@@ -1,4 +1,10 @@
+import json
 import os
+import uuid
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import Request as URLRequest
+from urllib.request import urlopen
 
 from app.core.exceptions import (
     BadRequestError,
@@ -6,6 +12,143 @@ from app.core.exceptions import (
     NotFoundError,
 )
 from app.database import get_connection
+
+
+
+# ============================================================
+# PERSISTENT MARKETPLACE STORAGE
+# ============================================================
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+SUPABASE_LIBRARY_BUCKET = os.getenv("SUPABASE_LIBRARY_BUCKET", "library").strip() or "library"
+
+
+def _storage_configured():
+    return bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)
+
+
+def _storage_request(method, path, body=None, content_type=None):
+    if not _storage_configured():
+        raise BadRequestError(
+            "Persistent marketplace storage is not configured. "
+            "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on the backend."
+        )
+
+    data = None
+    headers = {
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+    }
+
+    if body is not None:
+        if isinstance(body, (bytes, bytearray)):
+            data = bytes(body)
+        else:
+            data = json.dumps(body).encode("utf-8")
+            content_type = content_type or "application/json"
+
+    if content_type:
+        headers["Content-Type"] = content_type
+
+    request = URLRequest(
+        f"{SUPABASE_URL}/storage/v1{path}",
+        data=data,
+        headers=headers,
+        method=method,
+    )
+
+    try:
+        with urlopen(request, timeout=60) as response:
+            raw = response.read()
+            if not raw:
+                return None
+            try:
+                return json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                return raw
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise BadRequestError(
+            f"Marketplace storage request failed ({error.code}): {detail[:500]}"
+        ) from error
+    except URLError as error:
+        raise BadRequestError(
+            f"Unable to reach marketplace storage: {error.reason}"
+        ) from error
+
+
+def _ensure_storage_bucket():
+    try:
+        _storage_request(
+            "GET",
+            f"/bucket/{quote(SUPABASE_LIBRARY_BUCKET, safe='')}",
+        )
+        return
+    except BadRequestError:
+        pass
+
+    _storage_request(
+        "POST",
+        "/bucket",
+        {
+            "id": SUPABASE_LIBRARY_BUCKET,
+            "name": SUPABASE_LIBRARY_BUCKET,
+            "public": False,
+            "file_size_limit": 50 * 1024 * 1024,
+        },
+    )
+
+
+def upload_marketplace_storage(data, filename, content_type, kind):
+    """Upload marketplace media to persistent private Supabase Storage."""
+    if not _storage_configured():
+        return None
+
+    _ensure_storage_bucket()
+    extension = os.path.splitext(filename or "")[1].lower()
+    object_path = f"marketplace/{kind}/{uuid.uuid4().hex}{extension}"
+
+    _storage_request(
+        "POST",
+        f"/object/{quote(SUPABASE_LIBRARY_BUCKET, safe='')}/{quote(object_path, safe='/')}",
+        data,
+        content_type or "application/octet-stream",
+    )
+
+    return f"supabase://{object_path}"
+
+
+def get_marketplace_signed_url(storage_path, expires_in=300, download_name=None):
+    if not storage_path or not storage_path.startswith("supabase://"):
+        return None
+
+    object_path = storage_path[len("supabase://"):].lstrip("/")
+    result = _storage_request(
+        "POST",
+        f"/object/sign/{quote(SUPABASE_LIBRARY_BUCKET, safe='')}/{quote(object_path, safe='/')}",
+        {"expiresIn": expires_in},
+    )
+
+    signed_path = result.get("signedURL") if isinstance(result, dict) else None
+    if not signed_path:
+        raise NotFoundError("Marketplace file is not available in persistent storage")
+
+    if signed_path.startswith("http://") or signed_path.startswith("https://"):
+        url = signed_path
+    elif signed_path.startswith("/storage/v1/"):
+        url = f"{SUPABASE_URL}{signed_path}"
+    elif signed_path.startswith("/object/"):
+        url = f"{SUPABASE_URL}/storage/v1{signed_path}"
+    else:
+        url = f"{SUPABASE_URL}/storage/v1/{signed_path.lstrip('/')}"
+
+    if download_name:
+        separator = "&" if "?" in url else "?"
+        url = f"{url}{separator}download={quote(download_name)}"
+
+    return url
+
 
 # ============================================================
 # FILE RULES
@@ -830,12 +973,19 @@ def get_product_preview(product_id):
 
         path = product["preview_image_path"]
 
-        if not path or not os.path.isfile(path):
+        if not path:
             raise NotFoundError(
                 "Product preview not found"
             )
 
-        extension = os.path.splitext(path)[1].lower()
+        if path.startswith("supabase://"):
+            extension = os.path.splitext(path)[1].lower()
+        elif not os.path.isfile(path):
+            raise NotFoundError(
+                "Product preview not found"
+            )
+        else:
+            extension = os.path.splitext(path)[1].lower()
         media_type = {
             ".jpg": "image/jpeg",
             ".jpeg": "image/jpeg",
