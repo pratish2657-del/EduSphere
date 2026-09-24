@@ -311,13 +311,6 @@ export default function AdminDashboard() {
         path: "/app/admin/marketplace",
       },
       {
-        label: "Marketplace Management",
-        icon: BookOpen,
-        path: "/app/admin/marketplace-management",
-      },
-      { label: "Marketplace Payouts", icon: BookOpen, path: "/app/admin/marketplace-payouts" },
-      { label: "Marketplace Refund", icon: BookOpen, path: "/app/admin/marketplace-refunds"},
-      {
         label: "EduSphere AI",
         icon: Sparkles,
         path: "/app/admin/edusphere-ai",
@@ -375,8 +368,6 @@ export default function AdminDashboard() {
     ["Results", FileCheck2, "/app/admin/results"],
     ["Events", CalendarDays, "/app/admin/events"],
     ["Marketplace", BookOpen, "/app/admin/marketplace"],
-    ["Marketplace Management", BookOpen, "/app/admin/marketplace-management"],
-    ["Marketplace Payouts", BookOpen, "/app/admin/marketplace-payouts"],
     ["EduSphere AI", Sparkles, "/app/admin/edusphere-ai"],
   ];
 
