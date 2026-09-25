@@ -1225,9 +1225,45 @@ export default function AppPlaceholder() {
     };
   }, []);
 
-  const handleLogout = async () => {
-    await logout();
+const handleStudentTabChange = useCallback(
+  (
+    nextTab:
+      | "dashboard"
+      | "timetable"
+      | "courses"
+      | "events"
+      | "marketplace"
+      | "results"
+      | "attendance"
+  ) => {
+    if (nextTab === activeTab) return;
+
+    window.history.pushState(
+      { ...window.history.state, edusphereStudentTab: nextTab },
+      "",
+      window.location.href
+    );
+
+    setActiveTab(nextTab);
+  },
+  [activeTab]
+);
+
+useEffect(() => {
+  const handlePopState = () => {
+    setActiveTab("dashboard");
   };
+
+  window.addEventListener("popstate", handlePopState);
+
+  return () => {
+    window.removeEventListener("popstate", handlePopState);
+  };
+}, []);
+
+const handleLogout = async () => {
+  await logout();
+};
 
   if (loading) {
     return (
@@ -1353,7 +1389,7 @@ export default function AppPlaceholder() {
                   : {}),
               }}
               onClick={() => {
-                setActiveTab("dashboard");
+                handleStudentTabChange("dashboard");
               }}
             >
               <LayoutDashboard size={18} />
@@ -1369,7 +1405,7 @@ export default function AppPlaceholder() {
                   : {}),
               }}
               onClick={() => {
-                setActiveTab("timetable");
+                handleStudentTabChange("timetable");
                 if (!timetable) {
                   loadTimetable();
                 }
@@ -1388,7 +1424,7 @@ export default function AppPlaceholder() {
                   : {}),
               }}
               onClick={() => {
-                setActiveTab("courses");
+                handleStudentTabChange("courses");
                 if (!timetable) {
                   loadTimetable();
                 }
@@ -1417,7 +1453,7 @@ export default function AppPlaceholder() {
                   : {}),
               }}
               onClick={() => {
-                setActiveTab("events");
+                handleStudentTabChange("events");
                 if (!events) {
                   loadEvents();
                 }
@@ -1436,7 +1472,7 @@ export default function AppPlaceholder() {
                   : {}),
               }}
               onClick={() => {
-                setActiveTab("marketplace");
+                handleStudentTabChange("marketplace");
                 if (!marketplace) {
                   loadMarketplace();
                 }
@@ -1458,7 +1494,7 @@ export default function AppPlaceholder() {
                   : {}),
               }}
               onClick={() => {
-                setActiveTab("results");
+                handleStudentTabChange("results");
                 if (!results) {
                   loadResults();
                 }
@@ -1476,7 +1512,7 @@ export default function AppPlaceholder() {
                   ? styles.navItemActive
                   : {}),
               }}
-              onClick={() => setActiveTab("attendance")}
+              onClick={() => handleStudentTabChange("attendance")}
             >
               <UserRound size={18} />
               Attendance
