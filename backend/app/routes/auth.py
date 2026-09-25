@@ -23,7 +23,6 @@ FRONTEND_URL = os.getenv(
 # GOOGLE LOGIN
 # ============================================================
 
-
 @router.get("/google")
 async def google_login(request: Request):
     redirect_uri = os.getenv(
@@ -41,7 +40,6 @@ async def google_login(request: Request):
 # GOOGLE CALLBACK
 # ============================================================
 
-
 @router.get("/google/callback")
 async def google_callback(request: Request):
 
@@ -55,10 +53,13 @@ async def google_callback(request: Request):
     except Exception as error:
         print("GOOGLE OAUTH ERROR:", repr(error))
 
-        raise HTTPException(
-            status_code=401,
-            detail="Unable to authenticate with Google",
-        ) from error
+        # Remove stale OAuth state after a failed attempt.
+        request.session.pop("_state_google", None)
+
+        return RedirectResponse(
+            url=f"{FRONTEND_URL}/login?oauth_error=retry",
+            status_code=302,
+        )
 
     # ========================================================
     # GET GOOGLE USER INFORMATION
@@ -236,7 +237,7 @@ async def google_callback(request: Request):
                     full_name,
                     role_id,
                     is_super_admin_account,
-                    is_super_admin_account
+                    is_super_admin_account,
                 ),
             )
 
@@ -286,11 +287,6 @@ async def google_callback(request: Request):
 
                 # --------------------------------------------
                 # Enforce Super Admin privileges
-                #
-                # Do NOT check cursor.rowcount here.
-                #
-                # MySQL may return rowcount = 0 when the
-                # account already contains these values.
                 # --------------------------------------------
 
                 cursor.execute(
@@ -318,8 +314,8 @@ async def google_callback(request: Request):
 
             else:
 
-                # Ordinary accounts must never remain marked
-                # as Super Admin.
+                # Ordinary accounts must never remain
+                # marked as Super Admin.
 
                 cursor.execute(
                     """
@@ -383,7 +379,6 @@ async def google_callback(request: Request):
         # ====================================================
 
         if not user["is_active"]:
-
             raise HTTPException(
                 status_code=403,
                 detail="Your EduSphere account is inactive",
@@ -420,26 +415,26 @@ async def google_callback(request: Request):
         )
 
         # ====================================================
-        # MANDATORY PROFILE
+        # DETERMINE NEXT STEP
         # ====================================================
 
-        # ========================================================
-        # REDIRECT BACK TO REACT APPLICATION
-        # ========================================================
-
         next_step = (
-              "DASHBOARD"
-               if bool(user["profile_completed"])
-               else "MANDATORY_PROFILE"
-       )
+            "DASHBOARD"
+            if bool(user["profile_completed"])
+            else "MANDATORY_PROFILE"
+        )
+
+        # ====================================================
+        # REDIRECT BACK TO REACT APPLICATION
+        # ====================================================
 
         return RedirectResponse(
-                 url=(
-                 f"{FRONTEND_URL}/auth/callback"
-                 f"?next={next_step}"
+            url=(
+                f"{FRONTEND_URL}/auth/callback"
+                f"?next={next_step}"
             ),
             status_code=302,
-     )
+        )
 
     # ========================================================
     # EXPECTED HTTP ERRORS
@@ -476,16 +471,17 @@ async def google_callback(request: Request):
     finally:
 
         connection.close()
-        
+
+
 # ============================================================
 # CURRENT AUTHENTICATED USER
 # ============================================================
-
 
 @router.get("/me")
 async def current_user(request: Request):
 
     user = get_current_user(request)
+
     next_step = (
         "DASHBOARD"
         if bool(user["profile_completed"])
@@ -511,11 +507,11 @@ async def current_user(request: Request):
         ),
         "next_step": next_step,
     }
-    
+
+
 # ============================================================
 # LOGOUT
 # ============================================================
-
 
 @router.post("/logout")
 async def logout(request: Request):
@@ -525,4 +521,3 @@ async def logout(request: Request):
     return {
         "message": "Logged out successfully"
     }
-    
