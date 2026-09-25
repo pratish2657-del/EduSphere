@@ -160,12 +160,6 @@ type MarketplacePaymentResponse = {
   verified_at?: string | null;
 };
 
-type UPIFormState = {
-  utr_number: string;
-  payer_upi_id: string;
-  payer_phone: string;
-};
-
 type ProfessorDashboardResponse = {
   professor?: {
     professor_id?: number;
@@ -192,13 +186,6 @@ export default function ProfessorMarketplace() {
   const [marketplaceType, setMarketplaceType] = useState("");
   const [marketplaceCart, setMarketplaceCart] = useState<MarketplaceCartResponse | null>(null);
   const [marketplaceCartOpen, setMarketplaceCartOpen] = useState(false);
-  const [payment] = useState<MarketplacePaymentResponse | null>(null);
-  const [paymentOpen, setPaymentOpen] = useState(false);
-  const [paymentForm, setPaymentForm] = useState<UPIFormState>({
-    utr_number: "",
-    payer_upi_id: "",
-    payer_phone: "",
-  });
 
   const [marketplaceOrders, setMarketplaceOrders] = useState<MarketplaceOrdersResponse | null>(null);
   const [sellerOrders, setSellerOrders] = useState<SellerOrdersResponse | null>(null);
@@ -210,6 +197,7 @@ export default function ProfessorMarketplace() {
   const [pendingMarketplacePayment, setPendingMarketplacePayment] =
     useState<MarketplacePaymentResponse | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<MarketplaceProduct | null>(null);
+  const [shippingAddress, setShippingAddress] = useState("");
 
   const apiGet = useCallback(
     async <T,>(
@@ -370,7 +358,7 @@ export default function ProfessorMarketplace() {
     }
   }, [loadMarketplaceCart]);
 
-  const checkoutMarketplace = useCallback(async () => {
+  const checkoutMarketplace = useCallback(async (shippingAddress = "") => {
     const institutionId = dashboard?.professor?.institution_id;
 
     if (!institutionId) {
@@ -385,6 +373,18 @@ export default function ProfessorMarketplace() {
       return;
     }
 
+    const hasPhysicalProduct = marketplaceCart.items.some(
+      (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
+    );
+    const trimmedShippingAddress = shippingAddress.trim();
+
+    if (hasPhysicalProduct && trimmedShippingAddress.length < 10) {
+      setMarketplaceNotice(
+        "Enter a complete delivery address for physical products."
+      );
+      return;
+    }
+
     setMarketplaceBusy(true);
     setMarketplaceNotice("");
 
@@ -392,7 +392,11 @@ export default function ProfessorMarketplace() {
       const checkoutResponse = await fetch(
         `${API_BASE_URL}/marketplace/checkout?institution_id=${encodeURIComponent(
           institutionId
-        )}`,
+        )}&payment_method=ONLINE${
+          hasPhysicalProduct
+            ? `&shipping_address=${encodeURIComponent(trimmedShippingAddress)}`
+            : ""
+        }`,
         {
           method: "POST",
           credentials: "include",
@@ -452,9 +456,9 @@ export default function ProfessorMarketplace() {
         `Order #${orderId} created. Complete the UPI payment and submit your UTR for verification.`
       );
 
-      // The payment response is stored so the cart/modal can be opened
-      // by the manual-UPI payment UI in the marketplace component.
+      // Open the actual manual-UPI modal immediately after payment creation.
       setPendingMarketplacePayment(payment);
+      setShippingAddress("");
 
       await loadMarketplaceCart();
       await loadMarketplaceOrders();
@@ -486,38 +490,6 @@ export default function ProfessorMarketplace() {
     loadMarketplaceCart();
   }, [loadMarketplaceCart]);
 
-  const submitUPIDetails = useCallback(async () => {
-    if (!payment) return;
-
-    const utr = paymentForm.utr_number.trim();
-    const payerUpi = paymentForm.payer_upi_id.trim();
-    const payerPhone = paymentForm.payer_phone.trim();
-
-    if (!utr || !payerUpi || !payerPhone) {
-      setMarketplaceNotice("Enter the UTR, payer UPI ID, and payer phone number.");
-      return;
-    }
-
-    setMarketplaceBusy(true);
-    try {
-      await apiGet(`/marketplace/payments/${payment.payment_id}/submit-utr`, {
-        method: "POST",
-        body: JSON.stringify({
-          utr_number: utr,
-          payer_upi_id: payerUpi,
-          payer_phone: payerPhone,
-        }),
-      });
-      setPaymentOpen(false);
-      setPaymentForm({ utr_number: "", payer_upi_id: "", payer_phone: "" });
-      setMarketplaceNotice("Payment details submitted for verification.");
-      await loadMarketplaceOrders();
-    } catch (err) {
-      setMarketplaceNotice(err instanceof Error ? err.message : "Unable to submit payment details.");
-    } finally {
-      setMarketplaceBusy(false);
-    }
-  }, [apiGet, loadMarketplaceOrders, payment, paymentForm]);
 
   const professor = dashboard?.professor;
   const professorName = professor?.full_name || "Professor";
@@ -594,6 +566,8 @@ export default function ProfessorMarketplace() {
             onUpdateCart={updateMarketplaceCartItem}
             onRemoveCart={removeMarketplaceCartItem}
             onCheckout={checkoutMarketplace}
+            shippingAddress={shippingAddress}
+            onShippingAddressChange={setShippingAddress}
             orders={marketplaceOrders}
             sellerOrders={sellerOrders}
             panel={marketplacePanel}
@@ -618,70 +592,6 @@ export default function ProfessorMarketplace() {
         )}
       </main>
 
-      {paymentOpen && payment && (
-        <div
-          style={styles.modalBackdrop}
-          onClick={() => {
-            if (!marketplaceBusy) setPaymentOpen(false);
-          }}
-        >
-          <div style={styles.cartModal} onClick={(event) => event.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <div>
-                <span style={styles.cardEyebrow}>MANUAL UPI PAYMENT</span>
-                <h2 style={styles.modalTitle}>Order #{payment.order_id}</h2>
-              </div>
-              <button type="button" onClick={() => setPaymentOpen(false)} disabled={marketplaceBusy} style={styles.modalCloseButton}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div style={styles.modalBody}>
-              <div style={styles.modalInfoGrid}>
-                <div style={styles.modalInfoCard}>
-                  <WalletCards size={17} />
-                  <div><span style={styles.modalInfoLabel}>TOTAL TO PAY</span><strong style={styles.modalInfoValue}>{money(payment.amount)}</strong></div>
-                </div>
-                <div style={styles.modalInfoCard}>
-                  <WalletCards size={17} />
-                  <div><span style={styles.modalInfoLabel}>STATUS</span><strong style={styles.modalInfoValue}>{payment.status}</strong></div>
-                </div>
-                <div style={styles.modalInfoCard}>
-                  <Store size={17} />
-                  <div><span style={styles.modalInfoLabel}>UPI ID</span><strong style={styles.modalInfoValue}>{payment.upi_id}</strong></div>
-                </div>
-                <div style={styles.modalInfoCard}>
-                  <UserRound size={17} />
-                  <div><span style={styles.modalInfoLabel}>PAYEE</span><strong style={styles.modalInfoValue}>{payment.payment_name}</strong></div>
-                </div>
-              </div>
-
-              <div style={{ marginTop: 18, padding: 15, borderRadius: 13, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.12)" }}>
-                <strong style={{ color: "#e2e8f0", fontSize: 12 }}>Pay directly using UPI</strong>
-                <p style={{ margin: "8px 0 12px", color: "#94a3b8", fontSize: 11, lineHeight: 1.6 }}>
-                  Pay exactly {money(payment.amount)} to the UPI ID shown above using Google Pay or another UPI app. After payment, enter the transaction details below.
-                </p>
-                <button type="button" style={styles.primaryButton} onClick={() => { if (navigator.clipboard) void navigator.clipboard.writeText(payment.upi_id); setMarketplaceNotice("UPI ID copied."); }}>
-                  Copy UPI ID
-                </button>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 13, marginTop: 18 }}>
-                <label style={styles.formLabel}>UTR / Transaction Reference<input value={paymentForm.utr_number} onChange={(event) => setPaymentForm((current) => ({ ...current, utr_number: event.target.value }))} placeholder="Enter UTR / transaction reference" disabled={marketplaceBusy} style={styles.formInput} /></label>
-                <label style={styles.formLabel}>Payer UPI ID<input value={paymentForm.payer_upi_id} onChange={(event) => setPaymentForm((current) => ({ ...current, payer_upi_id: event.target.value }))} placeholder="example@upi" disabled={marketplaceBusy} style={styles.formInput} /></label>
-                <label style={styles.formLabel}>Payer Phone Number<input value={paymentForm.payer_phone} onChange={(event) => setPaymentForm((current) => ({ ...current, payer_phone: event.target.value }))} placeholder="10-digit mobile number" inputMode="numeric" disabled={marketplaceBusy} style={styles.formInput} /></label>
-              </div>
-            </div>
-
-            <div style={styles.modalFooter}>
-              <button type="button" style={styles.secondaryButton} onClick={() => setPaymentOpen(false)} disabled={marketplaceBusy}>Pay Later</button>
-              <button type="button" style={styles.primaryButton} onClick={submitUPIDetails} disabled={marketplaceBusy || payment.status !== "PENDING"}>
-                {marketplaceBusy ? "Submitting..." : "Submit UTR"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {pendingMarketplacePayment && (
         <MarketplaceUPIPaymentModal
@@ -965,6 +875,97 @@ function MarketplaceUPIPaymentModal({
   );
 }
 
+function MarketplacePreviewImage({
+  productId,
+  productName,
+}: {
+  productId: number;
+  productName: string;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+
+    const loadPreview = async () => {
+      try {
+        setFailed(false);
+        const response = await fetch(
+          `${API_BASE_URL}/marketplace/${productId}/preview`,
+          {
+            credentials: "include",
+            headers: { Accept: "image/*,*/*;q=0.8" },
+          }
+        );
+
+        if (!response.ok) throw new Error("Preview unavailable");
+
+        const blob = await response.blob();
+        if (!blob.type.startsWith("image/")) {
+          throw new Error("Preview response is not an image.");
+        }
+
+        objectUrl = URL.createObjectURL(blob);
+        if (active) setSrc(objectUrl);
+      } catch {
+        if (active) {
+          setSrc(null);
+          setFailed(true);
+        }
+      }
+    };
+
+    void loadPreview();
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [productId]);
+
+  if (failed || !src) {
+    return (
+      <div
+        style={{
+          width: "100%",
+          height: 150,
+          borderRadius: 12,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(15,23,42,.72)",
+          border: "1px solid rgba(129,140,248,.14)",
+          color: "#64748b",
+          fontSize: 10,
+          fontWeight: 800,
+          letterSpacing: ".08em",
+        }}
+      >
+        {failed ? "PREVIEW UNAVAILABLE" : "LOADING PREVIEW…"}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={`${productName} preview`}
+      loading="lazy"
+      style={{
+        width: "100%",
+        height: 150,
+        objectFit: "cover",
+        display: "block",
+        borderRadius: 12,
+        marginBottom: 12,
+        background: "#0f172a",
+      }}
+    />
+  );
+}
+
 function MarketplaceView({
   marketplace,
   loading,
@@ -984,6 +985,8 @@ function MarketplaceView({
   onUpdateCart,
   onRemoveCart,
   onCheckout,
+  shippingAddress,
+  onShippingAddressChange,
   orders,
   sellerOrders,
   panel,
@@ -1015,7 +1018,9 @@ function MarketplaceView({
   onAddToCart: (productId: number) => void;
   onUpdateCart: (productId: number, quantity: number) => void;
   onRemoveCart: (productId: number) => void;
-  onCheckout: () => void;
+  onCheckout: (shippingAddress: string) => void;
+  shippingAddress: string;
+  onShippingAddressChange: (value: string) => void;
   orders: MarketplaceOrdersResponse | null;
   sellerOrders: SellerOrdersResponse | null;
   panel: "shop" | "sell" | "orders" | "sales";
@@ -1091,7 +1096,13 @@ function MarketplaceView({
             <ShoppingCart size={16} />
             Cart
             <span style={styles.cartCount}>
-              {cart?.count ?? 0}
+              {Array.isArray(cart?.items)
+                ? cart.items.reduce(
+                    (total, item) =>
+                      total + Math.max(0, Number(item.quantity) || 0),
+                    0
+                  )
+                : 0}
             </span>
           </button>
         </div>
@@ -1271,6 +1282,8 @@ function MarketplaceView({
           onRemove={onRemoveCart}
           onCheckout={onCheckout}
           busy={busy}
+          shippingAddress={shippingAddress}
+          onShippingAddressChange={onShippingAddressChange}
         />
       )}
 
@@ -1305,6 +1318,11 @@ function MarketplaceProductCard({
         style={styles.marketplaceProductMain}
         onClick={onSelect}
       >
+        <MarketplacePreviewImage
+          productId={product.product_id}
+          productName={product.name}
+        />
+
         <div style={styles.marketplaceProductIcon}>
           {product.product_type === "DIGITAL" ? (
             <BookOpen size={22} />
@@ -1472,14 +1490,29 @@ function MarketplaceCartModal({
   onRemove,
   onCheckout,
   busy,
+  shippingAddress,
+  onShippingAddressChange,
 }: {
   cart: MarketplaceCartResponse;
   onClose: () => void;
   onUpdate: (productId: number, quantity: number) => void;
   onRemove: (productId: number) => void;
-  onCheckout: () => void;
+  onCheckout: (shippingAddress: string) => void;
   busy: boolean;
+  shippingAddress: string;
+  onShippingAddressChange: (value: string) => void;
 }) {
+  const hasPhysicalProduct = cart.items.some(
+    (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
+  );
+
+  const handleCheckout = () => {
+    if (hasPhysicalProduct && shippingAddress.trim().length < 10) {
+      return;
+    }
+    onCheckout(shippingAddress);
+  };
+
   return (
     <div style={styles.modalBackdrop} onClick={onClose}>
       <div style={styles.cartModal} onClick={(event) => event.stopPropagation()}>
@@ -1524,6 +1557,22 @@ function MarketplaceCartModal({
           )}
         </div>
 
+        {hasPhysicalProduct && (
+          <div style={{ width: "100%", padding: "0 20px 12px", boxSizing: "border-box" }}>
+            <label style={styles.formLabel}>
+              Delivery Address
+              <textarea
+                value={shippingAddress}
+                onChange={(event) => onShippingAddressChange(event.target.value)}
+                placeholder="House/building, street, area, city, PIN"
+                rows={3}
+                disabled={busy}
+                style={{ ...styles.formTextarea, width: "100%", boxSizing: "border-box" }}
+              />
+            </label>
+          </div>
+        )}
+
         <div style={styles.cartFooter}>
           <div>
             <span style={styles.modalInfoLabel}>BUYER PAYS</span>
@@ -1535,7 +1584,7 @@ function MarketplaceCartModal({
               Payment is made directly by UPI and manually verified by Super Admin.
             </span>
           </div>
-          <button type="button" style={styles.primaryButton} onClick={onCheckout} disabled={busy || cart.items.length === 0}>
+          <button type="button" style={styles.primaryButton} onClick={handleCheckout} disabled={busy || cart.items.length === 0 || (hasPhysicalProduct && shippingAddress.trim().length < 10)}>
             <WalletCards size={16} />
             {busy ? "Preparing..." : "Continue to UPI payment"}
           </button>
@@ -2015,11 +2064,6 @@ function MarketplaceProductForm({
       </div>
     </div>
   );
-}
-
-function money(value: number | string) {
-  const amount = Number(value);
-  return `₹${Number.isFinite(amount) ? amount.toFixed(2) : "0.00"}`;
 }
 
 function formatMarketplaceDate(value: string) {
