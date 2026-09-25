@@ -95,12 +95,10 @@ type MarketplaceCartResponse = {
   cart_id: number;
   count: number;
   items: MarketplaceCartItem[];
-
   subtotal_amount?: number | string;
   tax_percent?: number | string;
   tax_amount?: number | string;
   total_amount?: number | string;
-
   total: number | string;
 };
 
@@ -334,13 +332,27 @@ export default function ProfessorMarketplace() {
   const updateMarketplaceCartItem = useCallback(async (productId: number, quantity: number) => {
     setMarketplaceBusy(true);
     try {
-      await fetch(
-        `${API_BASE_URL}/marketplace/cart/items/${encodeURIComponent(productId)}?quantity=${encodeURIComponent(quantity)}`,
-        { method: "PUT", credentials: "include", headers: { Accept: "application/json" } }
-      ).then(async response => {
-        const data = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(getDisplayMessage(data?.detail ?? data?.message, "Unable to update cart."));
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/marketplace/cart/items/${encodeURIComponent(productId)}`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ quantity }),
+        }
+      );
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          getDisplayMessage(
+            data?.detail ?? data?.message,
+            "Unable to update cart."
+          )
+        );
+      }
       await loadMarketplaceCart();
     } catch (err) {
       setMarketplaceNotice(err instanceof Error ? err.message : "Unable to update cart.");
@@ -398,19 +410,20 @@ export default function ProfessorMarketplace() {
 
     try {
       const checkoutResponse = await fetch(
-        `${API_BASE_URL}/marketplace/checkout?institution_id=${encodeURIComponent(
-          institutionId
-        )}&payment_method=ONLINE${
-          hasPhysicalProduct
-            ? `&shipping_address=${encodeURIComponent(trimmedShippingAddress)}`
-            : ""
-        }`,
+        `${API_BASE_URL}/marketplace/checkout`,
         {
           method: "POST",
           credentials: "include",
           headers: {
             Accept: "application/json",
+            "Content-Type": "application/json",
           },
+          body: JSON.stringify({
+            institution_id: Number(institutionId),
+            shipping_address: hasPhysicalProduct
+              ? trimmedShippingAddress
+              : null,
+          }),
         }
       );
 
