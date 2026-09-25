@@ -35,6 +35,254 @@ const suggestions = [
   "Summarize study material",
 ];
 
+
+const renderInlineMarkdown = (value: string): React.ReactNode[] => {
+  const tokens =
+    /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|~~[^~]+~~|\$[^$\n]+\$)/g;
+
+  return value.split(tokens).map((part, index) => {
+    if (!part) return null;
+
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code key={index} className="edusphere-ai-inline-code" style={markdownStyles.inlineCode}>
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+
+    if (
+      (part.startsWith("**") && part.endsWith("**")) ||
+      (part.startsWith("__") && part.endsWith("__"))
+    ) {
+      return (
+        <strong key={index} style={markdownStyles.strong}>
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+
+    if (
+      (part.startsWith("*") && part.endsWith("*")) ||
+      (part.startsWith("_") && part.endsWith("_"))
+    ) {
+      return (
+        <em key={index} style={markdownStyles.em}>
+          {part.slice(1, -1)}
+        </em>
+      );
+    }
+
+    if (part.startsWith("~~") && part.endsWith("~~")) {
+      return (
+        <del key={index} style={markdownStyles.del}>
+          {part.slice(2, -2)}
+        </del>
+      );
+    }
+
+    if (part.startsWith("$") && part.endsWith("$")) {
+      return (
+        <span key={index} style={markdownStyles.mathInline}>
+          {part.slice(1, -1)}
+        </span>
+      );
+    }
+
+    return <React.Fragment key={index}>{part}</React.Fragment>;
+  });
+};
+
+const MarkdownMessage = ({ content }: { content: string }) => {
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const blocks: React.ReactNode[] = [];
+  let codeLines: string[] | null = null;
+
+  const flushCode = () => {
+    if (codeLines === null) return;
+
+    blocks.push(
+      <pre key={`code-${blocks.length}`} style={markdownStyles.codeBlock}>
+        <code>{codeLines.join("\n")}</code>
+      </pre>
+    );
+
+    codeLines = null;
+  };
+
+  lines.forEach((line, index) => {
+    const fence = line.trim().match(/^```(?:.*)$/);
+
+    if (fence) {
+      if (codeLines === null) {
+        codeLines = [];
+      } else {
+        flushCode();
+      }
+      return;
+    }
+
+    if (codeLines !== null) {
+      codeLines.push(line);
+      return;
+    }
+
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      blocks.push(<div key={`space-${index}`} style={{ height: 7 }} />);
+      return;
+    }
+
+    if (/^(---+|\*\*\*+)$/.test(trimmed)) {
+      blocks.push(<hr key={`hr-${index}`} style={markdownStyles.hr} />);
+      return;
+    }
+
+    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      const level = heading[1].length;
+      blocks.push(
+        <div
+          key={`heading-${index}`}
+          style={{
+            ...markdownStyles.heading,
+            fontSize: level === 1 ? 20 : level === 2 ? 17 : 15,
+          }}
+        >
+          {renderInlineMarkdown(heading[2])}
+        </div>
+      );
+      return;
+    }
+
+    const bullet = trimmed.match(/^[-*+]\s+(.+)$/);
+    if (bullet) {
+      blocks.push(
+        <div key={`bullet-${index}`} style={markdownStyles.listRow}>
+          <span style={markdownStyles.bullet}>•</span>
+          <span>{renderInlineMarkdown(bullet[1])}</span>
+        </div>
+      );
+      return;
+    }
+
+    const numbered = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
+    if (numbered) {
+      blocks.push(
+        <div key={`number-${index}`} style={markdownStyles.listRow}>
+          <span style={markdownStyles.number}>{numbered[1]}.</span>
+          <span>{renderInlineMarkdown(numbered[2])}</span>
+        </div>
+      );
+      return;
+    }
+
+    if (trimmed.startsWith(">")) {
+      blocks.push(
+        <div key={`quote-${index}`} style={markdownStyles.quote}>
+          {renderInlineMarkdown(trimmed.replace(/^>\s?/, ""))}
+        </div>
+      );
+      return;
+    }
+
+    blocks.push(
+      <div key={`paragraph-${index}`} style={markdownStyles.paragraph}>
+        {renderInlineMarkdown(line)}
+      </div>
+    );
+  });
+
+  flushCode();
+
+  return <div className="edusphere-ai-markdown">{blocks}</div>;
+};
+
+const markdownStyles: Record<string, React.CSSProperties> = {
+  paragraph: {
+    margin: 0,
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+  },
+  heading: {
+    margin: "10px 0 5px",
+    fontWeight: 800,
+    lineHeight: 1.25,
+    color: "#f8fafc",
+  },
+  strong: {
+    fontWeight: 800,
+    color: "#ffffff",
+  },
+  em: {
+    fontStyle: "italic",
+  },
+  del: {
+    opacity: 0.75,
+  },
+  inlineCode: {
+    display: "inline",
+    padding: "2px 5px",
+    borderRadius: 5,
+    background: "rgba(15,23,42,.9)",
+    border: "1px solid rgba(148,163,184,.18)",
+    color: "#c4b5fd",
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    fontSize: "0.92em",
+  },
+  codeBlock: {
+    margin: "8px 0",
+    padding: "12px",
+    borderRadius: 10,
+    background: "#080d1c",
+    border: "1px solid rgba(148,163,184,.16)",
+    overflowX: "auto",
+    whiteSpace: "pre",
+    fontSize: 12,
+    lineHeight: 1.55,
+    color: "#dbeafe",
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+  },
+  listRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 7,
+    margin: "3px 0",
+    overflowWrap: "anywhere",
+  },
+  bullet: {
+    flex: "0 0 auto",
+    color: "#a5b4fc",
+    fontWeight: 800,
+  },
+  number: {
+    flex: "0 0 auto",
+    minWidth: 20,
+    color: "#a5b4fc",
+    fontWeight: 700,
+  },
+  quote: {
+    margin: "7px 0",
+    padding: "7px 10px",
+    borderLeft: "3px solid #6366f1",
+    background: "rgba(99,102,241,.08)",
+    color: "#cbd5e1",
+    borderRadius: "0 7px 7px 0",
+  },
+  hr: {
+    border: 0,
+    borderTop: "1px solid rgba(148,163,184,.16)",
+    margin: "10px 0",
+  },
+  mathInline: {
+    padding: "0 2px",
+    fontFamily: "Georgia, 'Times New Roman', serif",
+    fontStyle: "italic",
+    color: "#ddd6fe",
+  },
+};
+
 export default function EduSphereAI() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -372,7 +620,7 @@ export default function EduSphereAI() {
                         <Bot size={13} /> EduSphere AI
                       </div>
                     )}
-                    <div>{message.text}</div>
+                    <MarkdownMessage content={message.text} />
                   </div>
                 </div>
               ))}
@@ -802,6 +1050,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 16,
     fontSize: 13,
     lineHeight: 1.6,
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
   aiBubble: {
     background: "rgba(30,41,59,.72)",
