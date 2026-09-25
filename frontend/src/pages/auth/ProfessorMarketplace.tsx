@@ -882,50 +882,12 @@ function MarketplacePreviewImage({
   productId: number;
   productName: string;
 }) {
-  const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    let objectUrl = "";
+  const previewUrl =
+    `${API_BASE_URL}/marketplace/${productId}/preview`;
 
-    const loadPreview = async () => {
-      try {
-        setFailed(false);
-        const response = await fetch(
-          `${API_BASE_URL}/marketplace/${productId}/preview`,
-          {
-            credentials: "include",
-            headers: { Accept: "image/*,*/*;q=0.8" },
-          }
-        );
-
-        if (!response.ok) throw new Error("Preview unavailable");
-
-        const blob = await response.blob();
-        if (!blob.type.startsWith("image/")) {
-          throw new Error("Preview response is not an image.");
-        }
-
-        objectUrl = URL.createObjectURL(blob);
-        if (active) setSrc(objectUrl);
-      } catch {
-        if (active) {
-          setSrc(null);
-          setFailed(true);
-        }
-      }
-    };
-
-    void loadPreview();
-
-    return () => {
-      active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [productId]);
-
-  if (failed || !src) {
+  if (failed) {
     return (
       <div
         style={{
@@ -943,24 +905,23 @@ function MarketplacePreviewImage({
           letterSpacing: ".08em",
         }}
       >
-        {failed ? "PREVIEW UNAVAILABLE" : "LOADING PREVIEW…"}
+        PREVIEW UNAVAILABLE
       </div>
     );
   }
 
   return (
     <img
-      src={src}
+      src={previewUrl}
       alt={`${productName} preview`}
       loading="lazy"
+      onError={() => setFailed(true)}
       style={{
         width: "100%",
         height: 150,
         objectFit: "cover",
         display: "block",
         borderRadius: 12,
-        marginBottom: 12,
-        background: "#0f172a",
       }}
     />
   );
