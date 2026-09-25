@@ -320,17 +320,24 @@ export default function AdminMarketplace() {
   };
 
   const updateCart = async (productId: number, quantity: number) => {
+    if (quantity < 1) return;
+
     setBusy(true);
     setNotice("");
+
     try {
-      await api(`/marketplace/cart/items/${productId}?quantity=${encodeURIComponent(
-        String(quantity)
-      )}`, {
+      await api(`/marketplace/cart/items/${productId}`, {
         method: "PUT",
+        body: JSON.stringify({
+          quantity: Number(quantity),
+        }),
       });
+
       await loadCart();
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Unable to update cart.");
+      setNotice(
+        err instanceof Error ? err.message : "Unable to update cart."
+      );
     } finally {
       setBusy(false);
     }
