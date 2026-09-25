@@ -187,12 +187,14 @@ export default function MarketplaceUPIPaymentModal({
 
   return (
     <div
+      className="marketplace-upi-overlay-responsive"
       style={styles.overlay}
       onClick={() => {
         if (!busy) onClose();
       }}
     >
       <div
+        className="marketplace-upi-modal-responsive"
         style={styles.modal}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
@@ -219,7 +221,7 @@ export default function MarketplaceUPIPaymentModal({
           </button>
         </div>
 
-        <div style={styles.summary}>
+        <div className="marketplace-upi-summary-responsive" style={styles.summary}>
           <div style={styles.summaryCell}>
             <span style={styles.label}>Amount</span>
             <strong style={styles.value}>{money(payment.amount)}</strong>
@@ -238,8 +240,8 @@ export default function MarketplaceUPIPaymentModal({
           </div>
         </div>
 
-        <div style={styles.paymentArea}>
-          <div style={styles.qrSection}>
+        <div className="marketplace-upi-payment-area-responsive" style={styles.paymentArea}>
+          <div className="marketplace-upi-qr-section-responsive" style={styles.qrSection}>
             <div style={styles.qrTitleRow}>
               <QrCode size={17} />
               <strong>Scan to pay</strong>
@@ -255,23 +257,23 @@ export default function MarketplaceUPIPaymentModal({
                 onError={() => setQrError(true)}
               />
             ) : (
-              <div style={styles.qrFallback}>
+              <div className="marketplace-upi-qr-fallback" style={styles.qrFallback}>
                 <QrCode size={34} />
                 <span>QR unavailable</span>
                 <small>Use the UPI ID below.</small>
               </div>
             )}
 
-            <span style={styles.qrHint}>
+            <span className="marketplace-upi-qr-hint" style={styles.qrHint}>
               Scan this QR with Google Pay or another UPI app.
             </span>
           </div>
 
-          <div style={styles.payDetails}>
+          <div className="marketplace-upi-pay-details-responsive" style={styles.payDetails}>
             <span style={styles.label}>Pay exactly</span>
             <strong style={styles.amount}>{money(payment.amount)}</strong>
 
-            <div style={styles.upiIdBox}>
+            <div className="marketplace-upi-upi-id-box" style={styles.upiIdBox}>
               <div>
                 <span style={styles.label}>UPI ID</span>
                 <code style={styles.upiId}>{payment.upi_id}</code>
@@ -313,7 +315,7 @@ export default function MarketplaceUPIPaymentModal({
         </div>
 
         {error && <div style={styles.error}>{error}</div>}
-        {message && <div style={styles.message}>{message}</div>}
+        {message && <div className="marketplace-upi-message" style={styles.message}>{message}</div>}
 
         <div style={styles.form}>
           <label style={styles.formLabel}>
@@ -354,7 +356,7 @@ export default function MarketplaceUPIPaymentModal({
           </label>
         </div>
 
-        <div style={styles.footer}>
+        <div className="marketplace-upi-footer-responsive" style={styles.footer}>
           <button type="button" onClick={onClose} disabled={busy} style={styles.secondaryButton}>
             Close
           </button>

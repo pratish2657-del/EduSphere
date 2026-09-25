@@ -284,3 +284,263 @@
 .marketplace-upi-open-button:hover {
   filter: brightness(1.06);
 }
+
+
+/* =========================================================
+   Responsive layout: tablet + mobile
+   The component also uses inline styles, so these responsive
+   rules intentionally use !important where required.
+   ========================================================= */
+
+/* Tablet: 561px - 900px */
+@media (min-width: 561px) and (max-width: 900px) {
+  .marketplace-upi-overlay-responsive {
+    padding: 16px !important;
+    align-items: center !important;
+  }
+
+  .marketplace-upi-modal-responsive {
+    width: min(760px, calc(100vw - 32px)) !important;
+    max-height: calc(100vh - 32px) !important;
+    border-radius: 14px !important;
+  }
+
+  .marketplace-upi-summary-responsive {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    margin: 16px 18px 0 !important;
+  }
+
+  .marketplace-upi-payment-area-responsive {
+    grid-template-columns: minmax(190px, 230px) minmax(0, 1fr) !important;
+    gap: 14px !important;
+    margin: 16px 18px 0 !important;
+  }
+
+  .marketplace-upi-qr-section-responsive,
+  .marketplace-upi-pay-details-responsive {
+    padding: 14px !important;
+  }
+
+  .marketplace-upi-qr-section-responsive img {
+    width: 190px !important;
+    height: 190px !important;
+  }
+
+  .marketplace-upi-qr-section-responsive .marketplace-upi-qr-fallback {
+    width: 190px !important;
+    height: 190px !important;
+  }
+
+  .marketplace-upi-form {
+    margin-left: 18px !important;
+    margin-right: 18px !important;
+  }
+
+  .marketplace-upi-instruction,
+  .marketplace-upi-error,
+  .marketplace-upi-message {
+    margin-left: 18px !important;
+    margin-right: 18px !important;
+  }
+
+  .marketplace-upi-footer-responsive {
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+  }
+}
+
+/* Small tablets / large phones: 401px - 560px */
+@media (min-width: 401px) and (max-width: 560px) {
+  .marketplace-upi-overlay-responsive {
+    padding: 10px !important;
+    align-items: flex-start !important;
+  }
+
+  .marketplace-upi-modal-responsive {
+    width: 100% !important;
+    max-height: calc(100vh - 20px) !important;
+    margin-top: 10px !important;
+    border-radius: 13px !important;
+  }
+
+  .marketplace-upi-header {
+    padding: 15px 14px !important;
+  }
+
+  .marketplace-upi-header h2 {
+    font-size: 20px !important;
+  }
+
+  .marketplace-upi-summary-responsive {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    margin: 14px !important;
+  }
+
+  .marketplace-upi-summary > div {
+    padding: 10px !important;
+  }
+
+  .marketplace-upi-payment-area-responsive {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    margin: 14px !important;
+  }
+
+  .marketplace-upi-qr-section-responsive,
+  .marketplace-upi-pay-details-responsive {
+    padding: 14px !important;
+  }
+
+  .marketplace-upi-qr-section-responsive img,
+  .marketplace-upi-qr-section-responsive .marketplace-upi-qr-fallback {
+    width: min(220px, 65vw) !important;
+    height: min(220px, 65vw) !important;
+  }
+
+  .marketplace-upi-upi-id-box {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .marketplace-upi-instruction,
+  .marketplace-upi-error,
+  .marketplace-upi-message {
+    margin-left: 14px !important;
+    margin-right: 14px !important;
+  }
+
+  .marketplace-upi-form {
+    margin-left: 14px !important;
+    margin-right: 14px !important;
+  }
+
+  .marketplace-upi-footer-responsive {
+    flex-direction: column !important;
+    padding: 14px !important;
+  }
+
+  .marketplace-upi-footer-responsive button {
+    width: 100% !important;
+  }
+
+  .marketplace-upi-note {
+    margin-left: 14px !important;
+    margin-right: 14px !important;
+  }
+}
+
+/* Mobile: up to 400px */
+@media (max-width: 400px) {
+  .marketplace-upi-overlay-responsive {
+    padding: 6px !important;
+    align-items: flex-start !important;
+  }
+
+  .marketplace-upi-modal-responsive {
+    width: 100% !important;
+    max-height: calc(100vh - 12px) !important;
+    margin-top: 6px !important;
+    border-radius: 11px !important;
+  }
+
+  .marketplace-upi-header {
+    padding: 12px 11px !important;
+    gap: 8px !important;
+  }
+
+  .marketplace-upi-header h2 {
+    font-size: 18px !important;
+  }
+
+  .marketplace-upi-header p {
+    font-size: 10px !important;
+  }
+
+  .marketplace-upi-close {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .marketplace-upi-summary-responsive {
+    grid-template-columns: 1fr 1fr !important;
+    margin: 10px !important;
+  }
+
+  .marketplace-upi-summary > div {
+    padding: 8px !important;
+  }
+
+  .marketplace-upi-summary span {
+    font-size: 9px !important;
+  }
+
+  .marketplace-upi-summary strong {
+    font-size: 11px !important;
+  }
+
+  .marketplace-upi-payment-area-responsive {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    margin: 10px !important;
+  }
+
+  .marketplace-upi-qr-section-responsive,
+  .marketplace-upi-pay-details-responsive {
+    padding: 11px !important;
+  }
+
+  .marketplace-upi-qr-section-responsive img,
+  .marketplace-upi-qr-section-responsive .marketplace-upi-qr-fallback {
+    width: min(190px, 62vw) !important;
+    height: min(190px, 62vw) !important;
+  }
+
+  .marketplace-upi-qr-hint {
+    font-size: 10px !important;
+  }
+
+  .marketplace-upi-upi-id-box {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .marketplace-upi-upi-id-box button {
+    width: 100% !important;
+  }
+
+  .marketplace-upi-instruction,
+  .marketplace-upi-error,
+  .marketplace-upi-message {
+    margin: 10px !important;
+    padding: 9px !important;
+    font-size: 10px !important;
+  }
+
+  .marketplace-upi-form {
+    gap: 10px !important;
+    margin: 10px !important;
+  }
+
+  .marketplace-upi-form input {
+    min-height: 42px !important;
+    font-size: 12px !important;
+  }
+
+  .marketplace-upi-footer-responsive {
+    flex-direction: column !important;
+    gap: 8px !important;
+    margin-top: 12px !important;
+    padding: 11px !important;
+  }
+
+  .marketplace-upi-footer-responsive button {
+    width: 100% !important;
+    min-height: 42px !important;
+  }
+
+  .marketplace-upi-note {
+    margin: 0 10px 12px !important;
+    font-size: 9px !important;
+  }
+}

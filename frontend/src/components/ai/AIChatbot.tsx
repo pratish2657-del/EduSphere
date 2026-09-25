@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { FormEvent } from "react";
 import {
@@ -192,6 +193,297 @@ const getRandomPrompts = (role: string): string[] => {
   return [...prompts]
     .sort(() => Math.random() - 0.5)
     .slice(0, 3);
+};
+
+
+/* =========================================================
+   MARKDOWN / BASIC MATH RENDERER
+
+   Gemini returns Markdown such as **bold**, *italic*, headings,
+   lists, code fences and $math$. React renders strings literally,
+   so we parse the common Markdown formats here instead of showing
+   the Markdown symbols to the user.
+========================================================= */
+
+const renderInlineMarkdown = (
+  value: string,
+  keyPrefix = "inline",
+): ReactNode[] => {
+  const tokenPattern =
+    /(`[^`\n]+`|\$\$[^$]*\$\$|\$[^$\n]+\$|\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_)/g;
+
+  const parts = value.split(tokenPattern);
+
+  return parts.map((part, index) => {
+    const key = `${keyPrefix}-${index}`;
+
+    if (!part) return null;
+
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code key={key} className="edusphere-ai-inline-code">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+
+    if (part.startsWith("$$") && part.endsWith("$$")) {
+      return (
+        <span key={key} className="edusphere-ai-math">
+          {part.slice(2, -2).trim()}
+        </span>
+      );
+    }
+
+    if (part.startsWith("$") && part.endsWith("$")) {
+      return (
+        <span key={key} className="edusphere-ai-inline-math">
+          {part.slice(1, -1).trim()}
+        </span>
+      );
+    }
+
+    if (
+      (part.startsWith("**") && part.endsWith("**")) ||
+      (part.startsWith("__") && part.endsWith("__"))
+    ) {
+      return (
+        <strong key={key}>
+          {renderInlineMarkdown(part.slice(2, -2), `${key}-bold`)}
+        </strong>
+      );
+    }
+
+    if (part.startsWith("~~") && part.endsWith("~~")) {
+      return (
+        <del key={key}>
+          {renderInlineMarkdown(part.slice(2, -2), `${key}-strike`)}
+        </del>
+      );
+    }
+
+    if (
+      (part.startsWith("*") && part.endsWith("*")) ||
+      (part.startsWith("_") && part.endsWith("_"))
+    ) {
+      return (
+        <em key={key}>
+          {renderInlineMarkdown(part.slice(1, -1), `${key}-italic`)}
+        </em>
+      );
+    }
+
+    return <span key={key}>{part}</span>;
+  });
+};
+
+const renderMarkdown = (markdown: string): ReactNode => {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const output: ReactNode[] = [];
+
+  let codeLines: string[] = [];
+  let codeLanguage = "";
+  let inCodeBlock = false;
+  let listItems: { type: "ul" | "ol"; text: string }[] = [];
+
+  const flushList = () => {
+    if (listItems.length === 0) return;
+
+    const groups: {
+      type: "ul" | "ol";
+      items: string[];
+    }[] = [];
+
+    for (const item of listItems) {
+      const last = groups[groups.length - 1];
+
+      if (last && last.type === item.type) {
+        last.items.push(item.text);
+      } else {
+        groups.push({
+          type: item.type,
+          items: [item.text],
+        });
+      }
+    }
+
+    groups.forEach((group, groupIndex) => {
+      const Tag = group.type;
+
+      output.push(
+        <Tag
+          key={`list-${output.length}-${groupIndex}`}
+          className="edusphere-ai-markdown-list"
+        >
+          {group.items.map((item, itemIndex) => (
+            <li key={`item-${itemIndex}`}>
+              {renderInlineMarkdown(
+                item,
+                `list-${output.length}-${groupIndex}-${itemIndex}`,
+              )}
+            </li>
+          ))}
+        </Tag>,
+      );
+    });
+
+    listItems = [];
+  };
+
+  const flushCode = () => {
+    if (!inCodeBlock) return;
+
+    output.push(
+      <div
+        key={`code-${output.length}`}
+        className="edusphere-ai-code-block"
+      >
+        {codeLanguage && (
+          <div className="edusphere-ai-code-language">
+            {codeLanguage}
+          </div>
+        )}
+        <pre>
+          <code>{codeLines.join("\n")}</code>
+        </pre>
+      </div>,
+    );
+
+    codeLines = [];
+    codeLanguage = "";
+    inCodeBlock = false;
+  };
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+
+    // Fenced code block.
+    if (trimmed.startsWith("```")) {
+      flushList();
+
+      if (inCodeBlock) {
+        flushCode();
+      } else {
+        inCodeBlock = true;
+        codeLanguage = trimmed.slice(3).trim();
+      }
+
+      return;
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line);
+      return;
+    }
+
+    // Blank line.
+    if (!trimmed) {
+      flushList();
+
+      output.push(
+        <div
+          key={`space-${index}`}
+          className="edusphere-ai-markdown-spacer"
+        />,
+      );
+      return;
+    }
+
+    // Headings.
+    const headingMatch = line.match(/^\s*(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      flushList();
+
+      const level = Math.min(headingMatch[1].length, 6);
+      const headingText = headingMatch[2];
+
+      const HeadingTag = `h${level}` as
+        | "h1"
+        | "h2"
+        | "h3"
+        | "h4"
+        | "h5"
+        | "h6";
+
+      output.push(
+        <HeadingTag
+          key={`heading-${index}`}
+          className={`edusphere-ai-markdown-h${level}`}
+        >
+          {renderInlineMarkdown(headingText, `heading-${index}`)}
+        </HeadingTag>,
+      );
+      return;
+    }
+
+    // Horizontal rule.
+    if (/^\s*(---+|\*\*\*+|___+)\s*$/.test(line)) {
+      flushList();
+      output.push(
+        <hr
+          key={`rule-${index}`}
+          className="edusphere-ai-markdown-rule"
+        />,
+      );
+      return;
+    }
+
+    // Unordered list.
+    const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
+    if (unordered) {
+      listItems.push({
+        type: "ul",
+        text: unordered[1],
+      });
+      return;
+    }
+
+    // Ordered list.
+    const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (ordered) {
+      listItems.push({
+        type: "ol",
+        text: ordered[1],
+      });
+      return;
+    }
+
+    // Blockquote.
+    const quote = line.match(/^\s*>\s?(.*)$/);
+    if (quote) {
+      flushList();
+
+      output.push(
+        <blockquote
+          key={`quote-${index}`}
+          className="edusphere-ai-markdown-quote"
+        >
+          {renderInlineMarkdown(quote[1], `quote-${index}`)}
+        </blockquote>,
+      );
+      return;
+    }
+
+    // Normal paragraph.
+    flushList();
+
+    output.push(
+      <p
+        key={`paragraph-${index}`}
+        className="edusphere-ai-markdown-paragraph"
+      >
+        {renderInlineMarkdown(line, `paragraph-${index}`)}
+      </p>,
+    );
+  });
+
+  flushList();
+
+  if (inCodeBlock) {
+    flushCode();
+  }
+
+  return <>{output}</>;
 };
 
 /* =========================================================
@@ -613,11 +905,12 @@ export default function AIChatbot() {
                           }}
                         >
                           <div
+                            className="edusphere-ai-message-content"
                             style={
                               styles.messageContent
                             }
                           >
-                            {item.content}
+                            {renderMarkdown(item.content)}
                           </div>
 
                           {item.role ===
@@ -1144,7 +1437,7 @@ const styles: Record<
     borderRadius: 13,
     fontSize: 10,
     lineHeight: 1.6,
-    whiteSpace: "pre-wrap",
+    whiteSpace: "normal",
   },
 
   userBubble: {
@@ -1167,6 +1460,7 @@ const styles: Record<
 
   messageContent: {
     overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
 
   contextBadge: {
