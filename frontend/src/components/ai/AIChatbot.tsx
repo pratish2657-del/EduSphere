@@ -1104,6 +1104,48 @@ if (typeof document !== "undefined") {
         max-height: calc(100dvh - 32px) !important;
       }
 
+      .edusphere-ai-message-content,
+      .edusphere-ai-code-block,
+      .edusphere-ai-code-block pre {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      .edusphere-ai-code-block {
+        overflow: hidden !important;
+      }
+
+      .edusphere-ai-code-block pre {
+        margin: 0 !important;
+        width: 100% !important;
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+        white-space: pre-wrap !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+      }
+
+      .edusphere-ai-code-block pre code {
+        white-space: pre-wrap !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+      }
+
+      .edusphere-ai-inline-code {
+        white-space: pre-wrap !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+      }
+
+      .edusphere-ai-markdown-paragraph,
+      .edusphere-ai-markdown-list,
+      .edusphere-ai-markdown-quote {
+        max-width: 100% !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+      }
+
       @media (max-width: 900px) {
         .edusphere-ai-floating-button {
           right: max(16px, env(safe-area-inset-right)) !important;
@@ -1128,6 +1170,11 @@ if (typeof document !== "undefined") {
       }
 
       @media (max-width: 600px) {
+        .edusphere-ai-chat-window .edusphere-ai-message-content {
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+
         .edusphere-ai-floating-button {
           right: 14px !important;
           bottom: max(14px, env(safe-area-inset-bottom)) !important;
@@ -1433,11 +1480,14 @@ const styles: Record<
 
   messageBubble: {
     maxWidth: "82%",
+    minWidth: 0,
+    boxSizing: "border-box",
     padding: "9px 11px",
     borderRadius: 13,
     fontSize: 10,
     lineHeight: 1.6,
     whiteSpace: "normal",
+    overflow: "hidden",
   },
 
   userBubble: {
@@ -1459,6 +1509,8 @@ const styles: Record<
   },
 
   messageContent: {
+    minWidth: 0,
+    maxWidth: "100%",
     overflowWrap: "anywhere",
     wordBreak: "break-word",
   },
