@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AIChatbot from "../../components/ai/AIChatbot";
+import "../../components/marketplace/MarketplaceUPIPaymentModal.css";
+import MarketplaceUPIPaymentModal from "../../components/marketplace/MarketplaceUPIPaymentModal";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -93,6 +95,12 @@ type MarketplaceCartResponse = {
   cart_id: number;
   count: number;
   items: MarketplaceCartItem[];
+
+  subtotal_amount?: number | string;
+  tax_percent?: number | string;
+  tax_amount?: number | string;
+  total_amount?: number | string;
+
   total: number | string;
 };
 
@@ -451,6 +459,10 @@ export default function ProfessorMarketplace() {
 
       const payment = paymentData as MarketplacePaymentResponse;
 
+      if (!payment || !Number.isFinite(Number(payment.payment_id))) {
+        throw new Error("Payment was created but no valid payment ID was returned.");
+      }
+
       setMarketplaceCartOpen(false);
       setMarketplaceNotice(
         `Order #${orderId} created. Complete the UPI payment and submit your UTR for verification.`
@@ -631,249 +643,6 @@ export default function ProfessorMarketplace() {
   );
 }
 
-
-function MarketplaceUPIPaymentModal({
-  payment,
-  onClose,
-  onSubmitted,
-}: {
-  payment: MarketplacePaymentResponse;
-  onClose: () => void;
-  onSubmitted: () => void | Promise<void>;
-}) {
-  const [utrNumber, setUtrNumber] = useState("");
-  const [payerUpiId, setPayerUpiId] = useState("");
-  const [payerPhone, setPayerPhone] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [copied, setCopied] = useState(false);
-
-  const amount = Number(payment.amount || 0);
-  const upiUri =
-    `upi://pay?pa=${encodeURIComponent(payment.upi_id)}` +
-    `&pn=${encodeURIComponent(payment.payment_name)}` +
-    `&am=${encodeURIComponent(amount.toFixed(2))}` +
-    `&cu=INR`;
-
-  const copyUpiId = async () => {
-    try {
-      await navigator.clipboard?.writeText(payment.upi_id);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      setMessage("Copy failed. Please copy the UPI ID manually.");
-    }
-  };
-
-  const submitUtr = async () => {
-    const utr = utrNumber.trim();
-    const payerUpi = payerUpiId.trim();
-    const phone = payerPhone.trim();
-
-    if (!utr) {
-      setMessage("Enter the UTR / transaction reference number.");
-      return;
-    }
-
-    if (!payerUpi) {
-      setMessage("Enter the UPI ID used for payment.");
-      return;
-    }
-
-    if (!phone) {
-      setMessage("Enter the phone number used for payment.");
-      return;
-    }
-
-    setBusy(true);
-    setMessage("");
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/marketplace/payments/${payment.payment_id}/submit-utr`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            utr_number: utr,
-            payer_upi_id: payerUpi,
-            payer_phone: phone,
-          }),
-        }
-      );
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(
-          getDisplayMessage(
-            data?.detail ?? data?.message,
-            "Unable to submit payment details."
-          )
-        );
-      }
-
-      setMessage(
-        "Payment details submitted. Your payment is awaiting Super Admin verification."
-      );
-
-      await onSubmitted();
-    } catch (err) {
-      setMessage(
-        err instanceof Error
-          ? err.message
-          : "Unable to submit payment details."
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div style={styles.upiModalBackdrop} onClick={onClose}>
-      <div
-        style={styles.upiModal}
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="professor-manual-upi-title"
-      >
-        <div style={styles.upiModalHeader}>
-          <div>
-            <span style={styles.cardEyebrow}>MANUAL UPI PAYMENT</span>
-            <h2 id="professor-manual-upi-title" style={styles.modalTitle}>
-              Pay ₹{amount.toFixed(2)}
-            </h2>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            style={styles.modalCloseButton}
-            disabled={busy}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div style={styles.upiModalBody}>
-          <div style={styles.upiPaymentCard}>
-            <span style={styles.modalInfoLabel}>PAY TO</span>
-            <strong style={styles.upiPaymentName}>
-              {payment.payment_name}
-            </strong>
-
-            <div style={styles.upiIdRow}>
-              <code style={styles.upiIdValue}>{payment.upi_id}</code>
-              <button
-                type="button"
-                onClick={copyUpiId}
-                style={styles.secondaryButton}
-                disabled={busy}
-              >
-                {copied ? "Copied" : "Copy UPI ID"}
-              </button>
-            </div>
-
-            <div style={styles.upiAmountRow}>
-              <span>Amount</span>
-              <strong>₹{amount.toFixed(2)}</strong>
-            </div>
-
-            <a
-              href={upiUri}
-              style={styles.upiOpenButton}
-              onClick={() =>
-                setMessage(
-                  "Complete the payment in your UPI app, then enter the UTR below."
-                )
-              }
-            >
-              <WalletCards size={16} />
-              Open UPI App
-            </a>
-          </div>
-
-          <div style={styles.upiInstructionBox}>
-            <strong>After payment</strong>
-            <ol style={styles.upiInstructionList}>
-              <li>Complete the payment.</li>
-              <li>Copy the UTR / transaction reference.</li>
-              <li>Enter the UPI ID and phone used to pay.</li>
-              <li>Submit the details for Super Admin verification.</li>
-            </ol>
-            <p style={styles.upiSecurityNote}>
-              The order stays pending until the payment is manually verified.
-            </p>
-          </div>
-
-          <div style={styles.upiForm}>
-            <label style={styles.formLabel}>
-              UTR / Transaction Reference
-              <input
-                value={utrNumber}
-                onChange={(event) => setUtrNumber(event.target.value)}
-                placeholder="Enter UTR / transaction reference"
-                disabled={busy}
-                style={styles.formInput}
-                autoComplete="off"
-              />
-            </label>
-
-            <label style={styles.formLabel}>
-              Payer UPI ID
-              <input
-                value={payerUpiId}
-                onChange={(event) => setPayerUpiId(event.target.value)}
-                placeholder="example@upi"
-                disabled={busy}
-                style={styles.formInput}
-                autoComplete="off"
-              />
-            </label>
-
-            <label style={styles.formLabel}>
-              Payer Phone
-              <input
-                value={payerPhone}
-                onChange={(event) => setPayerPhone(event.target.value)}
-                placeholder="Phone number used for payment"
-                disabled={busy}
-                style={styles.formInput}
-                autoComplete="tel"
-              />
-            </label>
-          </div>
-
-          {message && <div style={styles.upiMessage}>{message}</div>}
-
-          <div style={styles.upiModalActions}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={styles.secondaryButton}
-              disabled={busy}
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              onClick={submitUtr}
-              style={styles.primaryButton}
-              disabled={busy}
-            >
-              {busy ? "Submitting..." : "Submit UTR"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function MarketplacePreviewImage({
   productId,
@@ -1444,6 +1213,27 @@ function MarketplaceProductModal({
   );
 }
 
+function getMarketplaceCartTotal(cart: MarketplaceCartResponse): number {
+  const explicitTotal = Number(cart.total_amount ?? cart.total);
+  if (Number.isFinite(explicitTotal)) return explicitTotal;
+
+  const subtotal = cart.items.reduce((sum, item) => {
+    const itemSubtotal = Number(item.subtotal);
+    if (Number.isFinite(itemSubtotal)) return sum + itemSubtotal;
+
+    const price = Number(item.price);
+    const quantity = Number(item.quantity);
+    return sum + (Number.isFinite(price) ? price : 0) * (Number.isFinite(quantity) ? quantity : 0);
+  }, 0);
+
+  const taxAmount = Number(cart.tax_amount);
+  const tax = Number.isFinite(taxAmount)
+    ? taxAmount
+    : subtotal * (Number(cart.tax_percent) / 100 || 0.05);
+
+  return subtotal + tax;
+}
+
 function MarketplaceCartModal({
   cart,
   onClose,
@@ -1537,7 +1327,7 @@ function MarketplaceCartModal({
         <div style={styles.cartFooter}>
           <div>
             <span style={styles.modalInfoLabel}>BUYER PAYS</span>
-            <strong style={styles.cartTotal}>₹{Number(cart.total).toFixed(2)}</strong>
+            <strong style={styles.cartTotal}>₹{getMarketplaceCartTotal(cart).toFixed(2)}</strong>
             <span style={{ display: "block", marginTop: 5, color: "#7f8aa5", fontSize: 10 }}>
               5% tax is added to the buyer total.
             </span>
@@ -3263,6 +3053,154 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 8,
     fontWeight: 900,
     letterSpacing: "0.10em",
+  },
+
+  upiModalBackdrop: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 99999,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    boxSizing: "border-box",
+    background: "rgba(2, 6, 23, 0.82)",
+    backdropFilter: "blur(14px)",
+  },
+
+  upiModal: {
+    width: "min(620px, 100%)",
+    maxHeight: "92vh",
+    overflowY: "auto",
+    boxSizing: "border-box",
+    borderRadius: 22,
+    background: "linear-gradient(145deg, rgba(15,23,42,0.99), rgba(8,12,28,0.99))",
+    border: "1px solid rgba(129,140,248,0.28)",
+    boxShadow: "0 30px 120px rgba(0,0,0,0.70)",
+  },
+
+  upiModalHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 20,
+    padding: 24,
+    borderBottom: "1px solid rgba(148,163,184,0.10)",
+  },
+
+  upiModalBody: {
+    padding: 24,
+  },
+
+  upiPaymentCard: {
+    padding: 18,
+    borderRadius: 16,
+    background: "rgba(15,23,42,0.72)",
+    border: "1px solid rgba(129,140,248,0.16)",
+  },
+
+  upiPaymentName: {
+    display: "block",
+    marginTop: 6,
+    color: "#f8fafc",
+    fontSize: 17,
+  },
+
+  upiIdRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 14,
+  },
+
+  upiIdValue: {
+    flex: 1,
+    minWidth: 0,
+    padding: "10px 12px",
+    borderRadius: 10,
+    background: "rgba(2,6,23,0.65)",
+    border: "1px solid rgba(148,163,184,0.12)",
+    color: "#67e8f9",
+    fontSize: 12,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  upiAmountRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 16,
+    paddingTop: 14,
+    borderTop: "1px solid rgba(148,163,184,0.10)",
+    color: "#94a3b8",
+    fontSize: 12,
+  },
+
+  upiOpenButton: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    width: "100%",
+    marginTop: 16,
+    padding: "12px 16px",
+    boxSizing: "border-box",
+    borderRadius: 11,
+    background: "linear-gradient(135deg, rgba(79,70,229,0.92), rgba(6,182,212,0.82))",
+    color: "#fff",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+
+  upiInstructionBox: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 14,
+    background: "rgba(15,23,42,0.58)",
+    border: "1px solid rgba(148,163,184,0.10)",
+    color: "#cbd5e1",
+    fontSize: 12,
+    lineHeight: 1.6,
+  },
+
+  upiInstructionList: {
+    margin: "10px 0",
+    paddingLeft: 20,
+  },
+
+  upiSecurityNote: {
+    margin: "10px 0 0",
+    color: "#64748b",
+    fontSize: 10,
+  },
+
+  upiForm: {
+    display: "grid",
+    gap: 14,
+    marginTop: 18,
+  },
+
+  upiMessage: {
+    marginTop: 14,
+    padding: "10px 12px",
+    borderRadius: 10,
+    background: "rgba(30,41,59,0.75)",
+    border: "1px solid rgba(129,140,248,0.16)",
+    color: "#cbd5e1",
+    fontSize: 11,
+    lineHeight: 1.5,
+  },
+
+  upiModalActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 20,
+    paddingTop: 16,
+    borderTop: "1px solid rgba(148,163,184,0.10)",
   },
 
   modalBackdrop: {
