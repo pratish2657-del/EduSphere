@@ -471,6 +471,51 @@ export default function ProfessorMarketplace() {
   ]);
 
 
+
+  const placeCodOrder = useCallback(async (deliveryAddress = "") => {
+    const institutionId = dashboard?.professor?.institution_id;
+    if (!institutionId) {
+      setMarketplaceNotice("Your institution information is not available yet.");
+      return;
+    }
+    if (!marketplaceCart?.items.length) {
+      setMarketplaceNotice("Your cart is empty.");
+      return;
+    }
+    const allPhysical = marketplaceCart.items.every(
+      (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
+    );
+    if (!allPhysical) {
+      setMarketplaceNotice("Cash on Delivery is available only for physical products.");
+      return;
+    }
+    const shippingAddress = deliveryAddress.trim();
+    if (shippingAddress.length < 10) {
+      setMarketplaceNotice("Enter a valid delivery address for Cash on Delivery.");
+      return;
+    }
+    setMarketplaceBusy(true);
+    setMarketplaceNotice("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/marketplace/payments/submit-cod`, {
+        method: "POST",
+        credentials: "include",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ institution_id: Number(institutionId), shipping_address: shippingAddress }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(getDisplayMessage(data?.detail ?? data?.message, "Unable to place Cash on Delivery order."));
+      setPendingMarketplacePayment(null);
+      setMarketplaceNotice(`Order #${data.order_id} placed successfully with Cash on Delivery.`);
+      await loadMarketplaceCart();
+      await loadMarketplaceOrders();
+    } catch (err) {
+      setMarketplaceNotice(err instanceof Error ? err.message : "Unable to place Cash on Delivery order.");
+    } finally {
+      setMarketplaceBusy(false);
+    }
+  }, [dashboard, marketplaceCart, loadMarketplaceCart, loadMarketplaceOrders]);
+
   useEffect(() => {
     loadProfessorDashboard();
   }, [loadProfessorDashboard]);
@@ -559,6 +604,7 @@ export default function ProfessorMarketplace() {
             onUpdateCart={updateMarketplaceCartItem}
             onRemoveCart={removeMarketplaceCartItem}
             onCheckout={checkoutMarketplace}
+            onCod={placeCodOrder}
             shippingAddress={shippingAddress}
             onShippingAddressChange={setShippingAddress}
             orders={marketplaceOrders}
@@ -696,6 +742,7 @@ function MarketplaceView({
   onUpdateCart,
   onRemoveCart,
   onCheckout,
+  onCod,
   shippingAddress,
   onShippingAddressChange,
   orders,
@@ -730,6 +777,7 @@ function MarketplaceView({
   onUpdateCart: (productId: number, quantity: number) => void;
   onRemoveCart: (productId: number) => void;
   onCheckout: (shippingAddress: string) => void;
+  onCod: (shippingAddress: string) => void;
   shippingAddress: string;
   onShippingAddressChange: (value: string) => void;
   orders: MarketplaceOrdersResponse | null;
@@ -1221,6 +1269,7 @@ function MarketplaceCartModal({
   onUpdate,
   onRemove,
   onCheckout,
+  onCod,
   busy,
   shippingAddress,
   onShippingAddressChange,
@@ -1230,6 +1279,7 @@ function MarketplaceCartModal({
   onUpdate: (productId: number, quantity: number) => void;
   onRemove: (productId: number) => void;
   onCheckout: (shippingAddress: string) => void;
+  onCod: (shippingAddress: string) => void;
   busy: boolean;
   shippingAddress: string;
   onShippingAddressChange: (value: string) => void;
@@ -1316,10 +1366,23 @@ function MarketplaceCartModal({
               Payment is made directly by UPI and manually verified by Super Admin.
             </span>
           </div>
-          <button type="button" style={styles.primaryButton} onClick={handleCheckout} disabled={busy || cart.items.length === 0 || (hasPhysicalProduct && shippingAddress.trim().length < 10)}>
-            <WalletCards size={16} />
-            {busy ? "Preparing..." : "Continue to UPI payment"}
-          </button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button type="button" style={styles.primaryButton} onClick={handleCheckout} disabled={busy || cart.items.length === 0 || (hasPhysicalProduct && shippingAddress.trim().length < 10)}>
+              <WalletCards size={16} />
+              {busy ? "Preparing..." : "Pay with UPI"}
+            </button>
+            {cart.items.length > 0 && cart.items.every((item) => String(item.product_type).toUpperCase() === "PHYSICAL") && (
+              <button
+                type="button"
+                style={{ ...styles.primaryButton, background: "#14532d", borderColor: "#22c55e" }}
+                onClick={() => onCod(shippingAddress)}
+                disabled={busy || shippingAddress.trim().length < 10}
+              >
+                <Package size={16} />
+                {busy ? "Placing..." : "Cash on Delivery"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

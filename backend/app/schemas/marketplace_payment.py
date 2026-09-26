@@ -53,7 +53,7 @@ class MarketplacePaymentResponse(BaseModel):
     payment_id: int
     order_id: int
 
-    payment_method: Literal["UPI"]
+    payment_method: Literal["UPI", "COD"]
     status: Literal[
         "PENDING",
         "PAID",

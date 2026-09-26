@@ -245,6 +245,140 @@ def submit_checkout_payment(
 
 
 # ============================================================
+# SUBMIT CASH ON DELIVERY
+# BUYER — PHYSICAL PRODUCTS ONLY
+#
+# Creates and confirms the order atomically. Payment remains
+# PENDING because cash is collected on delivery.
+# ============================================================
+
+def submit_cod_checkout(
+    user_id: int,
+    data: MarketplaceCheckoutRequest,
+):
+    cart = get_cart(user_id)
+
+    if not cart.get("items"):
+        raise BadRequestError("Your cart is empty.")
+
+    items = cart["items"]
+
+    if not all(
+        str(item.get("product_type", "")).upper() == "PHYSICAL"
+        for item in items
+    ):
+        raise BadRequestError(
+            "Cash on Delivery is available only when all cart products are physical."
+        )
+
+    shipping_address = (
+        data.shipping_address.strip()
+        if data.shipping_address
+        else None
+    )
+
+    if len(shipping_address or "") < 10:
+        raise BadRequestError(
+            "Shipping address is required for Cash on Delivery."
+        )
+
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor()
+
+        order = checkout(
+            user_id=user_id,
+            data=MarketplaceCheckoutRequest(
+                institution_id=data.institution_id,
+                shipping_address=shipping_address,
+            ),
+            connection=connection,
+        )
+
+        # COD orders are confirmed immediately because no online
+        # payment verification is required. Inventory is finalized
+        # so the physical stock cannot be sold twice.
+        finalize_order_inventory(
+            order["order_id"],
+            cursor,
+        )
+
+        cursor.execute(
+            """
+            UPDATE marketplace_orders
+            SET status = 'CONFIRMED', expires_at = NULL
+            WHERE id = %s
+              AND status = 'PENDING'
+            """,
+            (order["order_id"],),
+        )
+
+        if cursor.rowcount != 1:
+            raise ConflictError("COD order could not be confirmed")
+
+        cursor.execute(
+            """
+            INSERT INTO marketplace_payments (
+                order_id,
+                buyer_id,
+                payment_method,
+                status,
+                amount,
+                currency,
+                utr_number,
+                payer_upi_id,
+                payer_phone,
+                submitted_at
+            )
+            VALUES (
+                %s,
+                %s,
+                'COD',
+                'PENDING',
+                %s,
+                'INR',
+                NULL,
+                NULL,
+                NULL,
+                CURRENT_TIMESTAMP
+            )
+            """,
+            (
+                order["order_id"],
+                user_id,
+                order["total_amount"],
+            ),
+        )
+
+        payment_id = cursor.lastrowid
+        connection.commit()
+
+        return {
+            "message": "COD order placed successfully.",
+            "payment_id": payment_id,
+            "order_id": order["order_id"],
+            "payment_method": "COD",
+            "status": "PENDING",
+            "order_status": "CONFIRMED",
+            "amount": order["total_amount"],
+            "currency": "INR",
+            "utr_number": None,
+            "payer_upi_id": None,
+            "payer_phone": None,
+            "submitted_at": None,
+            "verified_at": None,
+        }
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        connection.close()
+
+
+# ============================================================
 # CREATE PAYMENT
 # BUYER
 #

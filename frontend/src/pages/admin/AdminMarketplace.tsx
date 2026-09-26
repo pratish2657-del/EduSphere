@@ -131,7 +131,7 @@ type SellerOrdersResponse = {
 type PaymentResponse = {
   payment_id?: number | null;
   order_id?: number | null;
-  payment_method: "UPI";
+  payment_method: "UPI" | "COD";
   status: string;
   amount: number | string;
   currency: string;
@@ -428,6 +428,46 @@ export default function AdminMarketplace() {
     }
   };
 
+
+  const placeCodOrder = async () => {
+    const institutionId = profile?.institution_id;
+    if (!institutionId) {
+      setNotice("Your institution information is not available.");
+      return;
+    }
+    if (!cart?.items.length) {
+      setNotice("Your cart is empty.");
+      return;
+    }
+    const allPhysical = cart.items.every((item) => String(item.product_type).toUpperCase() === "PHYSICAL");
+    if (!allPhysical) {
+      setNotice("Cash on Delivery is available only for physical products.");
+      return;
+    }
+
+    const address = window.prompt("Enter the delivery address for Cash on Delivery:");
+    if (!address || address.trim().length < 10) {
+      setNotice("A valid delivery address is required for Cash on Delivery.");
+      return;
+    }
+
+    setBusy(true);
+    setNotice("");
+    try {
+      const data = await api<{ order_id: number }>("/marketplace/payments/submit-cod", {
+        method: "POST",
+        body: JSON.stringify({ institution_id: Number(institutionId), shipping_address: address.trim() }),
+      });
+      setPendingPayment(null);
+      setCartOpen(false);
+      setNotice(`Order #${data.order_id} placed successfully with Cash on Delivery.`);
+      await Promise.all([loadCart(), loadOrders()]);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Unable to place Cash on Delivery order.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const openPanel = async (
     next: "shop" | "sell" | "orders" | "sales"
@@ -926,14 +966,27 @@ export default function AdminMarketplace() {
                   {" · "}Total: {money(cart.total_amount ?? cart.total)}
                 </small>
               </div>
-              <button
-                className="admin-marketplace-primary"
-                onClick={checkout}
-                disabled={busy || !cart.items.length}
-              >
-                <WalletCards size={16} />
-                {busy ? "Processing..." : "Pay securely with UPI"}
-              </button>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <button
+                  className="admin-marketplace-primary"
+                  onClick={checkout}
+                  disabled={busy || !cart.items.length}
+                >
+                  <WalletCards size={16} />
+                  {busy ? "Preparing..." : "Pay with UPI"}
+                </button>
+                {cart.items.length > 0 && cart.items.every((item) => String(item.product_type).toUpperCase() === "PHYSICAL") && (
+                  <button
+                    className="admin-marketplace-primary"
+                    onClick={placeCodOrder}
+                    disabled={busy}
+                    style={{ background: "#14532d", borderColor: "#22c55e" }}
+                  >
+                    <Package size={16} />
+                    {busy ? "Placing..." : "Cash on Delivery"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

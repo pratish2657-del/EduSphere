@@ -23,6 +23,7 @@ from app.services.marketplace_payment_service import (
     create_payment,
     prepare_checkout_payment,
     submit_checkout_payment,
+    submit_cod_checkout,
     get_order_payment,
     get_payment,
     get_pending_payments,
@@ -144,6 +145,34 @@ async def submit_marketplace_checkout_payment(
             utr_number=data.utr_number,
             payer_upi_id=data.payer_upi_id,
             payer_phone=data.payer_phone,
+        )
+    except Exception as error:
+        raise _handle_payment_error(error) from error
+
+
+# ============================================================
+# SUBMIT COD CHECKOUT
+# ============================================================
+
+@router.post("/submit-cod")
+async def submit_marketplace_cod_checkout(
+    request: Request,
+    data: MarketplaceCheckoutRequest,
+):
+    """
+    Place a Cash on Delivery order.
+
+    COD is accepted only when every cart item is PHYSICAL.
+    The order is confirmed immediately and the payment remains
+    PENDING until cash is collected.
+    """
+
+    user = require_completed_profile(request)
+
+    try:
+        return submit_cod_checkout(
+            user_id=user["id"],
+            data=data,
         )
     except Exception as error:
         raise _handle_payment_error(error) from error
