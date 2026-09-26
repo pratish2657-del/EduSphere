@@ -224,6 +224,7 @@ def add_cart_item(
         )
 
         existing = cursor.fetchone()
+        new_quantity = quantity
 
         if existing:
             new_quantity = existing["quantity"] + quantity
@@ -266,9 +267,7 @@ def add_cart_item(
             "cart_id": cart_id,
             "product_id": product_id,
             "quantity": (
-                new_quantity
-                if existing
-                else quantity
+                new_quantity if existing else quantity
             ),
         }
 
