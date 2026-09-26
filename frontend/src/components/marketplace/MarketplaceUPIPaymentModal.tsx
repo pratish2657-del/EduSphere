@@ -5,8 +5,8 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 type MarketplacePayment = {
-  payment_id: number;
-  order_id: number;
+  payment_id?: number | null;
+  order_id?: number | null;
   payment_method?: string;
   status: string;
   amount: number | string;
@@ -19,6 +19,8 @@ type MarketplacePayment = {
   payer_phone?: string | null;
   submitted_at?: string | null;
   verified_at?: string | null;
+  checkout_institution_id?: number | null;
+  checkout_shipping_address?: string | null;
 };
 
 type Props = {
@@ -135,22 +137,44 @@ export default function MarketplaceUPIPaymentModal({
     setMessage("");
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/marketplace/payments/${payment.payment_id}/submit-utr`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
+      const isCheckoutDraft =
+        !Number.isFinite(Number(payment.payment_id)) ||
+        Number(payment.payment_id) <= 0;
+
+      const endpoint = isCheckoutDraft
+        ? `${API_BASE_URL}/marketplace/payments/submit-checkout`
+        : `${API_BASE_URL}/marketplace/payments/${payment.payment_id}/submit-utr`;
+
+      const body = isCheckoutDraft
+        ? {
+            institution_id: Number(payment.checkout_institution_id),
+            shipping_address: payment.checkout_shipping_address ?? null,
             utr_number: cleanUtr,
             payer_upi_id: cleanPayerUpiId,
             payer_phone: cleanPayerPhone,
-          }),
-        }
-      );
+          }
+        : {
+            utr_number: cleanUtr,
+            payer_upi_id: cleanPayerUpiId,
+            payer_phone: cleanPayerPhone,
+          };
+
+      if (
+        isCheckoutDraft &&
+        !Number.isFinite(Number(payment.checkout_institution_id))
+      ) {
+        throw new Error("Checkout institution information is missing.");
+      }
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
 
       const data = await response.json().catch(() => null);
 
@@ -207,7 +231,11 @@ export default function MarketplaceUPIPaymentModal({
             <h2 id="marketplace-upi-payment-title" style={styles.title}>
               Complete Payment
             </h2>
-            <p style={styles.order}>Order #{payment.order_id}</p>
+            <p style={styles.order}>
+              {Number.isFinite(Number(payment.order_id)) && Number(payment.order_id) > 0
+                ? `Order #${payment.order_id}`
+                : "Order will be created after payment details are submitted"}
+            </p>
           </div>
 
           <button
@@ -363,7 +391,7 @@ export default function MarketplaceUPIPaymentModal({
           <button
             type="button"
             onClick={submit}
-            disabled={busy || payment.status !== "PENDING"}
+            disabled={busy || !["PENDING", "READY"].includes(String(payment.status))}
             style={styles.primaryButton}
           >
             {busy ? "Submitting..." : "Submit Payment Details"}

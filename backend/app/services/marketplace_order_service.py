@@ -521,6 +521,7 @@ def get_cart(user_id: int):
 def checkout(
     user_id: int,
     data: MarketplaceCheckoutRequest,
+    connection=None,
 ):
     """
     Create a marketplace order from the user's entire cart.
@@ -531,7 +532,9 @@ def checkout(
     - Stock is reserved inside a transaction.
     - No payment is considered successful here.
     """
-    connection = get_connection()
+    owns_connection = connection is None
+    if owns_connection:
+        connection = get_connection()
 
     try:
         cursor = connection.cursor()
@@ -831,7 +834,8 @@ def checkout(
             (cart_id,),
         )
 
-        connection.commit()
+        if owns_connection:
+            connection.commit()
 
         return {
             "order_id": order_id,
@@ -849,7 +853,8 @@ def checkout(
         raise
 
     finally:
-        connection.close()
+        if owns_connection:
+            connection.close()
 
 
 # ============================================================

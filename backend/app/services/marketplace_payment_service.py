@@ -6,6 +6,8 @@ from app.core.exceptions import (
     NotFoundError,
 )
 from app.database import get_connection
+from app.schemas.marketplace import MarketplaceCheckoutRequest
+from app.services.marketplace_order_service import checkout, get_cart
 from app.services.marketplace_inventory_service import (
     expire_pending_orders,
     finalize_order_inventory,
@@ -52,6 +54,194 @@ def _payment_config():
         "payment_name": payment_name,
         "payment_phone": payment_phone,
     }
+
+
+
+# ============================================================
+# PREPARE CHECKOUT PAYMENT
+# BUYER
+#
+# IMPORTANT:
+# This endpoint DOES NOT create an order, payment row, reserve
+# inventory, or clear the cart.
+# ============================================================
+
+def prepare_checkout_payment(
+    user_id: int,
+    data: MarketplaceCheckoutRequest,
+):
+    config = _payment_config()
+
+    cart = get_cart(user_id)
+
+    if not cart.get("items"):
+        raise BadRequestError("Your cart is empty.")
+
+    if data.institution_id is None:
+        raise BadRequestError("Institution is required.")
+
+    has_physical = any(
+        str(item.get("product_type", "")).upper() == "PHYSICAL"
+        for item in cart["items"]
+    )
+
+    shipping_address = (
+        data.shipping_address.strip()
+        if data.shipping_address
+        else None
+    )
+
+    if has_physical and len(shipping_address or "") < 10:
+        raise BadRequestError(
+            "Shipping address is required for physical products."
+        )
+
+    return {
+        "message": "UPI checkout prepared. No order has been created.",
+        "payment_id": None,
+        "order_id": None,
+        "payment_method": "UPI",
+        "status": "READY",
+        "amount": cart["total_amount"],
+        "currency": "INR",
+        **config,
+        "institution_id": data.institution_id,
+        "shipping_address": shipping_address,
+        "utr_number": None,
+        "payer_upi_id": None,
+        "payer_phone": None,
+        "submitted_at": None,
+        "verified_at": None,
+    }
+
+
+# ============================================================
+# SUBMIT CHECKOUT + UTR
+# BUYER
+#
+# This is the ONLY buyer action that creates the order.
+# The order, order items, inventory reservation and payment
+# are created in ONE database transaction.
+# ============================================================
+
+def submit_checkout_payment(
+    user_id: int,
+    data: MarketplaceCheckoutRequest,
+    utr_number: str,
+    payer_upi_id: str,
+    payer_phone: str,
+):
+    config = _payment_config()
+
+    utr_number = utr_number.strip()
+    payer_upi_id = payer_upi_id.strip()
+    payer_phone = payer_phone.strip()
+
+    if not utr_number:
+        raise BadRequestError("UTR number is required")
+
+    if not payer_upi_id:
+        raise BadRequestError("Payer UPI ID is required")
+
+    if not payer_phone:
+        raise BadRequestError("Payer phone is required")
+
+    connection = get_connection()
+
+    try:
+        cursor = connection.cursor()
+
+        # Prevent the same UTR from being submitted twice.
+        cursor.execute(
+            """
+            SELECT id
+            FROM marketplace_payments
+            WHERE utr_number = %s
+            LIMIT 1
+            """,
+            (utr_number,),
+        )
+
+        if cursor.fetchone():
+            raise ConflictError(
+                "This UTR has already been submitted"
+            )
+
+        # This creates the order ONLY after all payment details
+        # have been supplied. It uses the same connection so that
+        # a failure anywhere rolls everything back.
+        order = checkout(
+            user_id=user_id,
+            data=data,
+            connection=connection,
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO marketplace_payments (
+                order_id,
+                buyer_id,
+                payment_method,
+                status,
+                amount,
+                currency,
+                utr_number,
+                payer_upi_id,
+                payer_phone,
+                submitted_at
+            )
+            VALUES (
+                %s,
+                %s,
+                'UPI',
+                'PENDING',
+                %s,
+                'INR',
+                %s,
+                %s,
+                %s,
+                CURRENT_TIMESTAMP
+            )
+            """,
+            (
+                order["order_id"],
+                user_id,
+                order["total_amount"],
+                utr_number,
+                payer_upi_id,
+                payer_phone,
+            ),
+        )
+
+        payment_id = cursor.lastrowid
+
+        connection.commit()
+
+        return {
+            "message": (
+                "UPI payment details submitted. "
+                "Your payment is awaiting Super Admin verification."
+            ),
+            "payment_id": payment_id,
+            "order_id": order["order_id"],
+            "payment_method": "UPI",
+            "status": "PENDING",
+            "amount": order["total_amount"],
+            "currency": "INR",
+            **config,
+            "utr_number": utr_number,
+            "payer_upi_id": payer_upi_id,
+            "payer_phone": payer_phone,
+            "submitted_at": None,
+            "verified_at": None,
+        }
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        connection.close()
 
 
 # ============================================================

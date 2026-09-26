@@ -150,8 +150,8 @@ type SellerOrdersResponse = {
 
 type MarketplacePaymentResponse = {
   message: string;
-  payment_id: number;
-  order_id: number;
+  payment_id?: number | null;
+  order_id?: number | null;
   payment_method: "UPI" | string;
   status: "PENDING" | "PAID" | "REJECTED" | string;
   amount: number | string;
@@ -164,6 +164,8 @@ type MarketplacePaymentResponse = {
   payer_phone?: string | null;
   submitted_at?: string | null;
   verified_at?: string | null;
+  checkout_institution_id?: number | null;
+  checkout_shipping_address?: string | null;
 };
 
 type ProfessorDashboardResponse = {
@@ -409,8 +411,8 @@ export default function ProfessorMarketplace() {
     setMarketplaceNotice("");
 
     try {
-      const checkoutResponse = await fetch(
-        `${API_BASE_URL}/marketplace/checkout`,
+      const response = await fetch(
+        `${API_BASE_URL}/marketplace/payments/prepare`,
         {
           method: "POST",
           credentials: "include",
@@ -427,66 +429,33 @@ export default function ProfessorMarketplace() {
         }
       );
 
-      const checkoutData = await checkoutResponse.json().catch(() => null);
+      const data = await response.json().catch(() => null);
 
-      if (!checkoutResponse.ok) {
+      if (!response.ok) {
         throw new Error(
           getDisplayMessage(
-            checkoutData?.detail ?? checkoutData?.message,
-            "Unable to create marketplace order."
+            data?.detail ?? data?.message,
+            "Unable to prepare UPI payment."
           )
         );
       }
 
-      const orderId = Number(checkoutData?.order_id);
-
-      if (!Number.isFinite(orderId)) {
-        throw new Error("Marketplace order ID was not returned.");
-      }
-
-      const paymentResponse = await fetch(
-        `${API_BASE_URL}/marketplace/payments/`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            order_id: orderId,
-          }),
-        }
-      );
-
-      const paymentData = await paymentResponse.json().catch(() => null);
-
-      if (!paymentResponse.ok) {
-        throw new Error(
-          getDisplayMessage(
-            paymentData?.detail ?? paymentData?.message,
-            "Unable to create UPI payment."
-          )
-        );
-      }
-
-      const payment = paymentData as MarketplacePaymentResponse;
-
-      if (!payment || !Number.isFinite(Number(payment.payment_id))) {
-        throw new Error("Payment was created but no valid payment ID was returned.");
-      }
+      const payment = {
+        ...(data as MarketplacePaymentResponse),
+        payment_id: null,
+        order_id: null,
+        checkout_institution_id: Number(institutionId),
+        checkout_shipping_address: hasPhysicalProduct
+          ? trimmedShippingAddress
+          : null,
+      } as MarketplacePaymentResponse;
 
       setMarketplaceCartOpen(false);
       setMarketplaceNotice(
-        `Order #${orderId} created. Complete the UPI payment and submit your UTR for verification.`
+        "Complete the UPI payment and submit your UTR. No order has been created yet."
       );
-
-      // Open the actual manual-UPI modal immediately after payment creation.
       setPendingMarketplacePayment(payment);
       setShippingAddress("");
-
-      await loadMarketplaceCart();
-      await loadMarketplaceOrders();
     } catch (err) {
       setMarketplaceNotice(
         err instanceof Error
@@ -499,9 +468,8 @@ export default function ProfessorMarketplace() {
   }, [
     dashboard,
     marketplaceCart,
-    loadMarketplaceCart,
-    loadMarketplaceOrders,
   ]);
+
 
   useEffect(() => {
     loadProfessorDashboard();

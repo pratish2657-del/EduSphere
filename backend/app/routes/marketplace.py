@@ -23,7 +23,6 @@ from app.schemas.marketplace import (
 )
 from app.services.marketplace_order_service import (
     add_cart_item,
-    checkout,
     get_cart,
     get_order,
     get_seller_orders,
@@ -31,6 +30,7 @@ from app.services.marketplace_order_service import (
     remove_cart_item,
     update_cart_item,
 )
+from app.services.marketplace_payment_service import prepare_checkout_payment
 from app.services.marketplace_service import (
     ALLOWED_MARKETPLACE_FILE_TYPES,
     ALLOWED_MARKETPLACE_PREVIEW_TYPES,
@@ -264,17 +264,19 @@ async def marketplace_checkout(
     """
     POST /marketplace/checkout
 
-    Creates a PENDING order.
+    Prepares a UPI checkout session.
 
-    This does NOT mark the order as paid.
-
-    The next step is local UPI payment + UTR submission.
+    This does NOT create an order, reserve inventory, create order
+    items, or clear the cart. The order is created only when the
+    buyer submits the UTR/payer details through the payment modal.
     """
 
     user = require_completed_profile(request)
 
     try:
-        return checkout(
+        # Checkout is now only a payment-session preparation step.
+        # It MUST NOT create an order or reserve inventory.
+        return prepare_checkout_payment(
             user_id=user["id"],
             data=data,
         )

@@ -357,8 +357,8 @@ type SellerOrdersResponse = {
 };
 
 type MarketplacePaymentCreateResponse = {
-  payment_id: number;
-  order_id: number;
+  payment_id?: number | null;
+  order_id?: number | null;
   payment_method: "UPI";
   status: string;
   amount: number | string;
@@ -371,6 +371,8 @@ type MarketplacePaymentCreateResponse = {
   payer_phone?: string | null;
   submitted_at?: string | null;
   verified_at?: string | null;
+  checkout_institution_id?: number | null;
+  checkout_shipping_address?: string | null;
 };
 
 
@@ -887,9 +889,12 @@ export default function AppPlaceholder() {
         timetable?.student.institution_id;
 
       if (!institutionId) {
-        setMarketplaceNotice("Your institution information is not available yet.");
+        setMarketplaceNotice(
+          "Your institution information is not available yet."
+        );
         return;
       }
+
       if (!marketplaceCart?.items.length) {
         setMarketplaceNotice("Your cart is empty.");
         return;
@@ -898,8 +903,13 @@ export default function AppPlaceholder() {
       const hasPhysical = marketplaceCart.items.some(
         (item) => String(item.product_type).toUpperCase() === "PHYSICAL"
       );
-      if (hasPhysical && deliveryAddress.trim().length < 10) {
-        setMarketplaceNotice("Enter a valid delivery address for physical products.");
+
+      const trimmedShippingAddress = deliveryAddress.trim();
+
+      if (hasPhysical && trimmedShippingAddress.length < 10) {
+        setMarketplaceNotice(
+          "Enter a valid delivery address for physical products."
+        );
         return;
       }
 
@@ -907,8 +917,11 @@ export default function AppPlaceholder() {
       setMarketplaceNotice("");
 
       try {
-        const checkoutResponse = await fetch(
-          `${API_BASE_URL}/marketplace/checkout`,
+        // IMPORTANT:
+        // This only prepares the UPI modal. It does NOT create an order,
+        // reserve inventory, create order items, or clear the cart.
+        const response = await fetch(
+          `${API_BASE_URL}/marketplace/payments/prepare`,
           {
             method: "POST",
             credentials: "include",
@@ -919,62 +932,41 @@ export default function AppPlaceholder() {
             body: JSON.stringify({
               institution_id: institutionId,
               shipping_address: hasPhysical
-                ? deliveryAddress.trim()
+                ? trimmedShippingAddress
                 : null,
             }),
           }
         );
 
-        const checkoutData = await checkoutResponse.json().catch(() => null);
-        if (!checkoutResponse.ok) {
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok) {
           throw new Error(
             getDisplayMessage(
-              checkoutData?.detail ?? checkoutData?.message,
-              "Unable to create marketplace order."
+              data?.detail ?? data?.message,
+              "Unable to prepare UPI payment."
             )
           );
         }
 
-        const orderId = Number(checkoutData?.order_id);
-        if (!Number.isFinite(orderId)) {
-          throw new Error("Marketplace order ID was not returned.");
-        }
+        const preparedPayment = {
+          ...(data as MarketplacePaymentCreateResponse),
+          payment_id: null,
+          order_id: null,
+          checkout_institution_id: institutionId,
+          checkout_shipping_address: hasPhysical
+            ? trimmedShippingAddress
+            : null,
+        };
 
-        const paymentResponse = await fetch(
-          `${API_BASE_URL}/marketplace/payments/`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              Accept: "application/json",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ order_id: orderId }),
-          }
-        );
-
-        const paymentData = await paymentResponse.json().catch(() => null);
-        if (!paymentResponse.ok) {
-          throw new Error(
-            getDisplayMessage(
-              paymentData?.detail ?? paymentData?.message,
-              "Unable to create UPI payment."
-            )
-          );
-        }
-
-        const createdPayment =
-          paymentData as MarketplacePaymentCreateResponse;
-        writePendingMarketplacePayment(createdPayment);
-        setPendingPayment(createdPayment);
+        setPendingPayment(preparedPayment);
         setPaymentModalOpen(true);
-        setMarketplacePanel("orders");
-        setShippingAddress("");
-        await loadMarketplaceCart();
-        await loadMarketplaceOrders();
+        setMarketplacePanel("shop");
       } catch (err) {
         setMarketplaceNotice(
-          err instanceof Error ? err.message : "Unable to start UPI payment."
+          err instanceof Error
+            ? err.message
+            : "Unable to start UPI payment."
         );
       } finally {
         setMarketplaceBusy(false);
@@ -984,8 +976,6 @@ export default function AppPlaceholder() {
       dashboard?.student.institution_id,
       timetable?.student.institution_id,
       marketplaceCart,
-      loadMarketplaceCart,
-      loadMarketplaceOrders,
     ]
   );
 
@@ -1986,21 +1976,29 @@ const handleLogout = async () => {
                 payment={pendingPayment}
                 onClose={() => {
                   setPaymentModalOpen(false);
+                  setPendingPayment(null);
                 }}
-                onSubmitted={(data) => {
-                  setPendingPayment((current) => {
-                    if (!current) return current;
+                onSubmitted={async (data) => {
+                  const updated = {
+                    ...(pendingPayment || {}),
+                    ...(data as Partial<MarketplacePaymentCreateResponse>),
+                  };
 
-                    const updated = {
-                      ...current,
-                      ...(data as Partial<MarketplacePaymentCreateResponse>),
-                    };
+                  writePendingMarketplacePayment(
+                    Number.isFinite(Number(updated.payment_id)) &&
+                      Number.isFinite(Number(updated.order_id))
+                      ? (updated as MarketplacePaymentCreateResponse)
+                      : null
+                  );
 
-                    writePendingMarketplacePayment(updated);
-                    return updated;
-                  });
-
+                  setPendingPayment(null);
                   setPaymentModalOpen(false);
+                  setMarketplaceNotice(
+                    "Payment details submitted. Your payment is awaiting Super Admin verification."
+                  );
+
+                  await loadMarketplaceCart();
+                  await loadMarketplaceOrders();
                 }}
               />,
               document.body

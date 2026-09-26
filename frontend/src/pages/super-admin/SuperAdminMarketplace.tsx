@@ -131,8 +131,8 @@ type SellerOrdersResponse = {
 };
 
 type PaymentResponse = {
-  payment_id: number;
-  order_id: number;
+  payment_id?: number | null;
+  order_id?: number | null;
   payment_method: "UPI";
   status: string;
   amount: number | string;
@@ -145,6 +145,8 @@ type PaymentResponse = {
   payer_phone?: string | null;
   submitted_at?: string | null;
   verified_at?: string | null;
+  checkout_institution_id?: number | null;
+  checkout_shipping_address?: string | null;
 };
 
 
@@ -400,44 +402,29 @@ export default function AdminMarketplace() {
         shippingAddress = address.trim();
       }
 
-      const checkoutData = await api<{
-        order_id: number;
-        subtotal_amount: number | string;
-        tax_percent: number | string;
-        tax_amount: number | string;
-        total_amount: number | string;
-      }>("/marketplace/checkout", {
-        method: "POST",
-        body: JSON.stringify({
-          institution_id: Number(institutionId),
-          shipping_address: shippingAddress,
-        }),
-      });
-
-      const orderId = Number(checkoutData.order_id);
-
-      if (!Number.isFinite(orderId)) {
-        throw new Error("Marketplace order ID was not returned.");
-      }
-
-      const payment = await api<PaymentResponse>("/marketplace/payments/", {
-        method: "POST",
-        body: JSON.stringify({ order_id: orderId }),
-      });
-
-      if (!payment?.payment_id) {
-        throw new Error(
-          "Payment was created but no payment ID was returned."
-        );
-      }
-
-      setPendingPayment(payment);
-      setCartOpen(false);
-      setNotice(
-        `Order #${orderId} created. Complete the direct UPI payment and submit the UTR.`
+      const payment = await api<PaymentResponse>(
+        "/marketplace/payments/prepare",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            institution_id: Number(institutionId),
+            shipping_address: shippingAddress,
+          }),
+        }
       );
 
-      await Promise.all([loadCart(), loadOrders()]);
+      setPendingPayment({
+        ...payment,
+        payment_id: null,
+        order_id: null,
+        checkout_institution_id: Number(institutionId),
+        checkout_shipping_address: shippingAddress,
+      });
+
+      setCartOpen(false);
+      setNotice(
+        "Complete the UPI payment and submit your UTR. No order has been created yet."
+      );
     } catch (err) {
       setNotice(
         err instanceof Error
@@ -448,6 +435,7 @@ export default function AdminMarketplace() {
       setBusy(false);
     }
   };
+
 
   const openPanel = async (
     next: "shop" | "sell" | "orders" | "sales"
