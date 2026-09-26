@@ -3104,7 +3104,7 @@ function MarketplaceCartModal({
         </div>
           {cart.items.some((item) => String(item.product_type).toUpperCase() === "PHYSICAL") && (
             <div style={{ width: "100%", marginBottom: 12 }}>
-              <textarea value={shippingAddress} onChange={(event) => onShippingAddressChange(event.target.value)} placeholder="Delivery address (house/building, street, area, city, PIN)" rows={3} disabled={busy} style={{ ...styles.formTextarea, width: "100%", boxSizing: "border-box" }} />
+              <textarea value={shippingAddress} onChange={(event) => onShippingAddressChange(event.target.value)} placeholder="Delivery address (Class Room Number e.g. B1 2.7 or Faculty Number)" rows={3} disabled={busy} style={{ ...styles.formTextarea, width: "100%", boxSizing: "border-box" }} />
             </div>
           )}
 

@@ -1347,7 +1347,7 @@ function MarketplaceCartModal({
               <textarea
                 value={shippingAddress}
                 onChange={(event) => onShippingAddressChange(event.target.value)}
-                placeholder="House/building, street, area, city, PIN"
+                placeholder="Class Room Number (e.g. B1 2.7) or Faculty Number"
                 rows={3}
                 disabled={busy}
                 style={{ ...styles.formTextarea, width: "100%", boxSizing: "border-box" }}
