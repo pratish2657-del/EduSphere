@@ -2220,6 +2220,16 @@ function ResultsView({
     (result) => String(result.result_status).toUpperCase() === "PASS"
   ).length;
 
+const gradePoints = (results?.results ?? [])
+  .map((result) => Number(result.grade_point))
+  .filter((point) => Number.isFinite(point));
+
+const overallSGPA =
+  gradePoints.length > 0
+    ? gradePoints.reduce((sum, point) => sum + point, 0) /
+      gradePoints.length
+    : null;
+
   return (
     <section>
       <div style={styles.timetableHeader}>
@@ -2294,6 +2304,11 @@ function ResultsView({
             <DataCard
               label="Percentage"
               value={percentage === null ? "—" : `${percentage.toFixed(2)}%`}
+              icon={<GraduationCap size={20} />}
+            />
+            <DataCard
+              label="Overall SGPA"
+              value={overallSGPA === null ? "—" : overallSGPA.toFixed(2)}
               icon={<GraduationCap size={20} />}
             />
           </div>
