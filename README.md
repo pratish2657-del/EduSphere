@@ -52,29 +52,29 @@ Add AI-assisted study workflows through EduSphere AI.
 
 🧩 Major Modules
 
-1. 🔐 Authentication
+🔐 Authentication
 
 EduSphere uses Google OAuth with session-based authentication and role-based authorization.
 
 User
-  ↓
+↓
 EduSphere Frontend
-  ↓
+↓
 FastAPI Backend
-  ↓
+↓
 Google OAuth
-  ↓
+↓
 Google Callback
-  ↓
+↓
 Authenticated Session
-  ↓
+↓
 Role / Profile Resolution
-  ↓
+↓
 Appropriate Dashboard
 
 The authenticated user's role and academic profile determine which parts of the platform are accessible.
 
-2. 👥 Role-Based Access
+👥 Role-Based Access
 
 EduSphere is designed around multiple roles.
 
@@ -175,17 +175,17 @@ Student Academic System
 The academic system connects institutional and student information through:
 
 Institution
-    ↓
+↓
 Program
-    ↓
+↓
 Section
-    ↓
+↓
 Student Profile
-    ↓
+↓
 Courses
-    ↓
+↓
 Timetable
-    ↓
+↓
 Attendance / Results
 
 Timetable
@@ -322,13 +322,13 @@ Featured state
 Library files use Supabase Storage.
 
 Student / Admin
-      ↓
+↓
 FastAPI
-      ↓
+↓
 Supabase Storage
-      ↓
+↓
 Private Library Bucket
-      ↓
+↓
 Time-limited Signed URL
 
 The library bucket is intended to remain private, with protected downloads served through signed URLs.
@@ -378,9 +378,65 @@ marketplace_seller_payouts
 marketplace_seller_payout_transactions
 marketplace_payout_reversals
 
-The payment architecture has been transitioning from Razorpay Route toward Cashfree Easy Split for marketplace split and payout workflows.
+Marketplace payment flow currently supports:
 
-Payment-provider activation, production credentials, KYC, and payout eligibility depend on the provider's current requirements and account configuration.
+UPI payments with UTR, payer UPI ID, and payer phone submission.
+
+Cash on Delivery (COD) for carts containing only physical products.
+
+Digital-only carts do not show COD.
+
+Mixed physical + digital carts do not show COD.
+
+Payment/order creation is deferred until the buyer submits the payment details for UPI.
+
+UPI payments remain PENDING until Super Admin verification.
+
+Verified UPI payments move the order to CONFIRMED.
+
+COD orders are confirmed when placed, while the COD payment remains PENDING until cash is collected.
+
+COD orders require a shipping address.
+
+Inventory is reserved atomically during checkout/order creation.
+
+The marketplace payment system is designed so that payment status is confirmed server-side. Production payment-provider activation, KYC, and payout eligibility depend on the provider's current requirements and account configuration.
+
+🔄 Marketplace Checkout Flow
+
+UPI
+
+Cart
+↓
+Prepare UPI payment
+↓
+No order/payment mutation yet
+↓
+Buyer submits UTR + payer UPI ID + phone
+↓
+Atomic order + payment creation
+↓
+Payment PENDING / Order PENDING
+↓
+Super Admin verification
+↓
+Payment PAID / Order CONFIRMED
+
+COD
+
+Physical-only cart
+↓
+Shipping address
+↓
+Atomic order creation + inventory reservation
+↓
+Order CONFIRMED
+↓
+COD payment PENDING
+↓
+Cash collected on delivery
+
+COD is intentionally unavailable when the cart contains digital products or a mixture of physical and digital products.
 
 💻 Developer Workspace
 
@@ -403,15 +459,15 @@ Render
 Architecture
 
 Developer Workspace
-        ↓
+↓
 Vercel Frontend
-        ↓
+↓
 Public IDE URL
-        ↓
-      nginx
-     ↙     ↘
+↓
+nginx
+↙     ↘
 code-server  IDE API
-     ↓        ↓
+↓        ↓
 workspace    files
 
 Each developer receives an isolated workspace:
@@ -423,31 +479,31 @@ Each developer receives an isolated workspace:
 EduSphere → IDE
 
 EduSphere DB
-    ↓
+↓
 Export DB
-    ↓
+↓
 Browser IDE
 
 IDE → EduSphere
 
 Browser IDE
-    ↓
+↓
 Sync IDE
-    ↓
+↓
 EduSphere DB
 
 📝 Submission Workflow
 
 Developer edits code
-        ↓
+↓
 Save in IDE
-        ↓
+↓
 Sync IDE
-        ↓
+↓
 Submit file
-        ↓
+↓
 Super Admin review
-        ↓
+↓
 Approved / Rejected
 
 Accepted submissions are reviewed before being used in the platform and are not automatically deployed into EduSphere.
@@ -582,40 +638,40 @@ Google Cloud OAuth
 
 🏗️ Production Architecture
 
-                         ┌──────────────────┐
-                         │      USERS       │
-                         └────────┬─────────┘
-                                  │
-                                  ▼
-                         ┌──────────────────┐
-                         │      VERCEL      │
-                         │   React + Vite   │
-                         └────────┬─────────┘
-                                  │ HTTPS
-                                  ▼
-                         ┌──────────────────┐
-                         │      RENDER      │
-                         │  FastAPI Backend │
-                         └───────┬─────┬────┘
-                                 │     │
-                     ┌───────────┘     └──────────────┐
-                     ▼                                ▼
-            ┌─────────────────┐              ┌─────────────────┐
-            │      AIVEN      │              │    SUPABASE     │
-            │      MySQL      │              │ Storage / Files │
-            └─────────────────┘              └─────────────────┘
+                     ┌──────────────────┐
+                     │      USERS       │
+                     └────────┬─────────┘
+                              │
+                              ▼
+                     ┌──────────────────┐
+                     │      VERCEL      │
+                     │   React + Vite   │
+                     └────────┬─────────┘
+                              │ HTTPS
+                              ▼
+                     ┌──────────────────┐
+                     │      RENDER      │
+                     │  FastAPI Backend │
+                     └───────┬─────┬────┘
+                             │     │
+                 ┌───────────┘     └──────────────┐
+                 ▼                                ▼
+        ┌─────────────────┐              ┌─────────────────┐
+        │      AIVEN      │              │    SUPABASE     │
+        │      MySQL      │              │ Storage / Files │
+        └─────────────────┘              └─────────────────┘
 
-                                 │
-                                 │ Developer IDE
-                                 ▼
-                         ┌──────────────────┐
-                         │      RENDER      │
-                         │  edusphere-ide   │
-                         │                  │
-                         │     nginx        │
-                         │   code-server    │
-                         │     IDE API      │
-                         └──────────────────┘
+                             │
+                             │ Developer IDE
+                             ▼
+                     ┌──────────────────┐
+                     │      RENDER      │
+                     │  edusphere-ide   │
+                     │                  │
+                     │     nginx        │
+                     │   code-server    │
+                     │     IDE API      │
+                     └──────────────────┘
 
 🗄️ Database Model
 
@@ -640,9 +696,9 @@ professor_verifications
 User identity and academic profiles are intentionally separated:
 
 users
-  ├── student_profiles
-  ├── professor_profiles
-  └── admin_profiles
+├── student_profiles
+├── professor_profiles
+└── admin_profiles
 
 This keeps platform authentication logically separate from academic information.
 
@@ -709,7 +765,7 @@ Install the required Python dependencies and configure the backend environment.
 
 Run FastAPI with Uvicorn:
 
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main --reload --host 0.0.0.0 --port 8000
 
 The local backend normally runs on:
 
@@ -858,29 +914,38 @@ The exact directory structure can evolve as the project grows.
 
 A typical feature workflow:
 
-1. Create / update database schema
-2. Update backend schema / service
-3. Add or update API route
-4. Update frontend API integration
-5. Build frontend
-6. Test locally
-7. Commit changes
-8. Push to GitHub
-9. Deploy
-10. Test production
+Create / update database schema
+
+Update backend schema / service
+
+Add or update API route
+
+Update frontend API integration
+
+Build frontend
+
+Test locally
+
+Commit changes
+
+Push to GitHub
+
+Deploy
+
+Test production
 
 For Developer Workspace features:
 
 Edit code in Browser IDE
-        ↓
+↓
 Save
-        ↓
+↓
 Sync IDE
-        ↓
+↓
 EduSphere DB copy updated
-        ↓
+↓
 Submit
-        ↓
+↓
 Super Admin review
 
 ✅ Production Testing Checklist
@@ -969,6 +1034,18 @@ Product listing
 
 Cart
 
+Physical product checkout
+
+Digital product checkout
+
+UPI payment submission
+
+UPI Super Admin verification
+
+COD checkout for physical-only carts
+
+Shipping address validation
+
 Order
 
 Payment
@@ -979,7 +1056,9 @@ Refund
 
 Seller payout
 
-Inventory
+Inventory reservation
+
+Inventory finalization
 
 Developer Workspace
 
@@ -1109,7 +1188,7 @@ git push origin feature/my-feature
 
 Open a Pull Request.
 
-# 📄 License
+📄 License
 
 Copyright © 2026 EduSphere.
 
