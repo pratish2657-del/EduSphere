@@ -1040,6 +1040,7 @@ function MarketplaceView({
           onUpdate={onUpdateCart}
           onRemove={onRemoveCart}
           onCheckout={onCheckout}
+          onCod={onCod}
           busy={busy}
           shippingAddress={shippingAddress}
           onShippingAddressChange={onShippingAddressChange}

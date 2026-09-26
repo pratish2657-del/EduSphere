@@ -2514,6 +2514,7 @@ function MarketplaceView({
   onUpdateCart: (productId: number, quantity: number) => void;
   onRemoveCart: (productId: number) => void;
   onCheckout: (shippingAddress: string) => void;
+  onCod: (shippingAddress: string) => void;
   
   
   shippingAddress: string;
@@ -2781,6 +2782,7 @@ function MarketplaceView({
           onUpdate={onUpdateCart}
           onRemove={onRemoveCart}
           onCheckout={onCheckout}
+          onCod={onCod}
           shippingAddress={shippingAddress}
           onShippingAddressChange={onShippingAddressChange}
           busy={busy}
