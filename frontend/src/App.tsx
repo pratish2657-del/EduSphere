@@ -521,14 +521,6 @@ function LandingPage() {
           support.edusphere.management@gmail.com
           <br />
           <br />
-
-          <strong>Legal & Contact Information</strong>
-          <br />
-          Legal Name: PRATISH KUMAR AGARWAL
-          <br />
-          Email: pratish2657@gmail.com
-          <br />
-          Phone: +91 8910161882
         </p>
 
         <div className="footer-links">
