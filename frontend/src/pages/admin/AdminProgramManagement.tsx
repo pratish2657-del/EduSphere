@@ -76,6 +76,59 @@ export default function AdminProgramManagement() {
   return (
     <>
     <style>{`/* EDUSPHERE_RESPONSIVE */
+      .edu-table {
+        width: 100% !important;
+        table-layout: fixed !important;
+        border-collapse: collapse !important;
+      }
+      .edu-table th,
+      .edu-table td {
+        padding: 15px 14px !important;
+        text-align: left !important;
+        vertical-align: middle !important;
+        border-bottom: 1px solid rgba(148,163,184,.10) !important;
+        box-sizing: border-box !important;
+      }
+      .edu-table th {
+        color: #e5eefc;
+        font-size: 13px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+      .edu-table td {
+        color: #cbd5e1;
+        font-size: 13px;
+        overflow: hidden;
+      }
+      .edu-program-cell strong {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .edu-program-cell small {
+        display: block;
+        margin-top: 4px;
+        color: #94a3b8;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .edu-table td:nth-child(2),
+      .edu-table td:nth-child(3),
+      .edu-table td:nth-child(4),
+      .edu-table td:nth-child(5) {
+        white-space: nowrap;
+      }
+      .edu-table td:last-child,
+      .edu-table th:last-child {
+        text-align: center !important;
+      }
+      .edu-row-actions {
+        justify-content: center;
+        align-items: center;
+      }
+
       @media (max-width: 900px) {
         .edu-page { padding: 24px 22px 60px !important; }
         .edu-header { align-items: flex-start !important; flex-direction: column !important; }
@@ -90,7 +143,7 @@ export default function AdminProgramManagement() {
         .edu-title { font-size: 30px !important; }
         .edu-panel-head { padding: 16px !important; }
         .edu-modal { padding: 18px !important; max-height: calc(100dvh - 28px) !important; overflow-y: auto !important; }
-        .edu-table { min-width: 700px !important; }
+        .edu-table { min-width: 760px !important; table-layout: fixed !important; }
         .edu-card { flex-wrap: wrap !important; }
         .edu-card-body { min-width: calc(100% - 58px) !important; }
         .edu-card .edu-status { margin-left: 56px; }
@@ -113,8 +166,16 @@ export default function AdminProgramManagement() {
     {error&&<div style={s.error}>{error}</div>}{notice&&<div style={s.notice}>{notice}</div>}
     <section style={s.panel}><div className="edu-panel-head" style={s.panelHead}><div><span style={s.eyebrow}>ACADEMIC STRUCTURE</span><h2 className="edu-panel-title" style={s.panelTitle}>Programs</h2></div><span style={s.count}>{programs.length} total</span></div>
       {loading?<div style={s.empty}>Loading programs…</div>:programs.length===0?<div style={s.empty}><BookOpen size={30}/><strong>No programs found</strong><span>Create your first academic program.</span></div>:
-      <div style={{overflowX:"auto"}}><table className="edu-table" style={s.table}><thead><tr><th>Program</th><th>Code</th><th>Degree</th><th>Duration</th><th>Status</th><th/></tr></thead><tbody>
-      {programs.map(p=><tr key={p.id}><td><strong>{p.name}</strong><small>{p.institution_name||"Your institution"}</small></td><td><b>{p.code}</b></td><td>{p.degree}</td><td>{p.duration_years} years</td><td><span style={{...s.status,...(Boolean(p.is_active)?s.active:s.inactive)}}>{Boolean(p.is_active)?"Active":"Inactive"}</span></td><td><div className="edu-row-actions" style={s.row}><button style={s.icon} onClick={()=>edit(p)}><Edit3 size={15}/></button><button style={{...s.icon,color:"#fca5a5"}} onClick={()=>remove(p)} disabled={busy}><Trash2 size={15}/></button></div></td></tr>)}
+      <div style={{overflowX:"auto"}}><table className="edu-table" style={s.table}>
+        <colgroup>
+          <col style={{width:"42%"}} />
+          <col style={{width:"12%"}} />
+          <col style={{width:"12%"}} />
+          <col style={{width:"12%"}} />
+          <col style={{width:"12%"}} />
+          <col style={{width:"10%"}} />
+        </colgroup><thead><tr><th className="edu-th">Program</th><th className="edu-th">Code</th><th className="edu-th">Degree</th><th className="edu-th">Duration</th><th className="edu-th">Status</th><th/></tr></thead><tbody>
+      {programs.map(p=><tr key={p.id}><td className="edu-program-cell"><strong>{p.name}</strong><small>{p.institution_name||"Your institution"}</small></td><td><b>{p.code}</b></td><td>{p.degree}</td><td>{p.duration_years} years</td><td><span style={{...s.status,...(Boolean(p.is_active)?s.active:s.inactive)}}>{Boolean(p.is_active)?"Active":"Inactive"}</span></td><td><div className="edu-row-actions" style={s.row}><button style={s.icon} onClick={()=>edit(p)}><Edit3 size={15}/></button><button style={{...s.icon,color:"#fca5a5"}} onClick={()=>remove(p)} disabled={busy}><Trash2 size={15}/></button></div></td></tr>)}
       </tbody></table></div>}
     </section>
     <button style={s.back} onClick={()=>navigate("/app/admin")}>← Back to Dashboard</button>
