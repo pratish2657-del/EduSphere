@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { BookOpen, Edit3, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -72,7 +73,8 @@ export default function AdminProgramManagement() {
     finally{setBusy(false);}
   };
 
-  return <>
+  return (
+    <>
     <style>{`/* EDUSPHERE_RESPONSIVE */
       @media (max-width: 900px) {
         .edu-page { padding: 24px 22px 60px !important; }
@@ -83,19 +85,19 @@ export default function AdminProgramManagement() {
         .edu-selector select { width: 100% !important; min-width: 0 !important; }
       }
       @media (max-width: 640px) {
-        .edu-page { padding: 18px 14px 50px !important; }
+        .edu-grid { grid-template-columns: 1fr !important; }
+        .edu-page { padding: 18px 14px 50px !important; overflow-x: hidden !important; }
         .edu-title { font-size: 30px !important; }
         .edu-panel-head { padding: 16px !important; }
-        .edu-grid { grid-template-columns: 1fr !important; }
-        .edu-modal { padding: 18px !important; }
-        .edu-table { min-width: 620px !important; }
+        .edu-modal { padding: 18px !important; max-height: calc(100dvh - 28px) !important; overflow-y: auto !important; }
+        .edu-table { min-width: 700px !important; }
         .edu-card { flex-wrap: wrap !important; }
         .edu-card-body { min-width: calc(100% - 58px) !important; }
         .edu-card .edu-status { margin-left: 56px; }
         .edu-card .edu-row-actions { margin-left: auto; }
       }
       @media (max-width: 420px) {
-        .edu-actions { flex-direction: column; }
+        .edu-actions { flex-direction: column; width: 100%; }
         .edu-actions button { width: 100%; }
         .edu-primary { width: 100%; justify-content: center; }
         .edu-secondary { width: 100%; justify-content: center; }
@@ -104,7 +106,7 @@ export default function AdminProgramManagement() {
         .edu-modal-actions button { width: 100%; justify-content: center; }
       }
     `}</style>
- return <div className="edu-page" style={s.page}>
+ <div className="edu-page" style={s.page}>
     <header className="edu-header" style={s.header}><div><span style={s.eyebrow}>EDUSPHERE • ADMIN</span><h1 className="edu-title" style={s.title}>Program Management</h1><p style={s.sub}>Manage academic programs for your institution.</p></div>
       <div className="edu-actions" style={s.actions}><button style={s.secondary} onClick={load}><RefreshCw size={16}/> Refresh</button><button style={s.primary} onClick={create}><Plus size={17}/> Add Program</button></div>
     </header>
@@ -122,10 +124,12 @@ export default function AdminProgramManagement() {
       <label style={s.check}><input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form,is_active:e.target.checked})}/> Program is active</label></div>
       <div className="edu-modal-actions" style={s.modalActions}><button style={s.secondary} onClick={()=>setOpen(false)}>Cancel</button><button style={s.primary} onClick={save} disabled={busy}>{busy?"Saving…":editing?"Save Changes":"Create Program"}</button></div>
     </div></div>}
-  </div>;
+  </div>
+    </>
+  );
 }
 
-const s:Record<string,React.CSSProperties>={
+const s:Record<string,CSSProperties>={
 page:{minHeight:"100vh",padding:"34px 40px 70px",background:"#050b15",color:"#e5eefc",fontFamily:"Inter,system-ui,sans-serif"},
 header:{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:20,marginBottom:25},eyebrow:{fontSize:10,letterSpacing:"1.8px",color:"#60a5fa",fontWeight:800},title:{margin:"7px 0 5px",fontSize:"clamp(28px,4vw,42px)"},sub:{margin:0,color:"#94a3b8",fontSize:14},actions:{display:"flex",gap:10},primary:{border:"1px solid rgba(96,165,250,.35)",background:"linear-gradient(135deg,#2563eb,#7c3aed)",color:"#fff",borderRadius:11,padding:"11px 15px",fontWeight:700,display:"inline-flex",alignItems:"center",gap:7,cursor:"pointer"},secondary:{border:"1px solid rgba(148,163,184,.18)",background:"rgba(255,255,255,.045)",color:"#cbd5e1",borderRadius:11,padding:"10px 14px",fontWeight:650,display:"inline-flex",alignItems:"center",gap:7,cursor:"pointer"},panel:{background:"rgba(9,17,31,.76)",border:"1px solid rgba(148,163,184,.13)",borderRadius:18,overflow:"hidden"},panelHead:{padding:"21px 22px",display:"flex",justifyContent:"space-between",borderBottom:"1px solid rgba(148,163,184,.1)"},panelTitle:{margin:"5px 0 0",fontSize:22},count:{color:"#94a3b8",fontSize:12},table:{width:"100%",borderCollapse:"collapse",minWidth:700},empty:{minHeight:280,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:9,color:"#64748b"},status:{padding:"5px 9px",borderRadius:999,fontSize:11,fontWeight:750},active:{color:"#86efac",background:"rgba(34,197,94,.1)"},inactive:{color:"#fbbf24",background:"rgba(245,158,11,.1)"},row:{display:"flex",gap:7},icon:{width:34,height:34,borderRadius:9,border:"1px solid rgba(148,163,184,.15)",background:"rgba(255,255,255,.04)",color:"#93c5fd",display:"grid",placeItems:"center",cursor:"pointer"},back:{marginTop:18,background:"transparent",border:0,color:"#94a3b8",cursor:"pointer"},error:{marginBottom:12,padding:11,borderRadius:10,background:"rgba(239,68,68,.09)",color:"#fca5a5"},notice:{marginBottom:12,padding:11,borderRadius:10,background:"rgba(34,197,94,.08)",color:"#86efac"},overlay:{position:"fixed",inset:0,background:"rgba(2,6,23,.72)",backdropFilter:"blur(8px)",display:"grid",placeItems:"center",padding:20,zIndex:50},modal:{width:"min(620px,100%)",background:"#0b1424",border:"1px solid rgba(148,163,184,.17)",borderRadius:18,padding:22},modalHead:{display:"flex",justifyContent:"space-between",marginBottom:22},close:{width:35,height:35,borderRadius:9,border:"1px solid rgba(148,163,184,.14)",background:"rgba(255,255,255,.04)",color:"#94a3b8"},grid:{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:15},field:{display:"grid",gap:7,color:"#94a3b8",fontSize:12},input:{padding:"10px 12px",borderRadius:10,border:"1px solid rgba(148,163,184,.2)",background:"#07101d",color:"#e2e8f0"},check:{display:"flex",alignItems:"center",gap:8,color:"#cbd5e1",fontSize:13},modalActions:{display:"flex",justifyContent:"flex-end",gap:9,marginTop:23}
 };
