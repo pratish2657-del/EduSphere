@@ -14,6 +14,8 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  SquarePen,
+  Landmark,
   UserRound,
   Users,
   X,
@@ -268,6 +270,16 @@ export default function AdminDashboard() {
         label: "Users",
         icon: Users,
         path: "/app/admin/users",
+      },
+      {
+        label: "Program-Course Management",
+        icon: SquarePen,
+        path: "/app/admin/program-management",
+      },
+      {
+        label: "Section Management",
+        icon: Landmark,
+        path: "/app/admin/section-management"
       },
       {
         label: "Professor Verification",

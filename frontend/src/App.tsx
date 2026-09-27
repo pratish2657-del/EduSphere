@@ -69,6 +69,8 @@ import SuperAdminDeveloperSubmissions from "./pages/super-admin/SuperAdminDevelo
 import MarketplacePaymentSuccess from "./pages/auth/MarketplacePaymentSuccess";
 import ProfessorEvents from "./pages/auth/ProfessorEvents";
 import SuperAdminMarketplacePayments from "./pages/super-admin/SuperAdminMarketplacePayments";
+import AdminProgramManagement from "./pages/admin/AdminProgramManagement";
+import AdminSectionManagement from "./pages/admin/AdminSectionManagement";
 
 const SuperAdminMarketplacePage =
   SuperAdminMarketplace as unknown as ComponentType;
@@ -725,6 +727,14 @@ export default function App() {
       <Route
         path="/app/super-admin/developer-submissions"
         element={<SuperAdminDeveloperSubmissions />}
+      />
+      <Route 
+        path="/app/admin/program-management"
+        element={<AdminProgramManagement/>}
+      />
+      <Route
+        path="/app/admin/section-management"
+        element={<AdminSectionManagement/>}
       />
       <Route
         path="/app/marketplace/payment-success"
